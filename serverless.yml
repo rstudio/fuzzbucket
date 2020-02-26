@@ -6,6 +6,7 @@ package:
   include:
   - boxbot.py
   exclude:
+  - .example.env
   - .flake8
   - .github/**
   - .gitignore

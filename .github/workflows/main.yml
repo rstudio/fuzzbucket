@@ -8,6 +8,8 @@ on:
   pull_request:
     branches-ignore:
     - master
+env:
+  AWS_DEFAULT_REGION: us-east-1
 jobs:
   default:
     runs-on: ubuntu-latest

@@ -1,5 +1,7 @@
+!.example.env
 *.egg
 *.egg-info/
+.*env
 .Python
 .eggs/
 .installed.cfg
