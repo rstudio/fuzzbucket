@@ -4,9 +4,9 @@ import random
 import boxbot
 
 
-def test_hello():
+def test_box_please():
     fancy_value = random.randint(-42, 42)
-    response = boxbot.hello({"fancy": fancy_value}, None)
+    response = boxbot.box_please({"fancy": fancy_value}, None)
     assert response["statusCode"] == 200
     assert response["body"] is not None
     body = json.loads(response["body"])

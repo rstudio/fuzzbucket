@@ -1,0 +1,11 @@
+{
+  "name": "boxbot",
+  "description": "",
+  "version": "0.1.0",
+  "dependencies": {
+    "serverless": "*",
+    "serverless-dynamodb-local": "*",
+    "serverless-offline": "*",
+    "serverless-python-requirements": "*"
+  }
+}

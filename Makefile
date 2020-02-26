@@ -1,3 +1,6 @@
+STAGE ?= dev
+REGION ?= us-east-1
+
 .PHONY: help
 help:
 	@echo Choose your own adventure:
@@ -9,6 +12,7 @@ help:
 deps:
 	pip install -r dev-requirements.txt
 	pip install -r requirements.txt
+	npm install
 
 .PHONY: lint
 lint:
@@ -18,3 +22,11 @@ lint:
 .PHONY: test
 test:
 	pytest -v
+
+.PHONY: deploy
+deploy:
+	npx sls deploy --stage $(STAGE) --region $(REGION)
+
+.PHONY: quickdeploy
+quickdeploy:
+	npx sls deploy function --function hello --stage $(STAGE) --region $(REGION)

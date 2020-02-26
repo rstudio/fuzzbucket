@@ -1,2 +1,2 @@
 [tool.black]
-exclude = '/\.venv\//'
+exclude = '/(\.venv\/|node_modules\/)/'

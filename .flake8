@@ -1,2 +1,4 @@
 [flake8]
-exclude = .venv/
+exclude = .venv/,node_modules/
+
+# vim:filetype=dosini
