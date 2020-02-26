@@ -2,6 +2,24 @@ service: boxbot
 provider:
   name: aws
   runtime: python3.8
+package:
+  include:
+  - boxbot.py
+  exclude:
+  - .flake8
+  - .github/**
+  - .gitignore
+  - .venv/**
+  - Makefile
+  - README.md
+  - conftest.py
+  - dev-requirements.txt
+  - node_modules/**
+  - package-lock.json
+  - package.json
+  - requirements.txt
+  - serverless.yml
+  - test_boxbot.py
 functions:
   box_please:
     handler: boxbot.box_please
