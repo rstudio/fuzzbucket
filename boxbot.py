@@ -1,6 +1,6 @@
 import json
 
-import boto3
+# import boto3
 
 
 def hello(event, context):
