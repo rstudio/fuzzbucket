@@ -1,5 +1,6 @@
 STAGE ?= dev
 REGION ?= us-east-1
+FUNCTION ?= list
 
 .PHONY: help
 help:
@@ -8,6 +9,7 @@ help:
 	@echo "- deps"
 	@echo "- help"
 	@echo "- lint"
+	@echo "- logs (STAGE=$(STAGE), REGION=$(REGION), FUNCTION=$(FUNCTION))"
 	@echo "- test"
 
 .PHONY: deps
@@ -28,3 +30,7 @@ test:
 .PHONY: deploy
 deploy:
 	npx sls deploy --stage $(STAGE) --region $(REGION) --verbose
+
+.PHONY: logs
+logs:
+	npx sls logs --function $(FUNCTION) --region $(REGION) --stage $(STAGE) --tail
