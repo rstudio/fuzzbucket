@@ -73,7 +73,10 @@ def _describe_instances(client, *args, **kwargs):
 def _q(event, key, default=None):
     if event is None:
         return default
-    return event.get("queryStringParameters", {}).get(key, default)
+    qs = event.get("queryStringParameters", {})
+    if qs is None:
+        return default
+    return qs.get(key, default)
 
 
 log.info("boxbot is alive")
