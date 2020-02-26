@@ -21,7 +21,7 @@ lint:
 
 .PHONY: test
 test:
-	pytest -v
+	pytest -v --disable-warnings
 
 .PHONY: deploy
 deploy:

@@ -1,15 +1,18 @@
 import json
-import random
+
+import boto3
+
+from moto import mock_ec2
 
 import boxbot
 
 
+@mock_ec2
 def test_box_please():
-    fancy_value = random.randint(-42, 42)
-    response = boxbot.box_please({"fancy": fancy_value}, None)
+    client = boto3.client("ec2")
+    response = boxbot.box_please({}, None, client=client)
     assert response["statusCode"] == 200
     assert response["body"] is not None
     body = json.loads(response["body"])
-    assert "this cow" in body["message"]
-    assert "fancy" in body["input"]
-    assert body["input"]["fancy"] == fancy_value
+    assert "instances" in body
+    assert "Reservations" in body["instances"]

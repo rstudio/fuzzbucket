@@ -1,1 +1,1 @@
-collect_ignore = [".venv", "node_modules"]
+norecursedirs = [".venv", "node_modules"]
