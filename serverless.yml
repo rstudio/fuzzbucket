@@ -21,5 +21,19 @@ package:
   - serverless.yml
   - test_boxbot.py
 functions:
-  box_please:
-    handler: boxbot.box_please
+  list:
+    handler: boxbot.list_boxes
+    events:
+    - http: { path: /, method: get }
+  show:
+    handler: boxbot.show_box
+    events:
+    - http: { path: /box, method: get }
+  create:
+    handler: boxbot.create_box
+    events:
+    - http: { path: /box, method: post }
+  delete:
+    handler: boxbot.delete_box
+    events:
+    - http: { path: /box, method: delete }

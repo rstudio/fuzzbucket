@@ -22,7 +22,7 @@ def to_json(thing):
     return json.dumps(thing, sort_keys=True, default=str)
 
 
-def box_please(event, context, client=ec2()):
+def list_boxes(event, context, client=ec2()):
     body = {"instances": {}}
     try:
         body["instances"] = client.describe_instances()
@@ -30,3 +30,15 @@ def box_please(event, context, client=ec2()):
     except ClientError as err:
         log().exception(err)
         return {"statusCode": 500, "body": to_json("oh no")}
+
+
+def show_box(event, context, client=ec2()):
+    return {"statusCode": 501, "body": '"not implemented"'}
+
+
+def create_box(event, context, client=ec2()):
+    return {"statusCode": 501, "body": '"not implemented"'}
+
+
+def delete_box(event, context, client=ec2()):
+    return {"statusCode": 501, "body": '"not implemented"'}

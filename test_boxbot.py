@@ -8,9 +8,9 @@ import boxbot
 
 
 @mock_ec2
-def test_box_please():
+def test_list_boxes():
     client = boto3.client("ec2")
-    response = boxbot.box_please({}, None, client=client)
+    response = boxbot.list_boxes({}, None, client=client)
     assert response["statusCode"] == 200
     assert response["body"] is not None
     body = json.loads(response["body"])
