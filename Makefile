@@ -3,10 +3,12 @@ REGION ?= us-east-1
 
 .PHONY: help
 help:
-	@echo Choose your own adventure:
-	@echo - deps
-	@echo - lint
-	@echo - test
+	@echo "Choose your own adventure:"
+	@echo "- deploy (STAGE=$(STAGE), REGION=$(REGION))"
+	@echo "- deps"
+	@echo "- help"
+	@echo "- lint"
+	@echo "- test"
 
 .PHONY: deps
 deps:
@@ -26,7 +28,3 @@ test:
 .PHONY: deploy
 deploy:
 	npx sls deploy --stage $(STAGE) --region $(REGION) --verbose
-
-.PHONY: quickdeploy
-quickdeploy:
-	npx sls deploy function --function hello --stage $(STAGE) --region $(REGION) --verbose
