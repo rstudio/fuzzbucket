@@ -22,10 +22,10 @@ def list_boxes(event, context, client=None):
     client = boto3.client("ec2") if client is None else client
     body = {"instances": {}}
     try:
-        filters = ()
+        filters = [{"Name": "tag-key", "Values": ["boxbot:created-at"]}]
         user = _q(event, "user")
         if user is not None:
-            filters = [{"Name": "tag:boxbot:user", "Values": [user]}]
+            filters.append({"Name": "tag:boxbot:user", "Values": [user]})
         body["instances"] = _describe_instances(client, Filters=filters)
         return {"statusCode": 200, "body": _to_json(body)}
     except ClientError:
