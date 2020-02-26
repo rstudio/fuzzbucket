@@ -25,8 +25,8 @@ test:
 
 .PHONY: deploy
 deploy:
-	npx sls deploy --stage $(STAGE) --region $(REGION)
+	npx sls deploy --stage $(STAGE) --region $(REGION) --verbose
 
 .PHONY: quickdeploy
 quickdeploy:
-	npx sls deploy function --function hello --stage $(STAGE) --region $(REGION)
+	npx sls deploy function --function hello --stage $(STAGE) --region $(REGION) --verbose

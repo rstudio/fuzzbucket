@@ -15,4 +15,4 @@ def test_list_boxes():
     assert response["body"] is not None
     body = json.loads(response["body"])
     assert "instances" in body
-    assert "Reservations" in body["instances"]
+    assert body["instances"] is not None

@@ -1,4 +1,5 @@
 [flake8]
+max-line-length = 90
 exclude = .venv/,node_modules/
 
 # vim:filetype=dosini

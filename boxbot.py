@@ -1,44 +1,79 @@
 import json
 import logging
-
-from functools import lru_cache
+import os
+import sys
 
 import boto3
 
 from botocore.exceptions import ClientError
 
 
-@lru_cache
-def log():
-    return logging.getLogger(__name__)
+log = logging.getLogger(__name__)
+logging.basicConfig(
+    stream=sys.stdout,
+    style="{",
+    format="name={name!r} level={levelname!r} time={asctime!r} msg={message!r}",
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()),
+)
 
 
-@lru_cache
-def ec2():
-    return boto3.client("ec2")
+def list_boxes(event, context, client=None):
+    log.debug(f"received event={_to_json(event)}")
+    client = boto3.client("ec2") if client is None else client
+    body = {"instances": {}}
+    try:
+        filters = ()
+        user = _q(event, "user")
+        if user is not None:
+            filters = [{"Name": "tag:boxbot:user", "Values": [user]}]
+        body["instances"] = _describe_instances(client, Filters=filters)
+        return {"statusCode": 200, "body": _to_json(body)}
+    except ClientError:
+        log.exception("oh no")
+        return {"statusCode": 500, "body": _to_json("oh no")}
 
 
-def to_json(thing):
+def show_box(event, context, client=None):
+    return {"statusCode": 501, "body": '"not implemented"'}
+
+
+def create_box(event, context, client=None):
+    return {"statusCode": 501, "body": '"not implemented"'}
+
+
+def delete_box(event, context, client=None):
+    return {"statusCode": 501, "body": '"not implemented"'}
+
+
+def _to_json(thing):
     return json.dumps(thing, sort_keys=True, default=str)
 
 
-def list_boxes(event, context, client=ec2()):
-    body = {"instances": {}}
-    try:
-        body["instances"] = client.describe_instances()
-        return {"statusCode": 200, "body": to_json(body)}
-    except ClientError as err:
-        log().exception(err)
-        return {"statusCode": 500, "body": to_json("oh no")}
+def _describe_instances(client, *args, **kwargs):
+    instances = []
+    for reservation in client.describe_instances(*args, **kwargs).get(
+        "Reservations", []
+    ):
+        for instance in reservation.get("Instances", []):
+            name = "<unknown>"
+            for tag in instance.get("Tags", []):
+                if tag["Key"] == "Name":
+                    name = tag["Value"]
+            record = {
+                "instance_id": instance["InstanceId"],
+                "name": name,
+            }
+            public_ip = instance.get("PublicIpAddress", None)
+            if public_ip is not None:
+                record["public_ip"] = public_ip
+            instances.append(record)
+    return list(sorted(instances, key=lambda i: i["name"]))
 
 
-def show_box(event, context, client=ec2()):
-    return {"statusCode": 501, "body": '"not implemented"'}
+def _q(event, key, default=None):
+    if event is None:
+        return default
+    return event.get("queryStringParameters", {}).get(key, default)
 
 
-def create_box(event, context, client=ec2()):
-    return {"statusCode": 501, "body": '"not implemented"'}
-
-
-def delete_box(event, context, client=ec2()):
-    return {"statusCode": 501, "body": '"not implemented"'}
+log.info("boxbot is alive")
