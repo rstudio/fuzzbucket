@@ -2,7 +2,13 @@ service: boxbot
 provider:
   name: aws
   runtime: python3.8
+  apiKeys:
+  - ${env:BOXBOT_API_KEY}
   iamRoleStatements:
+  - Effect: Allow
+    Action:
+    - apigateway:GET
+    Resource: '*'
   - Effect: Allow
     Action:
     - ec2:AssociateIamInstanceProfile
@@ -34,41 +40,54 @@ provider:
   - Effect: Allow
     Action:
     - ec2:DescribeInstances
-    Resource:
-    - '*'
+    Resource: '*'
 package:
   include:
   - boxbot.py
+  - basic_auth.py
   exclude:
-  - .example.env
-  - .flake8
-  - .github/**
-  - .gitignore
-  - .venv/**
-  - Makefile
-  - README.md
-  - conftest.py
-  - dev-requirements.txt
-  - node_modules/**
-  - package-lock.json
-  - package.json
-  - requirements.txt
-  - serverless.yml
-  - test_boxbot.py
+  - "./**/**"
+plugins:
+- serverless-basic-authentication
+resources:
+  Resources:
+    GatewayResponse:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.WWW-Authenticate: "'Basic'"
+        ResponseType: UNAUTHORIZED
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        StatusCode: '401'
 functions:
   list:
     handler: boxbot.list_boxes
     events:
-    - http: { path: /, method: get }
+    - http: { path: /, method: get, private: true }
   show:
     handler: boxbot.show_box
     events:
-    - http: { path: /box, method: get }
+    - http:
+        path: '/box/{id}'
+        method: get
+        private: true
+        request:
+          parameters:
+            paths:
+              id: true
   create:
     handler: boxbot.create_box
     events:
-    - http: { path: /box, method: post }
+    - http: { path: /box, method: post, private: true }
   delete:
     handler: boxbot.delete_box
     events:
-    - http: { path: /box, method: delete }
+    - http:
+        path: '/box/{id}'
+        method: delete
+        private: true
+        request:
+          parameters:
+            paths:
+              id: true
