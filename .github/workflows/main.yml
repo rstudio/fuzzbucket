@@ -1,0 +1,14 @@
+name: main
+on: [pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions/setup-python@master
+      with:
+        python-version: 3.8.x
+        architecture: x64
+    - run: make deps
+    - run: make lint
+    - run: make test
