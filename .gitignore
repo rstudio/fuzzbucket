@@ -6,7 +6,8 @@
 .coverage
 .eggs/
 .installed.cfg
-.serverless
+.serverless-resources-env/
+.serverless/
 .venv/
 build/
 custom.yml
@@ -15,6 +16,7 @@ dist/
 downloads/
 eggs/
 env/
+htmlcov/
 lib/
 lib64/
 node_modules/

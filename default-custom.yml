@@ -1,0 +1,7 @@
+apiKeys:
+- admin
+defaultInstanceType: t3.small
+memorySize: 128
+publicSubnetAvailabilityZone: us-east-1a
+publicSubnetCidrBlock: 172.98.0.0/19
+vpcCidrBlock: 172.98.0.0/18

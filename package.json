@@ -5,6 +5,7 @@
   "dependencies": {
     "serverless": "*",
     "serverless-basic-authentication": "*",
+    "serverless-resources-env": "*",
     "serverless-offline": "*"
   }
 }

@@ -60,8 +60,11 @@ logging.basicConfig(
 )
 
 
-def list_boxes(event, context, client=None):
+def list_boxes(event, context, client=None, env=None):
+    log.warn(f"environ={json.dumps(dict(os.environ))}")
     client = client if client is not None else boto3.client("ec2")
+    env = env if env is not None else dict(os.environ)
+    vpc_id = env["CF_VPC"]
     user = _extract_user(event)
     if user is None:
         return {
@@ -72,15 +75,17 @@ def list_boxes(event, context, client=None):
     try:
         return {
             "statusCode": 200,
-            "body": _to_json({"instances": _list_user_boxes(client, user)}),
+            "body": _to_json({"boxes": _list_user_boxes(client, user, vpc_id)}),
         }
     except ClientError:
         log.exception("oh no")
         return {"statusCode": 500, "body": _to_json("oh no")}
 
 
-def create_box(event, context, client=None):
+def create_box(event, context, client=None, env=None):
     client = client if client is not None else boto3.client("ec2")
+    env = env if env is not None else dict(os.environ)
+    vpc_id = env["CF_VPC"]
     user = _extract_user(event)
     if user is None:
         return {
@@ -96,27 +101,36 @@ def create_box(event, context, client=None):
             "body": _to_json(f"unknown image_alias={image_alias}"),
         }
 
-    for instance in _list_user_boxes(client, user):
+    for instance in _list_user_boxes(client, user, vpc_id):
         if instance.image_alias == image_alias:
-            return {"statusCode": 409, "body": _to_json({"instances": [instance]})}
+            return {"statusCode": 409, "body": _to_json({"boxes": [instance]})}
+
+    network_interface = dict(
+        DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
+    )
+
+    subnet_id = env.get("CF_PublicSubnet", None)
+    if subnet_id is not None:
+        network_interface["SubnetId"] = subnet_id
+    security_groups = [
+        sg.strip() for sg in env.get("CF_BoxbotDefaultSecurityGroup", "").split(" ")
+    ]
+
+    if _q(event, "connect") is not None:
+        security_groups += [
+            sg.strip() for sg in env.get("CF_BoxbotConnectSecurityGroup", "").split(" ")
+        ]
+    if len(security_groups) > 0:
+        network_interface["Groups"] = security_groups
 
     try:
         response = client.run_instances(
-            # FIXME: un-hardcodify
             ImageId=ami,
-            InstanceType="t3.small",
-            KeyName="connect",
+            InstanceType=env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
+            KeyName=user,
             MinCount=1,
             MaxCount=1,
-            NetworkInterfaces=[
-                dict(
-                    DeviceIndex=0,
-                    AssociatePublicIpAddress=True,
-                    DeleteOnTermination=True,
-                    # SubnetId="subnet-0c5015feba8daf817",
-                    # Groups=["sg-0620d67e0cd3cbdc3"],
-                )
-            ],
+            NetworkInterfaces=[network_interface],
             TagSpecifications=[
                 dict(
                     ResourceType="instance",
@@ -133,7 +147,7 @@ def create_box(event, context, client=None):
             "statusCode": 200,
             "body": _to_json(
                 {
-                    "instances": [
+                    "boxes": [
                         Box.from_ec2_dict(inst)
                         for inst in response.get("Instances", [])
                     ]
@@ -145,8 +159,9 @@ def create_box(event, context, client=None):
         return {"statusCode": 500, "body": _to_json("oh no")}
 
 
-def delete_box(event, context, client=None):
+def delete_box(event, context, client=None, env=None):
     client = client if client is not None else boto3.client("ec2")
+    env = env if env is not None else dict(os.environ)
     user = _extract_user(event)
     if user is None:
         return {
@@ -174,18 +189,17 @@ def _as_json(thing):
     return str(thing)
 
 
-def _list_user_boxes(client, user):
+def _list_user_boxes(client, user, vpc_id):
     filters = DEFAULT_FILTERS + [
         dict(Name=f"tag:{Tags.user.value}", Values=[user]),
+        dict(Name="vpc-id", Values=[vpc_id]),
     ]
-    instances = []
+    boxes = []
     for reservation in client.describe_instances(Filters=filters).get(
         "Reservations", []
     ):
-        instances += [
-            Box.from_ec2_dict(inst) for inst in reservation.get("Instances", [])
-        ]
-    return list(sorted(instances, key=lambda i: i.name))
+        boxes += [Box.from_ec2_dict(inst) for inst in reservation.get("Instances", [])]
+    return list(sorted(boxes, key=lambda i: i.name))
 
 
 def _resolve_ami_alias(image_alias, default=None):

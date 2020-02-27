@@ -1,8 +1,9 @@
 service: boxbot
-custom: ${file(${env:BOXBOT_CUSTOM_${opt:stage, 'dev'}, 'empty-custom.yml'})}
+custom: ${file(${env:BOXBOT_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
 provider:
   name: aws
   runtime: python3.8
+  memorySize: ${self:custom.memorySize, 128}
   apiKeys: ${self:custom.apiKeys}
   iamRoleStatements:
   - Effect: Allow
@@ -49,8 +50,70 @@ package:
   - "./**/**"
 plugins:
 - serverless-basic-authentication
+- serverless-resources-env
 resources:
   Resources:
+    VPC:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: ${self:custom.vpcCidrBlock, '172.98.0.0/18'}
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        Tags:
+        - Key: Name
+          Value: boxbot-${opt:stage, 'dev'}-vpc
+    PublicSubnet:
+      Type: AWS::EC2::Subnet
+      Properties:
+        VpcId: !Ref VPC
+        AvailabilityZone: ${self:custom.publicSubnetAvailabilityZone, 'us-east-1a'}
+        CidrBlock: ${self:custom.publicSubnetCidrBlock, '172.98.0.0/19'}
+        MapPublicIpOnLaunch: true
+        Tags:
+        - Key: Name
+          Value: boxbot-${opt:stage, 'dev'}-public
+    PublicRouteTable:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId: !Ref VPC
+        Tags:
+        - Key: Name
+          Value: boxbot-${opt:stage, 'dev'}-public
+    PublicRoute:
+      Type: AWS::EC2::Route
+      DependsOn: GatewayToInternet
+      Properties:
+        RouteTableId: !Ref PublicRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: !Ref InternetGateway
+    PublicSubnetRouteTableAssociation:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        SubnetId: !Ref PublicSubnet
+        RouteTableId: !Ref PublicRouteTable
+    InternetGateway:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+        - Key: Name
+          Value: boxbot-${opt:stage, 'dev'}-ig
+    GatewayToInternet:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        VpcId: !Ref VPC
+        InternetGatewayId: !Ref InternetGateway
+    S3Endpoint:
+      Type: AWS::EC2::VPCEndpoint
+      Properties:
+        RouteTableIds:
+        - !Ref PublicRouteTable
+        ServiceName:
+          Fn::Join:
+          - '.'
+          - - com.amazonaws
+            - Ref: AWS::Region
+            - s3
+        VpcId: !Ref VPC
     GatewayResponse:
       Type: AWS::ApiGateway::GatewayResponse
       Properties:
@@ -60,17 +123,119 @@ resources:
         RestApiId:
           Ref: ApiGatewayRestApi
         StatusCode: '401'
+    BoxbotDefaultSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: boxbot default access
+        GroupName: boxbot-${opt:stage, 'dev'}-default-sg
+        VpcId: !Ref VPC
+        SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: allow all outgoing
+          FromPort: 0
+          IpProtocol: -1
+          ToPort: 65535
+        SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: allow ssh incoming
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          Description: allow http incoming
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          Description: allow https incoming
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0
+          Description: allow alt http incoming
+          FromPort: 8080
+          IpProtocol: tcp
+          ToPort: 8080
+        - CidrIp: 0.0.0.0/0
+          Description: allow alt https incoming
+          FromPort: 8443
+          IpProtocol: tcp
+          ToPort: 8443
+        Tags:
+        - Key: Name
+          Value: boxbot-${opt:stage, 'dev'}-default-sg
+    BoxbotConnectSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: boxbot connect access
+        GroupName: boxbot-${opt:stage, 'dev'}-connect-sg
+        VpcId: !Ref VPC
+        SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: allow connect http incoming
+          FromPort: 3939
+          IpProtocol: tcp
+          ToPort: 3939
+        - CidrIp: 0.0.0.0/0
+          Description: allow connect setup http incoming
+          FromPort: 13939
+          IpProtocol: tcp
+          ToPort: 13939
+        Tags:
+        - Key: Name
+          Value: boxbot-${opt:stage, 'dev'}-connect-sg
+##     Outputs:
+##       vpcId:
+##         Description: VPC id
+##         Value: !Ref VPC
+##         Export:
+##           Name: boxbot-${opt:stage, 'dev'}-vpc
+##       boxbotDefaultSecurityGroup:
+##         Description: Boxbot Default VPC Security Group
+##         Value: !Ref BoxbotDefaultSecurityGroup
+##         Export:
+##           Name: boxbot-${opt:stage, 'dev'}-sg-default
+##       boxbotConnectSecurityGroup:
+##         Description: Boxbot Connect VPC Security Group
+##         Value: !Ref BoxbotConnectSecurityGroup
+##         Export:
+##           Name: boxbot-${opt:stage, 'dev'}-sg-connect
+##       publicSubnet:
+##         Description: Public subnet in VPC
+##         Value: !Ref PublicSubnet
+##         Export:
+##           Name: boxbot-${opt:stage, 'dev'}-subnet-public
 functions:
   list:
     handler: boxbot.list_boxes
+    custom:
+      env-resources:
+      - VPC
+      - PublicSubnet
+      - BoxbotDefaultSecurityGroup
+      - BoxbotConnectSecurityGroup
     events:
     - http: { path: /, method: get, private: true }
   create:
     handler: boxbot.create_box
+    environment:
+      BOXBOT_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
+    custom:
+      env-resources:
+      - VPC
+      - PublicSubnet
+      - BoxbotDefaultSecurityGroup
+      - BoxbotConnectSecurityGroup
     events:
     - http: { path: /box, method: post, private: true }
   delete:
     handler: boxbot.delete_box
+    custom:
+      env-resources:
+      - VPC
+      - PublicSubnet
+      - BoxbotDefaultSecurityGroup
+      - BoxbotConnectSecurityGroup
     events:
     - http:
         path: '/box/{id}'
