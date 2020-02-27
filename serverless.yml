@@ -39,13 +39,16 @@ provider:
   - Effect: Allow
     Action:
     - ec2:CreateInstance
+    - ec2:CreateKeyPair
     - ec2:DescribeInstances
+    - ec2:DescribeKeyPairs
     - ec2:RunInstances
     Resource: '*'
 package:
   include:
-  - boxbot.py
   - basic_auth.py
+  - boxbot.py
+  - image_aliases.py
   exclude:
   - "./**/**"
 plugins:
@@ -200,7 +203,7 @@ functions:
     environment:
       BOXBOT_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
       BOXBOT_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
-      BOXBOT_IMAGE_ALIASES: ${file(${env:BOXBOT_IMAGE_ALIASES_${opt:stage, 'dev'}, 'default-image-aliases.json'})}
+      BOXBOT_IMAGE_ALIASES: ${self:custom.imageAliases, 'default-image-aliases.json'}
     custom:
       env-resources:
       - VPC

@@ -17,7 +17,6 @@ downloads/
 eggs/
 env/
 htmlcov/
-image-aliases.json
 lib/
 lib64/
 node_modules/

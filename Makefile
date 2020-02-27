@@ -38,7 +38,8 @@ logs:
 
 .PHONY: clean
 clean:
-	$(RM) default-image-aliases.json
+	$(RM) image_aliases.py
 
-default-image-aliases.json: generate-image-aliases
+image_aliases.py: generate-image-aliases
 	./generate-image-aliases $@
+	black $@

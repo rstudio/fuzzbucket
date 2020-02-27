@@ -11,6 +11,8 @@ import boto3
 
 from botocore.exceptions import ClientError
 
+from image_aliases import image_aliases
+
 
 class Tags(enum.Enum):
     user = "boxbot:user"
@@ -172,8 +174,11 @@ def create_box(event, context, client=None, env=None):
             ),
         }
     except ClientError:
-        log.exception("oh no")
-        return {"statusCode": 500, "body": _to_json("oh no")}
+        log.exception("oh no boto3")
+        return {"statusCode": 500, "body": _to_json("oh no boto3")}
+    except FileNotFoundError:
+        log.exception("oh no file")
+        return {"statusCode": 500, "body": _to_json("oh no file")}
 
 
 def delete_box(event, context, client=None, env=None):
@@ -220,7 +225,7 @@ def _list_user_boxes(client, user, vpc_id):
 
 
 def _resolve_ami_alias(image_alias, env):
-    return json.loads(env["BOXBOT_IMAGE_ALIASES"]).get(image_alias, None)
+    return image_aliases.get(image_alias, None)
 
 
 def _extract_user(event):

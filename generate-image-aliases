@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import argparse
-import json
 import os
 import sys
 
@@ -9,7 +8,7 @@ from collections import namedtuple
 SearchEntry = namedtuple("SearchEntry", ("alias", "owner", "name"))
 
 CANONICAL_ID = "099720109477"
-CENTOS_ID = "679593333241"
+MARKETPLACE_ID = "679593333241"
 RHEL_ID = "309956199498"
 ALIAS_SEARCHES = [
     SearchEntry(
@@ -22,9 +21,9 @@ ALIAS_SEARCHES = [
         CANONICAL_ID,
         "ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*",
     ),
-    SearchEntry("centos6", CENTOS_ID, "CentOS Linux 6 x86_64 HVM EBS*"),
-    SearchEntry("centos7", CENTOS_ID, "CentOS Linux 7 x86_64 HVM EBS*"),
-    SearchEntry("centos8", CENTOS_ID, "CentOS Linux 8 x86_64 HVM EBS*"),
+    SearchEntry("centos6", MARKETPLACE_ID, "CentOS Linux 6 x86_64 HVM EBS*"),
+    SearchEntry("centos7", MARKETPLACE_ID, "CentOS Linux 7 x86_64 HVM EBS*"),
+    SearchEntry("centos8", MARKETPLACE_ID, "CentOS-8-x86_64-EBS-HVM-*"),
     SearchEntry("rhel6", RHEL_ID, "RHEL-6.10_HVM_*-x86_64-*"),
     SearchEntry("rhel7", RHEL_ID, "RHEL-7.8_HVM_*-x86_64-*"),
     SearchEntry("rhel8", RHEL_ID, "RHEL-8.2.0_HVM_*-x86_64-*"),
@@ -52,13 +51,12 @@ def main(sysargs=sys.argv[:]):
             raise RuntimeError(f"no images found for search={search}")
         image_aliases[search.alias] = sorted_images[-1]["ImageId"]
 
-    as_json = json.dumps(image_aliases, indent=2)
-    if args.outfile == "-":
-        print(as_json)
+    if os.path.basename(args.outfile) == "-":
+        print(f"image_aliases = {repr(image_aliases)}")
         return 0
 
     with open(args.outfile, "w") as out:
-        out.write(as_json)
+        out.write(f"image_aliases = {repr(image_aliases)}\n")
     return 0
 
 

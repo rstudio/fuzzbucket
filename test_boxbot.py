@@ -21,7 +21,6 @@ def authd_event():
 def env():
     return {
         "CF_VPC": "vpc-fafafafafaf",
-        "BOXBOT_IMAGE_ALIASES": '{"ubuntu18":"ami-fafafaf"}',
     }
 
 
