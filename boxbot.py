@@ -34,8 +34,12 @@ def list_boxes(event, context, client=None):
     body = {"instances": []}
     try:
         filters = [
-            {"Name": "tag-key", "Values": [TAGS["CREATED_AT"]]},
-            {"Name": f'tag:{TAGS["USER"]}', "Values": [user]},
+            dict(
+                Name="instance-state-name",
+                Values=["pending", "running", "stopping", "stopped"],
+            ),
+            dict(Name="tag-key", Values=[TAGS["CREATED_AT"]]),
+            dict(Name=f'tag:{TAGS["USER"]}', Values=[user]),
         ]
         body["instances"] = _describe_instances(client, Filters=filters)
         return {"statusCode": 200, "body": _to_json(body)}
@@ -74,22 +78,23 @@ def create_box(event, context, client=None):
             KeyName="connect",
             MinCount=1,
             MaxCount=1,
-            SecurityGroupIds=["sg-0620d67e0cd3cbdc3"],
             NetworkInterfaces=[
-                {
-                    "DeviceIndex": 0,
-                    "AssociatePublicIpAddress": True,
-                    "SubnetId": "subnet-0c5015feba8daf817",
-                }
+                dict(
+                    DeviceIndex=0,
+                    AssociatePublicIpAddress=True,
+                    DeleteOnTermination=True,
+                    SubnetId="subnet-0c5015feba8daf817",
+                    Groups=["sg-0620d67e0cd3cbdc3"],
+                )
             ],
             TagSpecifications=[
-                {
-                    "ResourceType": "instance",
-                    "Tags": [
-                        {"Key": TAGS["USER"], "Value": user},
-                        {"Key": TAGS["CREATED_AT"], "Value": str(time.time())},
+                dict(
+                    ResourceType="instance",
+                    Tags=[
+                        dict(Key=TAGS["USER"], Value=user),
+                        dict(Key=TAGS["CREATED_AT"], Value=str(time.time())),
                     ],
-                }
+                )
             ],
         )
         return {"statusCode": 200, "body": _to_json(response)}
