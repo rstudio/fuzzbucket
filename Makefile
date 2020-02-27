@@ -5,6 +5,7 @@ FUNCTION ?= list
 .PHONY: help
 help:
 	@echo "Choose your own adventure:"
+	@echo "- clean"
 	@echo "- deploy (STAGE=$(STAGE), REGION=$(REGION))"
 	@echo "- deps"
 	@echo "- help"
@@ -34,3 +35,10 @@ deploy:
 .PHONY: logs
 logs:
 	npx sls logs --function $(FUNCTION) --region $(REGION) --stage $(STAGE) --tail
+
+.PHONY: clean
+clean:
+	$(RM) default-image-aliases.json
+
+default-image-aliases.json: generate-image-aliases
+	./generate-image-aliases $@

@@ -1,2 +1,3 @@
 [tool.black]
 exclude = '/(\.venv|node_modules)/'
+include = 'generate-image-aliases'

@@ -1,6 +1,7 @@
 apiKeys:
 - admin
 defaultInstanceType: t3.small
+defaultImageAlias: ubuntu18
 memorySize: 128
 publicSubnetAvailabilityZone: us-east-1a
 publicSubnetCidrBlock: 172.98.0.0/19

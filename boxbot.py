@@ -95,7 +95,7 @@ def create_box(event, context, client=None, env=None):
             }
 
         image_alias = _q(event, "image_alias", "ubuntu18")
-        ami = _resolve_ami_alias(image_alias, None)
+        ami = _resolve_ami_alias(image_alias, env)
         if ami is None:
             return {
                 "statusCode": 400,
@@ -219,9 +219,8 @@ def _list_user_boxes(client, user, vpc_id):
     return list(sorted(boxes, key=lambda i: i.name))
 
 
-def _resolve_ami_alias(image_alias, default=None):
-    # TODO: dynamically?
-    return {"ubuntu18": "ami-046842448f9e74e7d"}.get(image_alias, default)
+def _resolve_ami_alias(image_alias, env):
+    return json.loads(env["BOXBOT_IMAGE_ALIASES"]).get(image_alias, None)
 
 
 def _extract_user(event):

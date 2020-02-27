@@ -19,7 +19,10 @@ def authd_event():
 
 @pytest.fixture
 def env():
-    return {"CF_VPC": "vpc-fafafafafaf"}
+    return {
+        "CF_VPC": "vpc-fafafafafaf",
+        "BOXBOT_IMAGE_ALIASES": '{"ubuntu18":"ami-fafafaf"}',
+    }
 
 
 @pytest.fixture

@@ -184,27 +184,6 @@ resources:
         Tags:
         - Key: Name
           Value: boxbot-${opt:stage, 'dev'}-connect-sg
-##     Outputs:
-##       vpcId:
-##         Description: VPC id
-##         Value: !Ref VPC
-##         Export:
-##           Name: boxbot-${opt:stage, 'dev'}-vpc
-##       boxbotDefaultSecurityGroup:
-##         Description: Boxbot Default VPC Security Group
-##         Value: !Ref BoxbotDefaultSecurityGroup
-##         Export:
-##           Name: boxbot-${opt:stage, 'dev'}-sg-default
-##       boxbotConnectSecurityGroup:
-##         Description: Boxbot Connect VPC Security Group
-##         Value: !Ref BoxbotConnectSecurityGroup
-##         Export:
-##           Name: boxbot-${opt:stage, 'dev'}-sg-connect
-##       publicSubnet:
-##         Description: Public subnet in VPC
-##         Value: !Ref PublicSubnet
-##         Export:
-##           Name: boxbot-${opt:stage, 'dev'}-subnet-public
 functions:
   list:
     handler: boxbot.list_boxes
@@ -220,6 +199,8 @@ functions:
     handler: boxbot.create_box
     environment:
       BOXBOT_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
+      BOXBOT_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
+      BOXBOT_IMAGE_ALIASES: ${file(${env:BOXBOT_IMAGE_ALIASES_${opt:stage, 'dev'}, 'default-image-aliases.json'})}
     custom:
       env-resources:
       - VPC
