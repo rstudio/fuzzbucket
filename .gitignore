@@ -8,6 +8,7 @@
 .serverless
 .venv/
 build/
+custom.yml
 develop-eggs/
 dist/
 downloads/

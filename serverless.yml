@@ -1,9 +1,9 @@
 service: boxbot
+custom: ${file(${env:BOXBOT_CUSTOM_${opt:stage, 'dev'}, 'empty-custom.yml'})}
 provider:
   name: aws
   runtime: python3.8
-  apiKeys:
-  - ${env:BOXBOT_API_KEY}
+  apiKeys: ${self:custom.apiKeys}
   iamRoleStatements:
   - Effect: Allow
     Action:
@@ -28,8 +28,8 @@ provider:
     - Fn::Join:
       - ':'
       - - arn:aws:ec2
-        - !Ref AWS::Region
-        - !Ref AWS::AccountId
+        - Ref: AWS::Region
+        - Ref: AWS::AccountId
         - instance/*
     - Fn::Join:
       - ':'
