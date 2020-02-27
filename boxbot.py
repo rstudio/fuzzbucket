@@ -1,4 +1,5 @@
 import base64
+import enum
 import json
 import logging
 import os
@@ -9,7 +10,60 @@ import boto3
 
 from botocore.exceptions import ClientError
 
-TAGS = {"USER": "boxbot:user", "CREATED_AT": "boxbot:created-at"}
+
+class Tags(enum.Enum):
+    user = "boxbot:user"
+    created_at = "boxbot:created-at"
+    image_alias = "boxbot:image-alias"
+
+
+class Box:
+    def __init__(self):
+        self.instance_id = ""
+        self.name = ""
+        self.created_at = ""
+        self.image_alias = ""
+        self.public_ip = None
+
+    @classmethod
+    def from_ec2_dict(cls, instance):
+        box = cls()
+        box.instance_id = instance["InstanceId"]
+        for tag in instance.get("Tags", []):
+            if tag["Key"] == "Name":
+                box.name = tag["Value"]
+            elif tag["Key"] == Tags.created_at.value:
+                box.created_at = tag["Value"]
+            elif tag["Key"] == Tags.image_alias.value:
+                box.image_alias = tag["Value"]
+
+        box.public_ip = instance.get("PublicIpAddress", None)
+        return box
+
+    @classmethod
+    def from_ec2_object(cls, instance):
+        box = cls()
+        box.instance_id = instance.instance_id
+        for tag in instance.tags:
+            if tag["Key"] == "Name":
+                box.name = tag["Value"]
+            elif tag["Key"] == Tags.created_at.value:
+                box.created_at = tag["Value"]
+            elif tag["Key"] == Tags.image_alias.value:
+                box.image_alias = tag["Value"]
+
+        box.public_ip = instance.public_ip_address
+        return box
+
+
+DEFAULT_FILTERS = [
+    dict(
+        Name="instance-state-name",
+        Values=["pending", "running", "stopping", "stopped"],
+    ),
+    dict(Name="tag-key", Values=[Tags.created_at.value]),
+    dict(Name="tag-key", Values=[Tags.image_alias.value]),
+]
 
 
 log = logging.getLogger(__name__)
@@ -31,18 +85,11 @@ def list_boxes(event, context, client=None):
             "body": _to_json("no user found"),
         }
 
-    body = {"instances": []}
     try:
-        filters = [
-            dict(
-                Name="instance-state-name",
-                Values=["pending", "running", "stopping", "stopped"],
-            ),
-            dict(Name="tag-key", Values=[TAGS["CREATED_AT"]]),
-            dict(Name=f'tag:{TAGS["USER"]}', Values=[user]),
-        ]
-        body["instances"] = _describe_instances(client, Filters=filters)
-        return {"statusCode": 200, "body": _to_json(body)}
+        return {
+            "statusCode": 200,
+            "body": _to_json({"instances": _list_user_boxes(client, user)}),
+        }
     except ClientError:
         log.exception("oh no")
         return {"statusCode": 500, "body": _to_json("oh no")}
@@ -70,6 +117,10 @@ def create_box(event, context, client=None):
             "body": _to_json(f"unknown image_alias={image_alias}"),
         }
 
+    for instance in _list_user_boxes(client, user):
+        if instance.image_alias == image_alias:
+            return {"statusCode": 409, "body": _to_json({"instances": [instance]})}
+
     try:
         response = client.run_instances(
             # FIXME: un-hardcodify
@@ -83,21 +134,33 @@ def create_box(event, context, client=None):
                     DeviceIndex=0,
                     AssociatePublicIpAddress=True,
                     DeleteOnTermination=True,
-                    SubnetId="subnet-0c5015feba8daf817",
-                    Groups=["sg-0620d67e0cd3cbdc3"],
+                    # SubnetId="subnet-0c5015feba8daf817",
+                    # Groups=["sg-0620d67e0cd3cbdc3"],
                 )
             ],
             TagSpecifications=[
                 dict(
                     ResourceType="instance",
                     Tags=[
-                        dict(Key=TAGS["USER"], Value=user),
-                        dict(Key=TAGS["CREATED_AT"], Value=str(time.time())),
+                        dict(Key="Name", Value=f"boxbot-{user}-{image_alias}"),
+                        dict(Key=Tags.user.value, Value=user),
+                        dict(Key=Tags.created_at.value, Value=str(time.time())),
+                        dict(Key=Tags.image_alias.value, Value=image_alias),
                     ],
                 )
             ],
         )
-        return {"statusCode": 200, "body": _to_json(response)}
+        return {
+            "statusCode": 200,
+            "body": _to_json(
+                {
+                    "instances": [
+                        Box.from_ec2_dict(inst)
+                        for inst in response.get("Instances", [])
+                    ]
+                }
+            ),
+        }
     except ClientError:
         log.exception("oh no")
         return {"statusCode": 500, "body": _to_json("oh no")}
@@ -108,28 +171,27 @@ def delete_box(event, context, client=None):
 
 
 def _to_json(thing):
-    return json.dumps(thing, sort_keys=True, default=str)
+    return json.dumps(thing, sort_keys=True, default=_as_json)
 
 
-def _describe_instances(client, *args, **kwargs):
+def _as_json(thing):
+    if hasattr(thing, "__dict__"):
+        return str(thing.__dict__)
+    return str(thing)
+
+
+def _list_user_boxes(client, user):
+    filters = DEFAULT_FILTERS + [
+        dict(Name=f"tag:{Tags.user.value}", Values=[user]),
+    ]
     instances = []
-    for reservation in client.describe_instances(*args, **kwargs).get(
+    for reservation in client.describe_instances(Filters=filters).get(
         "Reservations", []
     ):
-        for instance in reservation.get("Instances", []):
-            name = "<unknown>"
-            for tag in instance.get("Tags", []):
-                if tag["Key"] == "Name":
-                    name = tag["Value"]
-            record = {
-                "instance_id": instance["InstanceId"],
-                "name": name,
-            }
-            public_ip = instance.get("PublicIpAddress", None)
-            if public_ip is not None:
-                record["public_ip"] = public_ip
-            instances.append(record)
-    return list(sorted(instances, key=lambda i: i["name"]))
+        instances += [
+            Box.from_ec2_dict(inst) for inst in reservation.get("Instances", [])
+        ]
+    return list(sorted(instances, key=lambda i: i.name))
 
 
 def _resolve_ami_alias(image_alias, default=None):

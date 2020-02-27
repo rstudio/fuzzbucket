@@ -35,14 +35,14 @@ def test_list_boxes_forbidden():
 
 
 @mock_ec2
-@pytest.mark.skip(reason="subnet problems")
 def test_create_box(authd_event):
     client = boto3.client("ec2")
     response = boxbot.create_box(authd_event, None, client=client)
     assert response["statusCode"] == 200
     assert response["body"] is not None
     body = json.loads(response["body"])
-    assert "Instances" in body
+    assert "instances" in body
+    assert body["instances"] != []
 
 
 @mock_ec2
