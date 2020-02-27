@@ -18,7 +18,7 @@ def authd_event():
 
 @pytest.fixture
 def env():
-    return {"BOXBOT_VPC_ID": "vpc-fafafafafaf"}
+    return {"CF_VPC": "vpc-fafafafafaf"}
 
 
 @mock_ec2
