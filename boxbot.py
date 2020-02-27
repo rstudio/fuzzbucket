@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+import urllib.request
 
 import boto3
 
@@ -61,7 +62,6 @@ logging.basicConfig(
 
 
 def list_boxes(event, context, client=None, env=None):
-    log.warn(f"environ={json.dumps(dict(os.environ))}")
     client = client if client is not None else boto3.client("ec2")
     env = env if env is not None else dict(os.environ)
     vpc_id = env["CF_VPC"]
@@ -83,47 +83,64 @@ def list_boxes(event, context, client=None, env=None):
 
 
 def create_box(event, context, client=None, env=None):
-    client = client if client is not None else boto3.client("ec2")
-    env = env if env is not None else dict(os.environ)
-    vpc_id = env["CF_VPC"]
-    user = _extract_user(event)
-    if user is None:
-        return {
-            "statusCode": 403,
-            "body": _to_json("no user found"),
-        }
-
-    image_alias = _q(event, "image_alias", "ubuntu18")
-    ami = _resolve_ami_alias(image_alias, None)
-    if ami is None:
-        return {
-            "statusCode": 400,
-            "body": _to_json(f"unknown image_alias={image_alias}"),
-        }
-
-    for instance in _list_user_boxes(client, user, vpc_id):
-        if instance.image_alias == image_alias:
-            return {"statusCode": 409, "body": _to_json({"boxes": [instance]})}
-
-    network_interface = dict(
-        DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
-    )
-
-    subnet_id = env.get("CF_PublicSubnet", None)
-    if subnet_id is not None:
-        network_interface["SubnetId"] = subnet_id
-    security_groups = [
-        sg.strip() for sg in env.get("CF_BoxbotDefaultSecurityGroup", "").split(" ")
-    ]
-
-    if _q(event, "connect") is not None:
-        security_groups += [
-            sg.strip() for sg in env.get("CF_BoxbotConnectSecurityGroup", "").split(" ")
-        ]
-    if len(security_groups) > 0:
-        network_interface["Groups"] = security_groups
-
     try:
+        client = client if client is not None else boto3.client("ec2")
+        env = env if env is not None else dict(os.environ)
+        vpc_id = env["CF_VPC"]
+        user = _extract_user(event)
+        if user is None:
+            return {
+                "statusCode": 403,
+                "body": _to_json("no user found"),
+            }
+
+        image_alias = _q(event, "image_alias", "ubuntu18")
+        ami = _resolve_ami_alias(image_alias, None)
+        if ami is None:
+            return {
+                "statusCode": 400,
+                "body": _to_json(f"unknown image_alias={image_alias}"),
+            }
+
+        existing_keys = client.describe_key_pairs(
+            Filters=[dict(Name="key-name", Values=[user])]
+        )
+        if len(existing_keys["KeyPairs"]) == 0:
+            key_material = _fetch_first_github_key(user)
+            if key_material.strip() == "":
+                return {
+                    "statusCode": 400,
+                    "body": _to_json(f"could not fetch public key for user={user}"),
+                }
+
+            client.import_key_pair(
+                KeyName=user, PublicKeyMaterial=key_material.encode("utf-8")
+            )
+            log.debug(f"imported public key for user={user}")
+
+        for instance in _list_user_boxes(client, user, vpc_id):
+            if instance.image_alias == image_alias:
+                return {"statusCode": 409, "body": _to_json({"boxes": [instance]})}
+
+        network_interface = dict(
+            DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
+        )
+
+        subnet_id = env.get("CF_PublicSubnet", None)
+        if subnet_id is not None:
+            network_interface["SubnetId"] = subnet_id
+        security_groups = [
+            sg.strip() for sg in env.get("CF_BoxbotDefaultSecurityGroup", "").split(" ")
+        ]
+
+        if _q(event, "connect") is not None:
+            security_groups += [
+                sg.strip()
+                for sg in env.get("CF_BoxbotConnectSecurityGroup", "").split(" ")
+            ]
+        if len(security_groups) > 0:
+            network_interface["Groups"] = security_groups
+
         response = client.run_instances(
             ImageId=ami,
             InstanceType=env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
@@ -219,6 +236,11 @@ def _extract_user(event):
         return base64.b64decode(b64_token).decode("utf-8").split(":")[0]
 
     return _q(event, "user")
+
+
+def _fetch_first_github_key(user):
+    with urllib.request.urlopen(f"https://github.com/{user}.keys") as response:
+        return response.read().decode("utf-8").split("\n")[0].strip()
 
 
 def _q(event, key, default=None):
