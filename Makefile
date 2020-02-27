@@ -25,7 +25,7 @@ lint:
 
 .PHONY: test
 test:
-	pytest -v --disable-warnings
+	pytest --cov=boxbot -v --disable-warnings
 
 .PHONY: deploy
 deploy:

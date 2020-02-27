@@ -50,3 +50,25 @@ def test_create_box_forbidden():
     client = boto3.client("ec2")
     response = boxbot.create_box({}, None, client=client)
     assert response["statusCode"] == 403
+
+
+@mock_ec2
+def test_delete_box(authd_event):
+    client = boto3.client("ec2")
+    response = boxbot.create_box(authd_event, None, client=client)
+    assert response is not None
+    assert "body" in response
+    body = json.loads(response["body"])
+    assert "instances" in body
+    event = {"pathParameters": {"id": body["instances"][0]["instance_id"]}}
+    event.update(**authd_event)
+    response = boxbot.delete_box(event, None, client=client)
+    assert response["statusCode"] == 204
+
+
+@mock_ec2
+def test_delete_box_forbidden():
+    client = boto3.client("ec2")
+    event = {"pathParameters": {"id": "i-fafafafafafaf"}}
+    response = boxbot.delete_box(event, None, client=client)
+    assert response["statusCode"] == 403

@@ -65,17 +65,6 @@ functions:
     handler: boxbot.list_boxes
     events:
     - http: { path: /, method: get, private: true }
-  show:
-    handler: boxbot.show_box
-    events:
-    - http:
-        path: '/box/{id}'
-        method: get
-        private: true
-        request:
-          parameters:
-            paths:
-              id: true
   create:
     handler: boxbot.create_box
     events:

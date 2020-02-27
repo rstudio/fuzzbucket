@@ -3,6 +3,7 @@
 *.egg-info/
 .*env
 .Python
+.coverage
 .eggs/
 .installed.cfg
 .serverless

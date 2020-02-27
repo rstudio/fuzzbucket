@@ -40,21 +40,6 @@ class Box:
         box.public_ip = instance.get("PublicIpAddress", None)
         return box
 
-    @classmethod
-    def from_ec2_object(cls, instance):
-        box = cls()
-        box.instance_id = instance.instance_id
-        for tag in instance.tags:
-            if tag["Key"] == "Name":
-                box.name = tag["Value"]
-            elif tag["Key"] == Tags.created_at.value:
-                box.created_at = tag["Value"]
-            elif tag["Key"] == Tags.image_alias.value:
-                box.image_alias = tag["Value"]
-
-        box.public_ip = instance.public_ip_address
-        return box
-
 
 DEFAULT_FILTERS = [
     dict(
@@ -77,7 +62,6 @@ logging.basicConfig(
 
 def list_boxes(event, context, client=None):
     client = client if client is not None else boto3.client("ec2")
-
     user = _extract_user(event)
     if user is None:
         return {
@@ -95,13 +79,8 @@ def list_boxes(event, context, client=None):
         return {"statusCode": 500, "body": _to_json("oh no")}
 
 
-def show_box(event, context, client=None):
-    return {"statusCode": 501, "body": '"not implemented"'}
-
-
 def create_box(event, context, client=None):
     client = client if client is not None else boto3.client("ec2")
-
     user = _extract_user(event)
     if user is None:
         return {
@@ -167,7 +146,22 @@ def create_box(event, context, client=None):
 
 
 def delete_box(event, context, client=None):
-    return {"statusCode": 501, "body": '"not implemented"'}
+    client = client if client is not None else boto3.client("ec2")
+    user = _extract_user(event)
+    if user is None:
+        return {
+            "statusCode": 403,
+            "body": _to_json("no user found"),
+        }
+    instance_id = event.get("pathParameters", {}).get("id", None)
+    if instance_id is None:
+        return {"statusCode": 400, "body": _to_json("missing id")}
+    try:
+        client.terminate_instances(InstanceIds=[instance_id])
+        return {"statusCode": 204, "body": ""}
+    except ClientError:
+        log.exception("oh no")
+        return {"statusCode": 500, "body": _to_json("oh no")}
 
 
 def _to_json(thing):
@@ -176,7 +170,7 @@ def _to_json(thing):
 
 def _as_json(thing):
     if hasattr(thing, "__dict__"):
-        return str(thing.__dict__)
+        return thing.__dict__
     return str(thing)
 
 
