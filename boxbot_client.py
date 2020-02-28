@@ -71,7 +71,6 @@ def main(sysargs=sys.argv[:]):
         parser_ssh.set_defaults(func=client.ssh)
 
         args = parser.parse_args(sysargs[1:])
-        log.debug(f"parsed args={args!r}")
         if args.func(args):
             return 0
         return 86
@@ -93,10 +92,14 @@ class Client:
 
     def list(self, args):
         self._setup()
-        log.info(f"fetching boxes for user={self._user!r}")
+        log.debug(f"fetching boxes for user={self._user!r}")
         for box in self._list_boxes():
-            log.info(
-                " ".join([f"{field}={box[field]!r}" for field in sorted(box.keys())])
+            print(f"- {box['name']}:")
+            print(
+                "    "
+                + "\n    ".join(
+                    [f"{field}: {box[field]!r}" for field in sorted(box.keys())]
+                )
             )
         return True
 
