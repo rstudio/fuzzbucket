@@ -1,5 +1,4 @@
 FUNCTION ?= list
-PREFIX ?= $(HOME)
 REGION ?= us-east-1
 STAGE ?= dev
 
@@ -10,7 +9,7 @@ help:
 	@echo "- deploy (STAGE=$(STAGE), REGION=$(REGION))"
 	@echo "- deps"
 	@echo "- help"
-	@echo "- install-client (PREFIX=$(PREFIX))"
+	@echo "- install-client"
 	@echo "- lint"
 	@echo "- logs (STAGE=$(STAGE), REGION=$(REGION), FUNCTION=$(FUNCTION))"
 	@echo "- test"
@@ -48,4 +47,4 @@ image_aliases.py: generate_image_aliases.py
 
 .PHONY: install-client
 install-client:
-	install -m 0755 boxbot_client.py $(PREFIX)/bin/boxbot-client
+	python setup.py install
