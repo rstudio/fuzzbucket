@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import sys
+import urllib.parse
 import urllib.request
 
 log = logging.getLogger("boxbot")
@@ -70,12 +71,11 @@ class Client:
 
     def list(self, args):
         self.setup()
-        raw_response = {}
         req = self._build_request(self._url)
-        log.debug(f"built request for url={self._url!r}")
+        raw_response = {}
         with urllib.request.urlopen(req) as response:
             raw_response = json.load(response)
-        log.info(f"fetched boxes for user={self._user}")
+        log.info(f"fetched boxes for user={self._user!r}")
         for box in raw_response["boxes"]:
             log.info(
                 " ".join([f"{field}={box[field]}" for field in sorted(box.keys())])
@@ -83,7 +83,27 @@ class Client:
 
     def create(self, args):
         self.setup()
-        pass
+        payload = {
+            "instance_type": args.instance_type,
+            "image_alias": args.image_alias,
+        }
+        if args.connect:
+            payload["connect"] = "1"
+        req = self._build_request(
+            os.path.join(self._url, "box"),
+            data=urllib.parse.urlencode(payload).encode("utf-8"),
+            method="POST",
+        )
+        raw_response = {}
+        with urllib.request.urlopen(req) as response:
+            raw_response = json.load(response)
+        log.info(f"created box for user={self._user!r}")
+        for box in raw_response["boxes"]:
+            log.info(
+                " ".join([f"{field}={box[field]}" for field in sorted(box.keys())])
+            )
+            if box["public_ip"] is None:
+                log.warn(f"public_ip is has not yet been assigned")
 
     @property
     def _url(self):
