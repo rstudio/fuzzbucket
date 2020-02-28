@@ -6,7 +6,7 @@ provider:
   memorySize: ${self:custom.memorySize, 128}
   apiKeys: ${self:custom.apiKeys}
   environment:
-    LOG_LEVEL: debug
+    LOG_LEVEL: info
   iamRoleStatements:
   - Effect: Allow
     Action:
