@@ -4,7 +4,6 @@ import enum
 import json
 import logging
 import os
-import sys
 import time
 import urllib.request
 
@@ -81,32 +80,32 @@ DEFAULT_FILTERS = [
 ]
 
 
-log = logging.getLogger(__name__)
-logging.basicConfig(
-    stream=sys.stdout,
-    style="{",
-    format="name={name!r} level={levelname!r} time={asctime!r} msg={message!r}",
-    level=getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()),
-)
+ROOT_LOG = logging.getLogger()
+log = ROOT_LOG.getChild("boxbot")
+log.setLevel(getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()))
 
 
 def list_boxes(event, context, client=None, env=None):
-    client = client if client is not None else boto3.client("ec2")
-    env = env if env is not None else dict(os.environ)
-    vpc_id = env["CF_VPC"]
-    user = _extract_user(event)
-    if user is None:
-        return {
-            "statusCode": 403,
-            "body": _to_json("no user found"),
-        }
-
     try:
+        client = client if client is not None else boto3.client("ec2")
+        env = env if env is not None else dict(os.environ)
+        vpc_id = env["CF_VPC"]
+        log.debug(f"handling event={event!r}")
+        user = _extract_user(event)
+        if user is None:
+            return {
+                "statusCode": 403,
+                "body": _to_json("no user found"),
+            }
+
         return {
             "statusCode": 200,
             "body": _to_json({"boxes": _list_user_boxes(client, user, vpc_id)}),
         }
     except ClientError:
+        log.exception("oh no boto3")
+        return {"statusCode": 500, "body": _to_json("oh no boto3")}
+    except Exception:
         log.exception("oh no")
         return {"statusCode": 500, "body": _to_json("oh no")}
 
@@ -116,6 +115,7 @@ def create_box(event, context, client=None, env=None):
         client = client if client is not None else boto3.client("ec2")
         env = env if env is not None else dict(os.environ)
         vpc_id = env["CF_VPC"]
+        log.debug(f"handling event={event!r}")
         user = _extract_user(event)
         if user is None:
             return {
@@ -123,11 +123,12 @@ def create_box(event, context, client=None, env=None):
                 "body": _to_json("no user found"),
             }
 
-        ami = _q(event, "ami")
+        body = json.loads(event.get("body", "{}"))
+        ami = body.get("ami")
         if ami is not None:
             image_alias = "custom"
         else:
-            image_alias = _q(event, "image_alias", "ubuntu18")
+            image_alias = body.get("image_alias", "ubuntu18")
             ami = _resolve_ami_alias(image_alias, env)
         if ami is None:
             return {
@@ -151,8 +152,12 @@ def create_box(event, context, client=None, env=None):
             )
             log.debug(f"imported public key for user={user}")
 
+        name = body.get("name")
+        if name is None:
+            name = f"boxbot-{user}-{image_alias}"
+
         for instance in _list_user_boxes(client, user, vpc_id):
-            if instance.image_alias == image_alias:
+            if instance.name == name:
                 return {"statusCode": 409, "body": _to_json({"boxes": [instance]})}
 
         network_interface = dict(
@@ -166,7 +171,7 @@ def create_box(event, context, client=None, env=None):
             sg.strip() for sg in env.get("CF_BoxbotDefaultSecurityGroup", "").split(" ")
         ]
 
-        if _q(event, "connect") is not None:
+        if body.get("connect") is not None:
             security_groups += [
                 sg.strip()
                 for sg in env.get("CF_BoxbotConnectSecurityGroup", "").split(" ")
@@ -176,10 +181,8 @@ def create_box(event, context, client=None, env=None):
 
         response = client.run_instances(
             ImageId=ami,
-            InstanceType=_q(
-                event,
-                "instance_type",
-                env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
+            InstanceType=body.get(
+                "instance_type", env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
             ),
             KeyName=user,
             MinCount=1,
@@ -189,7 +192,7 @@ def create_box(event, context, client=None, env=None):
                 dict(
                     ResourceType="instance",
                     Tags=[
-                        dict(Key="Name", Value=f"boxbot-{user}-{image_alias}"),
+                        dict(Key="Name", Value=name),
                         dict(Key=Tags.user.value, Value=user),
                         dict(Key=Tags.created_at.value, Value=str(time.time())),
                         dict(Key=Tags.image_alias.value, Value=image_alias),
@@ -214,24 +217,31 @@ def create_box(event, context, client=None, env=None):
     except FileNotFoundError:
         log.exception("oh no file")
         return {"statusCode": 500, "body": _to_json("oh no file")}
+    except Exception:
+        log.exception("oh no")
+        return {"statusCode": 500, "body": _to_json("oh no")}
 
 
 def delete_box(event, context, client=None, env=None):
-    client = client if client is not None else boto3.client("ec2")
-    env = env if env is not None else dict(os.environ)
-    user = _extract_user(event)
-    if user is None:
-        return {
-            "statusCode": 403,
-            "body": _to_json("no user found"),
-        }
-    instance_id = event.get("pathParameters", {}).get("id", None)
-    if instance_id is None:
-        return {"statusCode": 400, "body": _to_json("missing id")}
     try:
+        client = client if client is not None else boto3.client("ec2")
+        env = env if env is not None else dict(os.environ)
+        log.debug(f"handling event={event!r}")
+        user = _extract_user(event)
+        if user is None:
+            return {
+                "statusCode": 403,
+                "body": _to_json("no user found"),
+            }
+        instance_id = event.get("pathParameters", {}).get("id", None)
+        if instance_id is None:
+            return {"statusCode": 400, "body": _to_json("missing id")}
         client.terminate_instances(InstanceIds=[instance_id])
         return {"statusCode": 204, "body": ""}
     except ClientError:
+        log.exception("oh no boto3")
+        return {"statusCode": 500, "body": _to_json("oh no boto3")}
+    except Exception:
         log.exception("oh no")
         return {"statusCode": 500, "body": _to_json("oh no")}
 
@@ -241,10 +251,10 @@ def _to_json(thing):
 
 
 def _as_json(thing):
-    if hasattr(thing, "__dict__"):
-        return thing.__dict__
     if hasattr(thing, "as_json") and callable(thing.as_json):
         return thing.as_json()
+    if hasattr(thing, "__dict__"):
+        return thing.__dict__
     return str(thing)
 
 

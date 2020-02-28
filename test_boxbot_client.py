@@ -1,4 +1,3 @@
-import argparse
 import contextlib
 import io
 import json
@@ -34,16 +33,18 @@ def gen_fake_urlopen(response):
 
 def test_client_list(monkeypatch):
     client = boxbot_client.Client()
+    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
         gen_fake_urlopen(io.StringIO(json.dumps({"boxes": [{"fancy": "probably"}]}))),
     )
-    client.list(None)
+    boxbot_client.main(["boxbot-client", "list"])
 
 
 def test_client_create(monkeypatch):
     client = boxbot_client.Client()
+    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
@@ -55,8 +56,8 @@ def test_client_create(monkeypatch):
             )
         ),
     )
-    client.create(
-        argparse.Namespace(instance_type="t8.pico", image="ubuntu49", connect=False)
+    boxbot_client.main(
+        ["boxbot-client", "create", "ubuntu49", "--instance-type=t8.pico", "--connect"]
     )
 
     monkeypatch.setattr(
@@ -68,23 +69,28 @@ def test_client_create(monkeypatch):
             )
         ),
     )
-    client.create(
-        argparse.Namespace(
-            instance_type="t9.nano", image="ami-fafbafabcadabfabcdabcbaf", connect=False
-        )
+    boxbot_client.main(
+        [
+            "boxbot-client",
+            "create",
+            "ami-fafbafabcadabfabcdabcbaf",
+            "--instance-type=t8.nano",
+        ]
     )
 
 
 def test_client_delete(monkeypatch):
     client = boxbot_client.Client()
+    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
     )
-    client.delete(argparse.Namespace(instance_id="i-havesomuchmoretogive"))
+    boxbot_client.main(["boxbot-client", "delete", "i-havesomuchmoretogive"])
 
 
 def test_client_ssh(monkeypatch):
     client = boxbot_client.Client()
+    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
 
     def fake_execvp(file, args):
         assert file == "ssh"
@@ -96,4 +102,4 @@ def test_client_ssh(monkeypatch):
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
-    client.ssh(argparse.Namespace(box="koolthing", ssh_user="cornelius"))
+    boxbot_client.main(["boxbot-client", "ssh", "koolthing", "--ssh-user=cornelius"])

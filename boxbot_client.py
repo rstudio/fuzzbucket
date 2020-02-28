@@ -28,9 +28,13 @@ logging.basicConfig(
 )
 
 
+def default_client():
+    return Client()
+
+
 def main(sysargs=sys.argv[:]):
     try:
-        client = Client()
+        client = default_client()
         parser = argparse.ArgumentParser(
             description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
         )
@@ -44,6 +48,9 @@ def main(sysargs=sys.argv[:]):
         parser_create = subparsers.add_parser("create", help="Create a box.")
         parser_create.add_argument(
             "image", default="ubuntu18", help="image alias or full AMI id"
+        )
+        parser_create.add_argument(
+            "-n", "--name", help="custom name for box (generated if omitted)"
         )
         parser_create.add_argument(
             "-c",
@@ -64,6 +71,7 @@ def main(sysargs=sys.argv[:]):
         parser_ssh.set_defaults(func=client.ssh)
 
         args = parser.parse_args(sysargs[1:])
+        log.debug(f"parsed args={args!r}")
         if args.func(args):
             return 0
         return 86
@@ -103,9 +111,11 @@ class Client:
             payload["image_alias"] = args.image
         if args.connect:
             payload["connect"] = "1"
+        if args.name != "":
+            payload["name"] = args.name
         req = self._build_request(
             os.path.join(self._url, "box"),
-            data=urllib.parse.urlencode(payload).encode("utf-8"),
+            data=json.dumps(payload).encode("utf-8"),
             method="POST",
         )
         raw_response = {}
@@ -116,7 +126,7 @@ class Client:
             log.info(
                 " ".join([f"{field}={box[field]!r}" for field in sorted(box.keys())])
             )
-            if box["public_ip"] is None:
+            if box.get("public_ip") is None:
                 log.warning(f"public_ip is has not yet been assigned")
         return True
 
