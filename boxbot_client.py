@@ -4,8 +4,9 @@ A client for boxbot.
 
 Configuration is accepted via the following environment variables:
 
-    BOXBOT_URL - string URL of the boxbot instance, including "user:token"
-                 credentials and path prefix
+    BOXBOT_URL - string URL of the boxbot instance including path prefix
+    BOXBOT_CREDENTIALS - "github-user:boxbot-token" string
+
 """
 import argparse
 import contextlib
@@ -84,7 +85,7 @@ class Client:
         log.info(f"fetched boxes for user={self._user!r}")
         for box in raw_response["boxes"]:
             log.info(
-                " ".join([f"{field}={box[field]}" for field in sorted(box.keys())])
+                " ".join([f"{field}={box[field]!r}" for field in sorted(box.keys())])
             )
 
     def create(self, args):
