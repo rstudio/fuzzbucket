@@ -196,10 +196,6 @@ functions:
     custom:
       env-resources:
       - VPC
-      - PublicSubnet
-      - BoxbotDefaultSecurityGroup
-      - BoxbotConnectSecurityGroup
-      - ApiGatewayRestApi
     events:
     - http: { path: /, method: get, private: true }
   create:
@@ -214,7 +210,6 @@ functions:
       - PublicSubnet
       - BoxbotDefaultSecurityGroup
       - BoxbotConnectSecurityGroup
-      - ApiGatewayRestApi
     events:
     - http: { path: /box, method: post, private: true }
   delete:
@@ -222,16 +217,20 @@ functions:
     custom:
       env-resources:
       - VPC
-      - PublicSubnet
-      - BoxbotDefaultSecurityGroup
-      - BoxbotConnectSecurityGroup
-      - ApiGatewayRestApi
     events:
     - http:
         path: '/box/{id}'
         method: delete
         private: true
-        request:
-          parameters:
-            paths:
-              id: true
+        request: { parameters: { paths: { id: true } } }
+  reboot:
+    handler: boxbot.reboot_box
+    custom:
+      env-resources:
+      - VPC
+    events:
+    - http:
+        path: '/reboot/{id}'
+        method: post
+        private: true
+        request: { parameters: { paths: { id: true } } }

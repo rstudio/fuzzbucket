@@ -57,7 +57,9 @@ class Box:
         box.instance_id = instance["InstanceId"]
         box.instance_type = instance["InstanceType"]
         box.image_id = instance["ImageId"]
-        box.public_dns_name = instance["PublicDnsName"]
+        box.public_dns_name = (
+            instance["PublicDnsName"] if instance["PublicDnsName"] != "" else None
+        )
         for tag in instance.get("Tags", []):
             if tag["Key"] == "Name":
                 box.name = tag["Value"]
@@ -222,10 +224,11 @@ def create_box(event, context, client=None, env=None):
         return {"statusCode": 500, "body": _to_json("oh no")}
 
 
-def delete_box(event, context, client=None, env=None):
+def reboot_box(event, context, client=None, env=None):
     try:
         client = client if client is not None else boto3.client("ec2")
         env = env if env is not None else dict(os.environ)
+        vpc_id = env["CF_VPC"]
         log.debug(f"handling event={event!r}")
         user = _extract_user(event)
         if user is None:
@@ -236,6 +239,39 @@ def delete_box(event, context, client=None, env=None):
         instance_id = event.get("pathParameters", {}).get("id", None)
         if instance_id is None:
             return {"statusCode": 400, "body": _to_json("missing id")}
+        if instance_id not in [
+            b.instance_id for b in _list_user_boxes(client, user, vpc_id)
+        ]:
+            return {"statusCode": 403, "body": _to_json("no touching")}
+        client.reboot_instances(InstanceIds=[instance_id])
+        return {"statusCode": 204, "body": ""}
+    except ClientError:
+        log.exception("oh no boto3")
+        return {"statusCode": 500, "body": _to_json("oh no boto3")}
+    except Exception:
+        log.exception("oh no")
+        return {"statusCode": 500, "body": _to_json("oh no")}
+
+
+def delete_box(event, context, client=None, env=None):
+    try:
+        client = client if client is not None else boto3.client("ec2")
+        env = env if env is not None else dict(os.environ)
+        vpc_id = env["CF_VPC"]
+        log.debug(f"handling event={event!r}")
+        user = _extract_user(event)
+        if user is None:
+            return {
+                "statusCode": 403,
+                "body": _to_json("no user found"),
+            }
+        instance_id = event.get("pathParameters", {}).get("id", None)
+        if instance_id is None:
+            return {"statusCode": 400, "body": _to_json("missing id")}
+        if instance_id not in [
+            b.instance_id for b in _list_user_boxes(client, user, vpc_id)
+        ]:
+            return {"statusCode": 403, "body": _to_json("no touching")}
         client.terminate_instances(InstanceIds=[instance_id])
         return {"statusCode": 204, "body": ""}
     except ClientError:

@@ -85,7 +85,16 @@ def test_client_delete(monkeypatch):
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
     )
-    boxbot_client.main(["boxbot-client", "delete", "i-havesomuchmoretogive"])
+    boxbot_client.main(["boxbot-client", "delete", "welp"])
+
+
+def test_client_reboot(monkeypatch):
+    client = boxbot_client.Client()
+    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
+    monkeypatch.setattr(
+        client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
+    )
+    boxbot_client.main(["boxbot-client", "reboot", "zombie-skills"])
 
 
 def test_client_ssh(monkeypatch):

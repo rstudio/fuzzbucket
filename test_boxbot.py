@@ -89,8 +89,16 @@ def test_delete_box(authd_event, env, monkeypatch, pubkey):
     assert "boxes" in body
     event = {"pathParameters": {"id": body["boxes"][0]["instance_id"]}}
     event.update(**authd_event)
-    response = boxbot.delete_box(event, None, client=client)
-    assert response["statusCode"] == 204
+
+    all_instances = client.describe_instances()
+    with monkeypatch.context() as mp:
+
+        def fake_describe_instances(*_args, **_kwargs):
+            return all_instances
+
+        mp.setattr(client, "describe_instances", fake_describe_instances)
+        response = boxbot.delete_box(event, None, client=client, env=env)
+        assert response["statusCode"] == 204
 
 
 @mock_ec2
@@ -98,6 +106,38 @@ def test_delete_box_forbidden(env):
     client = boto3.client("ec2")
     event = {"pathParameters": {"id": "i-fafafafafafaf"}}
     response = boxbot.delete_box(event, None, client=client, env=env)
+    assert response["statusCode"] == 403
+
+
+@mock_ec2
+def test_reboot_box(authd_event, env, monkeypatch, pubkey):
+    client = boto3.client("ec2")
+    with monkeypatch.context() as mp:
+        mp.setattr(boxbot, "_fetch_first_github_key", lambda u: pubkey)
+        response = boxbot.create_box(authd_event, None, client=client, env=env)
+    assert response is not None
+    assert "body" in response
+    body = json.loads(response["body"])
+    assert "boxes" in body
+    event = {"pathParameters": {"id": body["boxes"][0]["instance_id"]}}
+    event.update(**authd_event)
+
+    all_instances = client.describe_instances()
+    with monkeypatch.context() as mp:
+
+        def fake_describe_instances(*_args, **_kwargs):
+            return all_instances
+
+        mp.setattr(client, "describe_instances", fake_describe_instances)
+        response = boxbot.reboot_box(event, None, client=client, env=env)
+        assert response["statusCode"] == 204
+
+
+@mock_ec2
+def test_reboot_box_forbidden(env):
+    client = boto3.client("ec2")
+    event = {"pathParameters": {"id": "i-fafafafafafaf"}}
+    response = boxbot.reboot_box(event, None, client=client, env=env)
     assert response["statusCode"] == 403
 
 

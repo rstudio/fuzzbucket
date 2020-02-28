@@ -9,6 +9,7 @@ Configuration is accepted via the following environment variables:
 
 """
 import argparse
+import configparser
 import contextlib
 import base64
 import json
@@ -22,7 +23,7 @@ log = logging.getLogger("boxbot")
 logging.basicConfig(
     stream=sys.stdout,
     style="{",
-    format="{name}:{levelname}:{asctime}:: {message}",
+    format="# {name}:{levelname}:{asctime}:: {message}",
     datefmt="%Y-%m-%dT%H%M%S",
     level=getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()),
 )
@@ -45,7 +46,9 @@ def main(sysargs=sys.argv[:]):
         )
         parser_list.set_defaults(func=client.list)
 
-        parser_create = subparsers.add_parser("create", help="Create a box.")
+        parser_create = subparsers.add_parser(
+            "create", aliases=["new"], help="Create a box."
+        )
         parser_create.add_argument(
             "image", default="ubuntu18", help="image alias or full AMI id"
         )
@@ -61,9 +64,17 @@ def main(sysargs=sys.argv[:]):
         parser_create.add_argument("-t", "--instance-type", default="t3.small")
         parser_create.set_defaults(func=client.create)
 
-        parser_delete = subparsers.add_parser("delete", help="Delete a box.")
-        parser_delete.add_argument("instance_id")
+        parser_delete = subparsers.add_parser(
+            "delete", aliases=["rm"], help="Delete a box."
+        )
+        parser_delete.add_argument("box")
         parser_delete.set_defaults(func=client.delete)
+
+        parser_reboot = subparsers.add_parser(
+            "reboot", aliases=["restart"], help="Reboot a box."
+        )
+        parser_reboot.add_argument("box")
+        parser_reboot.set_defaults(func=client.reboot)
 
         parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
         parser_ssh.add_argument("box")
@@ -93,14 +104,12 @@ class Client:
     def list(self, args):
         self._setup()
         log.debug(f"fetching boxes for user={self._user!r}")
-        for box in self._list_boxes():
-            print(f"- {box['name']}:")
-            print(
-                "    "
-                + "\n    ".join(
-                    [f"{field}: {box[field]!r}" for field in sorted(box.keys())]
-                )
-            )
+        boxes_ini = configparser.ConfigParser()
+        boxes = self._list_boxes()
+        log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
+        for box in boxes:
+            boxes_ini[box["name"]] = box
+        boxes_ini.write(sys.stdout)
         return True
 
     def create(self, args):
@@ -135,24 +144,36 @@ class Client:
 
     def delete(self, args):
         self._setup()
+        matching_box = self._find_box(args.box)
+        if matching_box is None:
+            log.error(f"no box found matching {args.box!r}")
+            return False
         req = self._build_request(
-            os.path.join(self._url, "box", args.instance_id), method="DELETE"
+            os.path.join(self._url, "box", matching_box["instance_id"]), method="DELETE"
         )
         with self._urlopen(req) as response:
             _ = response.read()
-        log.info(
-            f"deleted box for user={self._user!r} instance_id={args.instance_id!r}"
+        log.info(f"deleted box for user={self._user!r} name={matching_box['name']}")
+        return True
+
+    def reboot(self, args):
+        self._setup()
+        matching_box = self._find_box(args.box)
+        if matching_box is None:
+            log.error(f"no box found matching {args.box!r}")
+            return False
+        req = self._build_request(
+            os.path.join(self._url, "reboot", matching_box["instance_id"]),
+            method="POST",
         )
+        with self._urlopen(req) as response:
+            _ = response.read()
+        log.info(f"rebooted box for user={self._user!r} box={matching_box['name']!r}")
         return True
 
     def ssh(self, args):
         self._setup()
-        boxes = self._list_boxes()
-        matching_box = None
-        for box in boxes:
-            if box.get("name") == args.box or box.get("image_alias") == args.box:
-                matching_box = box
-                break
+        matching_box = self._find_box(args.box)
         if matching_box is None:
             log.error(f"no box found matching {args.box!r}")
             return False
@@ -161,6 +182,14 @@ class Client:
         os.execvp(
             "ssh", ["ssh", f"{args.ssh_user}@{matching_box.get('public_dns_name')}"]
         )
+
+    def _find_box(self, box_search):
+        boxes = self._list_boxes()
+        for box in boxes:
+            log.debug(f"finding box_search={box_search!r} considering box={box!r}")
+            if box.get("name") == box_search or box.get("image_alias") == box_search:
+                return box
+        return None
 
     def _list_boxes(self):
         req = self._build_request(self._url)
