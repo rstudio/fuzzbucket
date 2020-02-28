@@ -1,4 +1,5 @@
 import base64
+import datetime
 import enum
 import json
 import logging
@@ -22,16 +23,42 @@ class Tags(enum.Enum):
 
 class Box:
     def __init__(self):
-        self.instance_id = ""
-        self.name = ""
-        self.created_at = ""
-        self.image_alias = ""
+        self.created_at = None
+        self.image_alias = None
+        self.image_id = None
+        self.instance_id = None
+        self.instance_type = None
+        self.name = None
+        self.public_dns_name = None
         self.public_ip = None
+
+    def as_json(self):
+        return dict(
+            [
+                (key, getattr(self, key))
+                for key in (list(self.__dict__.keys()) + ["age"])
+                if getattr(self, key) is not None
+            ]
+        )
+
+    @property
+    def age(self):
+        if not self.created_at:
+            return "?"
+        delta = datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(
+            float(self.created_at)
+        )
+        hours, remainder = divmod(delta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{delta.days}d{hours}h{minutes}m{seconds}s"
 
     @classmethod
     def from_ec2_dict(cls, instance):
         box = cls()
         box.instance_id = instance["InstanceId"]
+        box.instance_type = instance["InstanceType"]
+        box.image_id = instance["ImageId"]
+        box.public_dns_name = instance["PublicDnsName"]
         for tag in instance.get("Tags", []):
             if tag["Key"] == "Name":
                 box.name = tag["Value"]
@@ -96,8 +123,12 @@ def create_box(event, context, client=None, env=None):
                 "body": _to_json("no user found"),
             }
 
-        image_alias = _q(event, "image_alias", "ubuntu18")
-        ami = _resolve_ami_alias(image_alias, env)
+        ami = _q(event, "ami")
+        if ami is not None:
+            image_alias = "custom"
+        else:
+            image_alias = _q(event, "image_alias", "ubuntu18")
+            ami = _resolve_ami_alias(image_alias, env)
         if ami is None:
             return {
                 "statusCode": 400,
@@ -212,6 +243,8 @@ def _to_json(thing):
 def _as_json(thing):
     if hasattr(thing, "__dict__"):
         return thing.__dict__
+    if hasattr(thing, "as_json") and callable(thing.as_json):
+        return thing.as_json()
     return str(thing)
 
 

@@ -1,6 +1,7 @@
 import base64
 import json
 import random
+import time
 
 import boto3
 import pytest
@@ -98,3 +99,15 @@ def test_delete_box_forbidden(env):
     event = {"pathParameters": {"id": "i-fafafafafafaf"}}
     response = boxbot.delete_box(event, None, client=client, env=env)
     assert response["statusCode"] == 403
+
+
+def test_box():
+    box = boxbot.Box()
+    box.instance_id = "i-fafafafafafafaf"
+    assert box.age == "?"
+
+    box.created_at = str(time.time() - 1000)
+    assert box.age.startswith("0d5h")
+
+    assert "instance_id" in box.as_json()
+    assert "age" in box.as_json()

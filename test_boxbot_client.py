@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import io
 import json
+import os
 
 import pytest
 
@@ -55,8 +56,21 @@ def test_client_create(monkeypatch):
         ),
     )
     client.create(
+        argparse.Namespace(instance_type="t8.pico", image="ubuntu49", connect=False)
+    )
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(
+            io.StringIO(
+                json.dumps({"boxes": [{"public_ip": None, "worth": "immeasurable"}]})
+            )
+        ),
+    )
+    client.create(
         argparse.Namespace(
-            instance_type="t8.pico", image_alias="ubuntu49", connect=False
+            instance_type="t9.nano", image="ami-fafbafabcadabfabcdabcbaf", connect=False
         )
     )
 
@@ -67,3 +81,19 @@ def test_client_delete(monkeypatch):
         client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
     )
     client.delete(argparse.Namespace(instance_id="i-havesomuchmoretogive"))
+
+
+def test_client_ssh(monkeypatch):
+    client = boxbot_client.Client()
+
+    def fake_execvp(file, args):
+        assert file == "ssh"
+        assert args == ["ssh", "cornelius@ethereal-plane.example.org"]
+
+    def fake_list_boxes():
+        return [{"name": "koolthing", "public_dns_name": "ethereal-plane.example.org"}]
+
+    monkeypatch.setattr(os, "execvp", fake_execvp)
+    monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
+
+    client.ssh(argparse.Namespace(box="koolthing", ssh_user="cornelius"))
