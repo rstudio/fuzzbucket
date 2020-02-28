@@ -8,6 +8,7 @@ Configuration is accepted via the following environment variables:
                  credentials and path prefix
 """
 import argparse
+import contextlib
 import base64
 import json
 import logging
@@ -20,7 +21,8 @@ log = logging.getLogger("boxbot")
 logging.basicConfig(
     stream=sys.stdout,
     style="{",
-    format="name={name!r} level={levelname!r} time={asctime!r} msg={message!r}",
+    format="{name}:{levelname}:{asctime}:: {message}",
+    datefmt="%Y-%m-%dT%H%M%S",
     level=getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()),
 )
 
@@ -39,7 +41,7 @@ def main(sysargs=sys.argv[:]):
         parser_list.set_defaults(func=client.list)
 
         parser_create = subparsers.add_parser("create", help="Create a box.")
-        parser_create.add_argument("-a", "--image-alias", default="ubuntu18")
+        parser_create.add_argument("image_alias", default="ubuntu18")
         parser_create.add_argument(
             "-c",
             "--connect",
@@ -48,6 +50,10 @@ def main(sysargs=sys.argv[:]):
         )
         parser_create.add_argument("-t", "--instance-type", default="t3.small")
         parser_create.set_defaults(func=client.create)
+
+        parser_delete = subparsers.add_parser("delete", help="Delete a box.")
+        parser_delete.add_argument("instance_id")
+        parser_delete.set_defaults(func=client.delete)
 
         args = parser.parse_args(sysargs[1:])
         args.func(args)
@@ -63,17 +69,17 @@ class Client:
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
 
-    def setup(self):
+    def _setup(self):
         if self._url is None:
             raise ValueError("missing url")
         if self._credentials is None:
             raise ValueError("missing credentials")
 
     def list(self, args):
-        self.setup()
+        self._setup()
         req = self._build_request(self._url)
         raw_response = {}
-        with urllib.request.urlopen(req) as response:
+        with self._urlopen(req) as response:
             raw_response = json.load(response)
         log.info(f"fetched boxes for user={self._user!r}")
         for box in raw_response["boxes"]:
@@ -82,7 +88,7 @@ class Client:
             )
 
     def create(self, args):
-        self.setup()
+        self._setup()
         payload = {
             "instance_type": args.instance_type,
             "image_alias": args.image_alias,
@@ -95,15 +101,31 @@ class Client:
             method="POST",
         )
         raw_response = {}
-        with urllib.request.urlopen(req) as response:
+        with self._urlopen(req) as response:
             raw_response = json.load(response)
         log.info(f"created box for user={self._user!r}")
         for box in raw_response["boxes"]:
             log.info(
-                " ".join([f"{field}={box[field]}" for field in sorted(box.keys())])
+                " ".join([f"{field}={box[field]!r}" for field in sorted(box.keys())])
             )
             if box["public_ip"] is None:
-                log.warn(f"public_ip is has not yet been assigned")
+                log.warning(f"public_ip is has not yet been assigned")
+
+    def delete(self, args):
+        self._setup()
+        req = self._build_request(
+            os.path.join(self._url, "box", args.instance_id), method="DELETE"
+        )
+        with self._urlopen(req) as response:
+            _ = response.read()
+        log.info(
+            f"deleted box for user={self._user!r} instance_id={args.instance_id!r}"
+        )
+
+    @contextlib.contextmanager
+    def _urlopen(self, request):
+        with urllib.request.urlopen(request) as response:
+            yield response
 
     @property
     def _url(self):

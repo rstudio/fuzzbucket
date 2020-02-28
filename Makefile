@@ -1,3 +1,4 @@
+COVERAGE_THRESHOLD ?= 75
 FUNCTION ?= list
 REGION ?= us-east-1
 STAGE ?= dev
@@ -12,7 +13,7 @@ help:
 	@echo "- install-client"
 	@echo "- lint"
 	@echo "- logs (STAGE=$(STAGE), REGION=$(REGION), FUNCTION=$(FUNCTION))"
-	@echo "- test"
+	@echo "- test (COVERAGE_THRESHOLD=$(COVERAGE_THRESHOLD))"
 
 .PHONY: deps
 deps:
@@ -27,7 +28,7 @@ lint:
 
 .PHONY: test
 test:
-	pytest --cov=boxbot -v --disable-warnings
+	pytest --cov=boxbot --cov=boxbot_client --cov-fail-under=$(COVERAGE_THRESHOLD) -v --disable-warnings
 
 .PHONY: deploy
 deploy:
