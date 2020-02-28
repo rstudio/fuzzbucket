@@ -196,6 +196,7 @@ functions:
       - PublicSubnet
       - BoxbotDefaultSecurityGroup
       - BoxbotConnectSecurityGroup
+      - ServiceEndpoint
     events:
     - http: { path: /, method: get, private: true }
   create:
@@ -210,6 +211,7 @@ functions:
       - PublicSubnet
       - BoxbotDefaultSecurityGroup
       - BoxbotConnectSecurityGroup
+      - ServiceEndpoint
     events:
     - http: { path: /box, method: post, private: true }
   delete:
@@ -220,6 +222,7 @@ functions:
       - PublicSubnet
       - BoxbotDefaultSecurityGroup
       - BoxbotConnectSecurityGroup
+      - ServiceEndpoint
     events:
     - http:
         path: '/box/{id}'

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 import argparse
 import os
 import sys
@@ -42,7 +41,7 @@ def main(sysargs=sys.argv[:]):
     image_aliases = {}
     for search in ALIAS_SEARCHES:
         response = client.describe_images(
-            Filters=[dict(Name="name", Values=[search.name]),], Owners=[search.owner]
+            Filters=[dict(Name="name", Values=[search.name])], Owners=[search.owner]
         )
         sorted_images = list(
             sorted(response["Images"], key=lambda i: i["CreationDate"])

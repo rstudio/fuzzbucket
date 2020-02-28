@@ -145,7 +145,11 @@ def create_box(event, context, client=None, env=None):
 
         response = client.run_instances(
             ImageId=ami,
-            InstanceType=env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
+            InstanceType=_q(
+                event,
+                "instance_type",
+                env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
+            ),
             KeyName=user,
             MinCount=1,
             MaxCount=1,
