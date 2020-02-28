@@ -42,6 +42,7 @@ provider:
     - ec2:CreateKeyPair
     - ec2:DescribeInstances
     - ec2:DescribeKeyPairs
+    - ec2:ImportKeyPair
     - ec2:RunInstances
     Resource: '*'
 package:
