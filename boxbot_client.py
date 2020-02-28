@@ -131,9 +131,16 @@ class Client:
             method="POST",
         )
         raw_response = {}
-        with self._urlopen(req) as response:
-            raw_response = json.load(response)
-        log.info(f"created box for user={self._user!r}")
+        try:
+            with self._urlopen(req) as response:
+                raw_response = json.load(response)
+            log.info(f"created box for user={self._user!r}")
+        except urllib.request.HTTPError as exc:
+            if exc.code == 409:
+                log.warning("matching box already exists")
+                raw_response = json.load(exc)
+            else:
+                raise exc
         for box in raw_response["boxes"]:
             log.info(
                 " ".join([f"{field}={box[field]!r}" for field in sorted(box.keys())])
