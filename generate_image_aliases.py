@@ -20,8 +20,10 @@ ALIAS_SEARCHES = [
         CANONICAL_ID,
         "ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*",
     ),
-    SearchEntry("centos6", MARKETPLACE_ID, "CentOS Linux 6 x86_64 HVM EBS*"),
-    SearchEntry("centos7", MARKETPLACE_ID, "CentOS Linux 7 x86_64 HVM EBS*"),
+    # TODO: find a supported (??) centos6 image
+    # SearchEntry("centos6", MARKETPLACE_ID, "CentOS Linux 6 x86_64 HVM EBS*"),
+    # TODO: find a supported (??) centos7 image
+    # SearchEntry("centos7", MARKETPLACE_ID, "CentOS Linux 7 x86_64 HVM EBS*"),
     SearchEntry("centos8", MARKETPLACE_ID, "CentOS-8-x86_64-EBS-HVM-*"),
     SearchEntry("rhel6", RHEL_ID, "RHEL-6.10_HVM_*-x86_64-*"),
     SearchEntry("rhel7", RHEL_ID, "RHEL-7.8_HVM_*-x86_64-*"),
