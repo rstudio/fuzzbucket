@@ -184,7 +184,10 @@ class Client:
             args.ssh_user = self._guess_ssh_user(
                 matching_box["image_alias"], "ec2-user"
             )
-        log.info(f"ssh'ing into matching_box={matching_box['name']!r}")
+        log.info(
+            f"ssh'ing into matching_box={matching_box['name']!r} "
+            + f"ssh_user={args.ssh_user!r}"
+        )
         print(self._boxes_to_ini([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()

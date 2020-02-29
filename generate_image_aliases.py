@@ -20,14 +20,18 @@ ALIAS_SEARCHES = [
         CANONICAL_ID,
         "ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*",
     ),
-    # TODO: find a supported (??) centos6 image
-    # SearchEntry("centos6", MARKETPLACE_ID, "CentOS Linux 6 x86_64 HVM EBS*"),
-    # TODO: find a supported (??) centos7 image
-    # SearchEntry("centos7", MARKETPLACE_ID, "CentOS Linux 7 x86_64 HVM EBS*"),
-    SearchEntry("centos8", MARKETPLACE_ID, "CentOS-8-x86_64-EBS-HVM-*"),
-    SearchEntry("rhel6", RHEL_ID, "RHEL-6.10_HVM_*-x86_64-*"),
-    SearchEntry("rhel7", RHEL_ID, "RHEL-7.8_HVM_*-x86_64-*"),
-    SearchEntry("rhel8", RHEL_ID, "RHEL-8.2.0_HVM_*-x86_64-*"),
+    SearchEntry(
+        "centos6", MARKETPLACE_ID, "CentOS Linux 6 x86_64 HVM EBS ENA 1901_01-*"
+    ),
+    SearchEntry(
+        "centos7", MARKETPLACE_ID, "CentOS Linux 7 x86_64 HVM EBS ENA 1901_01-*"
+    ),
+    # FIXME: centos.org does not publish a centos8 image (?)
+    # SearchEntry("centos8", MARKETPLACE_ID, "CentOS-8-x86_64-EBS-HVM-*"),
+    # SearchEntry("centos8", MARKETPLACE_ID, "centos-8.1-plain-x86_64-200210_20-*"),
+    SearchEntry("rhel6", RHEL_ID, "RHEL-6.10_HVM_GA-*-x86_64-*"),
+    SearchEntry("rhel7", RHEL_ID, "RHEL-7.7_HVM_GA-*-x86_64-*"),
+    SearchEntry("rhel8", RHEL_ID, "RHEL-8.0.0_HVM-*-x86_64-*"),
 ]
 
 
