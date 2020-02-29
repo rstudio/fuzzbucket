@@ -12,6 +12,7 @@ import argparse
 import configparser
 import contextlib
 import base64
+import io
 import json
 import logging
 import os
@@ -78,7 +79,7 @@ def main(sysargs=sys.argv[:]):
 
         parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
         parser_ssh.add_argument("box")
-        parser_ssh.add_argument("-u", "--ssh-user", default="ubuntu")
+        parser_ssh.add_argument("-u", "--ssh-user", default="")
         parser_ssh.set_defaults(func=client.ssh)
 
         args = parser.parse_args(sysargs[1:])
@@ -104,12 +105,9 @@ class Client:
     def list(self, args):
         self._setup()
         log.debug(f"fetching boxes for user={self._user!r}")
-        boxes_ini = configparser.ConfigParser()
         boxes = self._list_boxes()
         log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
-        for box in boxes:
-            boxes_ini[box["name"]] = box
-        boxes_ini.write(sys.stdout)
+        print(self._boxes_to_ini(boxes), end="")
         return True
 
     def create(self, args):
@@ -141,12 +139,8 @@ class Client:
                 raw_response = json.load(exc)
             else:
                 raise exc
-        for box in raw_response["boxes"]:
-            log.info(
-                " ".join([f"{field}={box[field]!r}" for field in sorted(box.keys())])
-            )
-            if box.get("public_ip") is None:
-                log.warning(f"public_ip is has not yet been assigned")
+
+        print(self._boxes_to_ini(raw_response["boxes"]), end="")
         return True
 
     def delete(self, args):
@@ -161,6 +155,7 @@ class Client:
         with self._urlopen(req) as response:
             _ = response.read()
         log.info(f"deleted box for user={self._user!r} name={matching_box['name']}")
+        print(self._boxes_to_ini([matching_box]), end="")
         return True
 
     def reboot(self, args):
@@ -176,6 +171,7 @@ class Client:
         with self._urlopen(req) as response:
             _ = response.read()
         log.info(f"rebooted box for user={self._user!r} box={matching_box['name']!r}")
+        print(self._boxes_to_ini([matching_box]), end="")
         return True
 
     def ssh(self, args):
@@ -184,6 +180,12 @@ class Client:
         if matching_box is None:
             log.error(f"no box found matching {args.box!r}")
             return False
+        if args.ssh_user == "":
+            args.ssh_user = self._guess_ssh_user(
+                matching_box["image_alias"], "ec2-user"
+            )
+        log.info(f"ssh'ing into matching_box={matching_box['name']!r}")
+        print(self._boxes_to_ini([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
         os.execvp(
@@ -230,6 +232,29 @@ class Client:
             creds_b64 = creds_b64.decode("utf-8")
             req.headers["Authorization"] = f"basic {creds_b64}"
         return req
+
+    @staticmethod
+    def _boxes_to_ini(boxes):
+        boxes_ini = configparser.ConfigParser()
+        for box in boxes:
+            boxes_ini[box["name"]] = box
+            if box.get("public_ip") is None:
+                box["public_ip"] = "(pending)"
+        buf = io.StringIO()
+        boxes_ini.write(buf)
+        buf.seek(0)
+        return buf.read()
+
+    @staticmethod
+    def _guess_ssh_user(image_alias, default="root"):
+        image_alias = image_alias.lower()
+        if image_alias.startswith("ubuntu"):
+            return "ubuntu"
+        if image_alias.startswith("centos"):
+            return "centos"
+        if image_alias.startswith("rhel") or image_alias.startswith("suse"):
+            return "ec2-user"
+        return default
 
 
 if __name__ == "__main__":
