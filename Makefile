@@ -19,18 +19,17 @@ help:
 
 .PHONY: deps
 deps:
-	pip install -r dev-requirements.txt
-	pip install -r requirements.txt
+	pipenv install --dev
 	npm install
 
 .PHONY: lint
 lint:
-	black --check --diff .
-	flake8 .
+	pipenv run black --check --diff .
+	pipenv run flake8 .
 
 .PHONY: test
 test:
-	pytest --cov=boxbot --cov=boxbot_client --cov-fail-under=$(COVERAGE_THRESHOLD) -v --disable-warnings
+	pipenv run pytest --cov=fuzzbucket --cov=fuzzbucket_client --cov-fail-under=$(COVERAGE_THRESHOLD) -v --disable-warnings
 
 .PHONY: deploy
 deploy:
@@ -45,11 +44,11 @@ clean:
 	$(RM) image_aliases.py custom.yml
 
 image_aliases.py: generate_image_aliases.py
-	python ./generate_image_aliases.py $@
-	black $@
+	pipenv run python ./generate_image_aliases.py $@
+	pipenv run black $@
 
 custom.yml: generate_api_key_names.py
-	python ./generate_api_key_names.py $(GITHUB_ORG) $(GITHUB_TEAM) $@
+	pipenv run python ./generate_api_key_names.py $(GITHUB_ORG) $(GITHUB_TEAM) $@
 
 .PHONY: install-client
 install-client:

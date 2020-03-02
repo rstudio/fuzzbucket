@@ -1,4 +1,4 @@
-# boxbot
+# fuzzbucket
 
 boxes boxes everywhere
 

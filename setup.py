@@ -5,10 +5,12 @@ from setuptools import setup
 
 def main():
     setup(
-        name="boxbot-client",
+        name="fuzzbucket-client",
         version="0.1.0",
-        py_modules=["boxbot_client"],
-        entry_points={"console_scripts": ["boxbot-client = boxbot_client:main"]},
+        py_modules=["fuzzbucket_client"],
+        entry_points={
+            "console_scripts": ["fuzzbucket-client = fuzzbucket_client:main"]
+        },
     )
     return 0
 

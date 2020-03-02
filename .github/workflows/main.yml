@@ -25,7 +25,7 @@ jobs:
     - uses: actions/cache@v1
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
         restore-keys: |
           ${{ runner.os }}-pip-
     - uses: actions/cache@v1
@@ -34,6 +34,8 @@ jobs:
         key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-node-
+    - run: pip install -U pipenv
     - run: make deps
+    - run: pipenv check
     - run: make lint
     - run: make test

@@ -1,5 +1,5 @@
-service: boxbot
-custom: ${file(${env:BOXBOT_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
+service: fuzzbucket
+custom: ${file(${env:FUZZBUCKET_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
 provider:
   name: aws
   runtime: python3.8
@@ -50,7 +50,7 @@ provider:
 package:
   include:
   - basic_auth.py
-  - boxbot.py
+  - fuzzbucket.py
   - image_aliases.py
   exclude:
   - "./**/**"
@@ -67,7 +67,7 @@ resources:
         EnableDnsHostnames: true
         Tags:
         - Key: Name
-          Value: boxbot-${opt:stage, 'dev'}-vpc
+          Value: fuzzbucket-${opt:stage, 'dev'}-vpc
     PublicSubnet:
       Type: AWS::EC2::Subnet
       Properties:
@@ -77,14 +77,14 @@ resources:
         MapPublicIpOnLaunch: true
         Tags:
         - Key: Name
-          Value: boxbot-${opt:stage, 'dev'}-public
+          Value: fuzzbucket-${opt:stage, 'dev'}-public
     PublicRouteTable:
       Type: AWS::EC2::RouteTable
       Properties:
         VpcId: !Ref VPC
         Tags:
         - Key: Name
-          Value: boxbot-${opt:stage, 'dev'}-public
+          Value: fuzzbucket-${opt:stage, 'dev'}-public
     PublicRoute:
       Type: AWS::EC2::Route
       DependsOn: GatewayToInternet
@@ -102,7 +102,7 @@ resources:
       Properties:
         Tags:
         - Key: Name
-          Value: boxbot-${opt:stage, 'dev'}-ig
+          Value: fuzzbucket-${opt:stage, 'dev'}-ig
     GatewayToInternet:
       Type: AWS::EC2::VPCGatewayAttachment
       Properties:
@@ -129,11 +129,11 @@ resources:
         RestApiId:
           Ref: ApiGatewayRestApi
         StatusCode: '401'
-    BoxbotDefaultSecurityGroup:
+    FuzzbucketDefaultSecurityGroup:
       Type: AWS::EC2::SecurityGroup
       Properties:
-        GroupDescription: boxbot default access
-        GroupName: boxbot-${opt:stage, 'dev'}-default-sg
+        GroupDescription: fuzzbucket default access
+        GroupName: fuzzbucket-${opt:stage, 'dev'}-default-sg
         VpcId: !Ref VPC
         SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
@@ -169,12 +169,12 @@ resources:
           ToPort: 8443
         Tags:
         - Key: Name
-          Value: boxbot-${opt:stage, 'dev'}-default-sg
-    BoxbotConnectSecurityGroup:
+          Value: fuzzbucket-${opt:stage, 'dev'}-default-sg
+    FuzzbucketConnectSecurityGroup:
       Type: AWS::EC2::SecurityGroup
       Properties:
-        GroupDescription: boxbot connect access
-        GroupName: boxbot-${opt:stage, 'dev'}-connect-sg
+        GroupDescription: fuzzbucket connect access
+        GroupName: fuzzbucket-${opt:stage, 'dev'}-connect-sg
         VpcId: !Ref VPC
         SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
@@ -189,31 +189,31 @@ resources:
           ToPort: 13939
         Tags:
         - Key: Name
-          Value: boxbot-${opt:stage, 'dev'}-connect-sg
+          Value: fuzzbucket-${opt:stage, 'dev'}-connect-sg
 functions:
   list:
-    handler: boxbot.list_boxes
+    handler: fuzzbucket.list_boxes
     custom:
       env-resources:
       - VPC
     events:
     - http: { path: /, method: get, private: true }
   create:
-    handler: boxbot.create_box
+    handler: fuzzbucket.create_box
     environment:
-      BOXBOT_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
-      BOXBOT_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
-      BOXBOT_IMAGE_ALIASES: ${self:custom.imageAliases, 'default-image-aliases.json'}
+      FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
+      FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
+      FUZZBUCKET_IMAGE_ALIASES: ${self:custom.imageAliases, 'default-image-aliases.json'}
     custom:
       env-resources:
       - VPC
       - PublicSubnet
-      - BoxbotDefaultSecurityGroup
-      - BoxbotConnectSecurityGroup
+      - FuzzbucketDefaultSecurityGroup
+      - FuzzbucketConnectSecurityGroup
     events:
     - http: { path: /box, method: post, private: true }
   delete:
-    handler: boxbot.delete_box
+    handler: fuzzbucket.delete_box
     custom:
       env-resources:
       - VPC
@@ -224,7 +224,7 @@ functions:
         private: true
         request: { parameters: { paths: { id: true } } }
   reboot:
-    handler: boxbot.reboot_box
+    handler: fuzzbucket.reboot_box
     custom:
       env-resources:
       - VPC
