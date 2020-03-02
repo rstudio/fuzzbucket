@@ -182,7 +182,7 @@ def test_client_ssh(monkeypatch):
 
     def fake_execvp(file, args):
         assert file == "ssh"
-        assert args == ["ssh", "cornelius@ethereal-plane.example.org"]
+        assert args == ["ssh", "ethereal-plane.example.org", "-l", "cornelius"]
 
     def fake_list_boxes():
         return [{"name": "koolthing", "public_dns_name": "ethereal-plane.example.org"}]
@@ -191,6 +191,6 @@ def test_client_ssh(monkeypatch):
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
     ret = fuzzbucket_client.main(
-        ["fuzzbucket-client", "ssh", "koolthing", "--ssh-user=cornelius"]
+        ["fuzzbucket-client", "ssh", "koolthing", "-l", "cornelius"]
     )
     assert ret == 0

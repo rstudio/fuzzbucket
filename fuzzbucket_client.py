@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sys
+import textwrap
 import urllib.parse
 import urllib.request
 
@@ -89,8 +90,21 @@ def main(sysargs=sys.argv[:]):
         parser_reboot.set_defaults(func=client.reboot)
 
         parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
+        parser_ssh.usage = "usage: %(prog)s [-h] box [ssh-arguments]"
+        parser_ssh.description = textwrap.dedent(
+            """
+            SSH into a box, optionally passing arbitrary commands as positional
+            arguments.  Additionally, stdio streams will be inherited by the ssh
+            process in order to support piping.
+            """
+        )
+        parser_ssh.epilog = textwrap.dedent(
+            """
+            NOTE: If no login is provided via the "-l" ssh option, a value will
+            be guessed based on the box image alias.
+        """
+        )
         parser_ssh.add_argument("box")
-        parser_ssh.add_argument("-u", "--ssh-user", default="")
         parser_ssh.set_defaults(func=client.ssh)
 
         known_args, unknown_args = parser.parse_known_args(sysargs[1:])
@@ -204,21 +218,22 @@ class Client:
         if matching_box is None:
             log.error(f"no box found matching {known_args.box!r}")
             return False
-        if known_args.ssh_user == "":
-            known_args.ssh_user = self._guess_ssh_user(
-                matching_box["image_alias"], "ec2-user"
-            )
+        if "-l" not in unknown_args:
+            unknown_args = [
+                "-l",
+                self._guess_ssh_user(
+                    matching_box.get("image_alias", "ubuntu18"), "ec2-user"
+                ),
+            ] + unknown_args
         log.info(
-            f"ssh'ing into matching_box={matching_box['name']!r} "
-            + f"ssh_user={known_args.ssh_user!r}"
+            f"sshing into matching_box={matching_box['name']!r} "
+            + f"ssh_args={unknown_args!r}"
         )
         print(self._boxes_to_ini([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
         os.execvp(
-            "ssh",
-            ["ssh", f"{known_args.ssh_user}@{matching_box.get('public_dns_name')}"]
-            + unknown_args,
+            "ssh", ["ssh", matching_box.get("public_dns_name")] + unknown_args,
         )
         return True
 
