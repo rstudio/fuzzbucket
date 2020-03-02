@@ -75,6 +75,11 @@ Once the `fuzzbucket` API is deployed, the `fuzzbucket-client` may be used to
 do all the things:
 
 ```bash
+# install fuzzbucket-client via setup.py
+python setup.py install
+```
+
+```bash
 # get some help
 fuzzbucket-client --help
 ```
