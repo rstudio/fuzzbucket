@@ -234,3 +234,11 @@ functions:
         method: post
         private: true
         request: { parameters: { paths: { id: true } } }
+  reap:
+    handler: fuzzbucket.reap_boxes
+    custom:
+      env-resources:
+      - VPC
+    events:
+    - schedule: rate(1 hour)
+      enabled: true

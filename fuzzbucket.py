@@ -18,6 +18,7 @@ class Tags(enum.Enum):
     user = "fuzzbucket:user"
     created_at = "fuzzbucket:created-at"
     image_alias = "fuzzbucket:image-alias"
+    ttl = "fuzzbucket:ttl"
 
 
 class Box:
@@ -30,6 +31,7 @@ class Box:
         self.name = None
         self.public_dns_name = None
         self.public_ip = None
+        self.ttl = None
 
     def as_json(self):
         return dict(
@@ -60,6 +62,7 @@ class Box:
         box.public_dns_name = (
             instance["PublicDnsName"] if instance["PublicDnsName"] != "" else None
         )
+        box.public_ip = instance.get("PublicIpAddress", None)
         for tag in instance.get("Tags", []):
             if tag["Key"] == "Name":
                 box.name = tag["Value"]
@@ -67,8 +70,8 @@ class Box:
                 box.created_at = tag["Value"]
             elif tag["Key"] == Tags.image_alias.value:
                 box.image_alias = tag["Value"]
-
-        box.public_ip = instance.get("PublicIpAddress", None)
+            elif tag["Key"] == Tags.ttl.value:
+                box.ttl = tag["Value"]
         return box
 
 
@@ -87,201 +90,199 @@ log = ROOT_LOG.getChild("fuzzbucket")
 log.setLevel(getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()))
 
 
+def lambda_function(wrapped):
+    def wrapper(event, context, client=None, env=None):
+        try:
+            client = client if client is not None else boto3.client("ec2")
+            env = env if env is not None else dict(os.environ)
+            return wrapped(event, context, client=client, env=env)
+        except ClientError:
+            log.exception("oh no boto3")
+            return {"statusCode": 500, "body": _to_json("oh no boto3")}
+        except Exception:
+            log.exception("oh no")
+            return {"statusCode": 500, "body": _to_json("oh no")}
+
+    return wrapper
+
+
+@lambda_function
 def list_boxes(event, context, client=None, env=None):
-    try:
-        client = client if client is not None else boto3.client("ec2")
-        env = env if env is not None else dict(os.environ)
-        vpc_id = env["CF_VPC"]
-        log.debug(f"handling event={event!r}")
-        user = _extract_user(event)
-        if user is None:
-            return {
-                "statusCode": 403,
-                "body": _to_json("no user found"),
-            }
-
+    vpc_id = env["CF_VPC"]
+    log.debug(f"handling event={event!r}")
+    user = _extract_user(event)
+    if user is None:
         return {
-            "statusCode": 200,
-            "body": _to_json({"boxes": _list_user_boxes(client, user, vpc_id)}),
+            "statusCode": 403,
+            "body": _to_json("no user found"),
         }
-    except ClientError:
-        log.exception("oh no boto3")
-        return {"statusCode": 500, "body": _to_json("oh no boto3")}
-    except Exception:
-        log.exception("oh no")
-        return {"statusCode": 500, "body": _to_json("oh no")}
+
+    return {
+        "statusCode": 200,
+        "body": _to_json({"boxes": _list_user_boxes(client, user, vpc_id)}),
+    }
 
 
+@lambda_function
 def create_box(event, context, client=None, env=None):
-    try:
-        client = client if client is not None else boto3.client("ec2")
-        env = env if env is not None else dict(os.environ)
-        vpc_id = env["CF_VPC"]
-        log.debug(f"handling event={event!r}")
-        user = _extract_user(event)
-        if user is None:
-            return {
-                "statusCode": 403,
-                "body": _to_json("no user found"),
-            }
+    vpc_id = env["CF_VPC"]
+    log.debug(f"handling event={event!r}")
+    user = _extract_user(event)
+    if user is None:
+        return {
+            "statusCode": 403,
+            "body": _to_json("no user found"),
+        }
 
-        body = json.loads(event.get("body", "{}"))
-        ami = body.get("ami")
-        if ami is not None:
-            image_alias = "custom"
-        else:
-            image_alias = body.get("image_alias", "ubuntu18")
-            ami = _resolve_ami_alias(image_alias, env)
-        if ami is None:
+    body = json.loads(event.get("body", "{}"))
+    ami = body.get("ami")
+    if ami is not None:
+        image_alias = "custom"
+    else:
+        image_alias = body.get("image_alias", "ubuntu18")
+        ami = _resolve_ami_alias(image_alias, env)
+    if ami is None:
+        return {
+            "statusCode": 400,
+            "body": _to_json(f"unknown image_alias={image_alias}"),
+        }
+
+    existing_keys = client.describe_key_pairs(
+        Filters=[dict(Name="key-name", Values=[user])]
+    )
+    if len(existing_keys["KeyPairs"]) == 0:
+        key_material = _fetch_first_github_key(user)
+        if key_material.strip() == "":
             return {
                 "statusCode": 400,
-                "body": _to_json(f"unknown image_alias={image_alias}"),
+                "body": _to_json(f"could not fetch public key for user={user}"),
             }
 
-        existing_keys = client.describe_key_pairs(
-            Filters=[dict(Name="key-name", Values=[user])]
+        client.import_key_pair(
+            KeyName=user, PublicKeyMaterial=key_material.encode("utf-8")
         )
-        if len(existing_keys["KeyPairs"]) == 0:
-            key_material = _fetch_first_github_key(user)
-            if key_material.strip() == "":
-                return {
-                    "statusCode": 400,
-                    "body": _to_json(f"could not fetch public key for user={user}"),
-                }
+        log.debug(f"imported public key for user={user}")
 
-            client.import_key_pair(
-                KeyName=user, PublicKeyMaterial=key_material.encode("utf-8")
-            )
-            log.debug(f"imported public key for user={user}")
+    name = body.get("name", f"fuzzbucket-{user}-{image_alias}")
+    ttl = body.get("ttl", str(3600 * 4))
 
-        name = body.get("name")
-        if name is None:
-            name = f"fuzzbucket-{user}-{image_alias}"
+    for instance in _list_user_boxes(client, user, vpc_id):
+        if instance.name == name:
+            return {"statusCode": 409, "body": _to_json({"boxes": [instance]})}
 
-        for instance in _list_user_boxes(client, user, vpc_id):
-            if instance.name == name:
-                return {"statusCode": 409, "body": _to_json({"boxes": [instance]})}
+    network_interface = dict(
+        DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
+    )
 
-        network_interface = dict(
-            DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
-        )
+    subnet_id = env.get("CF_PublicSubnet", None)
+    if subnet_id is not None:
+        network_interface["SubnetId"] = subnet_id
+    security_groups = [
+        sg.strip() for sg in env.get("CF_FuzzbucketDefaultSecurityGroup", "").split(" ")
+    ]
 
-        subnet_id = env.get("CF_PublicSubnet", None)
-        if subnet_id is not None:
-            network_interface["SubnetId"] = subnet_id
-        security_groups = [
+    if body.get("connect") is not None:
+        security_groups += [
             sg.strip()
-            for sg in env.get("CF_FuzzbucketDefaultSecurityGroup", "").split(" ")
+            for sg in env.get("CF_FuzzbucketConnectSecurityGroup", "").split(" ")
         ]
+    if len(security_groups) > 0:
+        network_interface["Groups"] = security_groups
 
-        if body.get("connect") is not None:
-            security_groups += [
-                sg.strip()
-                for sg in env.get("CF_FuzzbucketConnectSecurityGroup", "").split(" ")
-            ]
-        if len(security_groups) > 0:
-            network_interface["Groups"] = security_groups
-
-        response = client.run_instances(
-            ImageId=ami,
-            InstanceType=body.get(
-                "instance_type",
-                env.get("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
-            ),
-            KeyName=user,
-            MinCount=1,
-            MaxCount=1,
-            NetworkInterfaces=[network_interface],
-            TagSpecifications=[
-                dict(
-                    ResourceType="instance",
-                    Tags=[
-                        dict(Key="Name", Value=name),
-                        dict(Key=Tags.user.value, Value=user),
-                        dict(Key=Tags.created_at.value, Value=str(time.time())),
-                        dict(Key=Tags.image_alias.value, Value=image_alias),
-                    ],
-                )
-            ],
-        )
-        return {
-            "statusCode": 200,
-            "body": _to_json(
-                {
-                    "boxes": [
-                        Box.from_ec2_dict(inst)
-                        for inst in response.get("Instances", [])
-                    ]
-                }
-            ),
-        }
-    except ClientError:
-        log.exception("oh no boto3")
-        return {"statusCode": 500, "body": _to_json("oh no boto3")}
-    except FileNotFoundError:
-        log.exception("oh no file")
-        return {"statusCode": 500, "body": _to_json("oh no file")}
-    except Exception:
-        log.exception("oh no")
-        return {"statusCode": 500, "body": _to_json("oh no")}
+    response = client.run_instances(
+        ImageId=ami,
+        InstanceType=body.get(
+            "instance_type", env.get("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
+        ),
+        KeyName=user,
+        MinCount=1,
+        MaxCount=1,
+        NetworkInterfaces=[network_interface],
+        TagSpecifications=[
+            dict(
+                ResourceType="instance",
+                Tags=[
+                    dict(Key="Name", Value=name),
+                    dict(Key=Tags.created_at.value, Value=str(time.time())),
+                    dict(Key=Tags.image_alias.value, Value=image_alias),
+                    dict(Key=Tags.ttl.value, Value=ttl),
+                    dict(Key=Tags.user.value, Value=user),
+                ],
+            )
+        ],
+    )
+    return {
+        "statusCode": 200,
+        "body": _to_json(
+            {
+                "boxes": [
+                    Box.from_ec2_dict(inst) for inst in response.get("Instances", [])
+                ]
+            }
+        ),
+    }
 
 
+@lambda_function
 def reboot_box(event, context, client=None, env=None):
-    try:
-        client = client if client is not None else boto3.client("ec2")
-        env = env if env is not None else dict(os.environ)
-        vpc_id = env["CF_VPC"]
-        log.debug(f"handling event={event!r}")
-        user = _extract_user(event)
-        if user is None:
-            return {
-                "statusCode": 403,
-                "body": _to_json("no user found"),
-            }
-        instance_id = event.get("pathParameters", {}).get("id", None)
-        if instance_id is None:
-            return {"statusCode": 400, "body": _to_json("missing id")}
-        if instance_id not in [
-            b.instance_id for b in _list_user_boxes(client, user, vpc_id)
-        ]:
-            return {"statusCode": 403, "body": _to_json("no touching")}
-        client.reboot_instances(InstanceIds=[instance_id])
-        return {"statusCode": 204, "body": ""}
-    except ClientError:
-        log.exception("oh no boto3")
-        return {"statusCode": 500, "body": _to_json("oh no boto3")}
-    except Exception:
-        log.exception("oh no")
-        return {"statusCode": 500, "body": _to_json("oh no")}
+    vpc_id = env["CF_VPC"]
+    log.debug(f"handling event={event!r}")
+    user = _extract_user(event)
+    if user is None:
+        return {
+            "statusCode": 403,
+            "body": _to_json("no user found"),
+        }
+    instance_id = event.get("pathParameters", {}).get("id", None)
+    if instance_id is None:
+        return {"statusCode": 400, "body": _to_json("missing id")}
+    if instance_id not in [
+        b.instance_id for b in _list_user_boxes(client, user, vpc_id)
+    ]:
+        return {"statusCode": 403, "body": _to_json("no touching")}
+    client.reboot_instances(InstanceIds=[instance_id])
+    return {"statusCode": 204, "body": ""}
 
 
+@lambda_function
 def delete_box(event, context, client=None, env=None):
-    try:
-        client = client if client is not None else boto3.client("ec2")
-        env = env if env is not None else dict(os.environ)
-        vpc_id = env["CF_VPC"]
-        log.debug(f"handling event={event!r}")
-        user = _extract_user(event)
-        if user is None:
-            return {
-                "statusCode": 403,
-                "body": _to_json("no user found"),
-            }
-        instance_id = event.get("pathParameters", {}).get("id", None)
-        if instance_id is None:
-            return {"statusCode": 400, "body": _to_json("missing id")}
-        if instance_id not in [
-            b.instance_id for b in _list_user_boxes(client, user, vpc_id)
-        ]:
-            return {"statusCode": 403, "body": _to_json("no touching")}
-        client.terminate_instances(InstanceIds=[instance_id])
-        return {"statusCode": 204, "body": ""}
-    except ClientError:
-        log.exception("oh no boto3")
-        return {"statusCode": 500, "body": _to_json("oh no boto3")}
-    except Exception:
-        log.exception("oh no")
-        return {"statusCode": 500, "body": _to_json("oh no")}
+    vpc_id = env["CF_VPC"]
+    log.debug(f"handling event={event!r}")
+    user = _extract_user(event)
+    if user is None:
+        return {
+            "statusCode": 403,
+            "body": _to_json("no user found"),
+        }
+    instance_id = event.get("pathParameters", {}).get("id", None)
+    if instance_id is None:
+        return {"statusCode": 400, "body": _to_json("missing id")}
+    if instance_id not in [
+        b.instance_id for b in _list_user_boxes(client, user, vpc_id)
+    ]:
+        return {"statusCode": 403, "body": _to_json("no touching")}
+    client.terminate_instances(InstanceIds=[instance_id])
+    return {"statusCode": 204, "body": ""}
+
+
+@lambda_function
+def reap_boxes(event, context, client=None, env=None):
+    for box in _list_boxes_filtered(client, []):
+        if box.created_at is None:
+            log.warning("skipping box without created_at")
+            continue
+        ttl = box.ttl
+        if ttl is None:
+            ttl = 3600 * 4
+        ttl = int(ttl)
+        if (box.created_at + ttl) < time.time():
+            log.warning(
+                f"skipping box that is not stale instance_id={box.instance_id!r} "
+                + f"created_at={box.created_at!r} ttl={box.ttl!r}"
+            )
+            continue
+        log.info(f"terminating stale box instance_id={box.instance_id!r}")
+        client.terminate_instances(InstanceIds=[box.instance_id])
 
 
 def _to_json(thing):
@@ -297,10 +298,17 @@ def _as_json(thing):
 
 
 def _list_user_boxes(client, user, vpc_id):
-    filters = DEFAULT_FILTERS + [
-        dict(Name=f"tag:{Tags.user.value}", Values=[user]),
-        dict(Name="vpc-id", Values=[vpc_id]),
-    ]
+    return _list_boxes_filtered(
+        client,
+        DEFAULT_FILTERS
+        + [
+            dict(Name=f"tag:{Tags.user.value}", Values=[user]),
+            dict(Name="vpc-id", Values=[vpc_id]),
+        ],
+    )
+
+
+def _list_boxes_filtered(client, filters):
     boxes = []
     for reservation in client.describe_instances(Filters=filters).get(
         "Reservations", []
