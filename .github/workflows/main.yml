@@ -6,6 +6,8 @@ on:
     tags:
     - .*
   pull_request:
+    branches:
+    - .*
     branches-ignore:
     - master
 env:
