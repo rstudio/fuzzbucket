@@ -1,6 +1,0 @@
-black
-coverage
-flake8
-moto
-pytest
-pytest-cover

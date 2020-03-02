@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-A client for boxbot.
+A client for fuzzbucket.
 
 Configuration is accepted via the following environment variables:
 
-    BOXBOT_URL - string URL of the boxbot instance including path prefix
-    BOXBOT_CREDENTIALS - "github-user:boxbot-token" string
+    FUZZBUCKET_URL - string URL of the fuzzbucket instance including path prefix
+    FUZZBUCKET_CREDENTIALS - "github-user:fuzzbucket-token" string
 
 """
 import argparse
@@ -20,7 +20,7 @@ import sys
 import urllib.parse
 import urllib.request
 
-log = logging.getLogger("boxbot")
+log = logging.getLogger("fuzzbucket")
 logging.basicConfig(
     stream=sys.stdout,
     style="{",
@@ -217,11 +217,11 @@ class Client:
 
     @property
     def _url(self):
-        return self._env.get("BOXBOT_URL")
+        return self._env.get("FUZZBUCKET_URL")
 
     @property
     def _credentials(self):
-        return self._env.get("BOXBOT_CREDENTIALS")
+        return self._env.get("FUZZBUCKET_CREDENTIALS")
 
     @property
     def _user(self):

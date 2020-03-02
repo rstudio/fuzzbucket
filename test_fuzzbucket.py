@@ -8,7 +8,7 @@ import pytest
 
 from moto import mock_ec2
 
-import boxbot
+import fuzzbucket
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def pubkey():
 @mock_ec2
 def test_list_boxes(authd_event, env):
     client = boto3.client("ec2")
-    response = boxbot.list_boxes(authd_event, None, client=client, env=env)
+    response = fuzzbucket.list_boxes(authd_event, None, client=client, env=env)
     assert response["statusCode"] == 200
     assert response["body"] is not None
     body = json.loads(response["body"])
@@ -53,7 +53,7 @@ def test_list_boxes(authd_event, env):
 @mock_ec2
 def test_list_boxes_forbidden(env):
     client = boto3.client("ec2")
-    response = boxbot.list_boxes({}, None, client=client, env=env)
+    response = fuzzbucket.list_boxes({}, None, client=client, env=env)
     assert response["statusCode"] == 403
 
 
@@ -61,8 +61,8 @@ def test_list_boxes_forbidden(env):
 def test_create_box(authd_event, env, monkeypatch, pubkey):
     client = boto3.client("ec2")
     with monkeypatch.context() as mp:
-        mp.setattr(boxbot, "_fetch_first_github_key", lambda u: pubkey)
-        response = boxbot.create_box(authd_event, None, client=client, env=env)
+        mp.setattr(fuzzbucket, "_fetch_first_github_key", lambda u: pubkey)
+        response = fuzzbucket.create_box(authd_event, None, client=client, env=env)
     assert response["statusCode"] == 200
     assert response["body"] is not None
     body = json.loads(response["body"])
@@ -73,7 +73,7 @@ def test_create_box(authd_event, env, monkeypatch, pubkey):
 @mock_ec2
 def test_create_box_forbidden(env):
     client = boto3.client("ec2")
-    response = boxbot.create_box({}, None, client=client, env=env)
+    response = fuzzbucket.create_box({}, None, client=client, env=env)
     assert response["statusCode"] == 403
 
 
@@ -81,8 +81,8 @@ def test_create_box_forbidden(env):
 def test_delete_box(authd_event, env, monkeypatch, pubkey):
     client = boto3.client("ec2")
     with monkeypatch.context() as mp:
-        mp.setattr(boxbot, "_fetch_first_github_key", lambda u: pubkey)
-        response = boxbot.create_box(authd_event, None, client=client, env=env)
+        mp.setattr(fuzzbucket, "_fetch_first_github_key", lambda u: pubkey)
+        response = fuzzbucket.create_box(authd_event, None, client=client, env=env)
     assert response is not None
     assert "body" in response
     body = json.loads(response["body"])
@@ -97,7 +97,7 @@ def test_delete_box(authd_event, env, monkeypatch, pubkey):
             return all_instances
 
         mp.setattr(client, "describe_instances", fake_describe_instances)
-        response = boxbot.delete_box(event, None, client=client, env=env)
+        response = fuzzbucket.delete_box(event, None, client=client, env=env)
         assert response["statusCode"] == 204
 
 
@@ -105,7 +105,7 @@ def test_delete_box(authd_event, env, monkeypatch, pubkey):
 def test_delete_box_forbidden(env):
     client = boto3.client("ec2")
     event = {"pathParameters": {"id": "i-fafafafafafaf"}}
-    response = boxbot.delete_box(event, None, client=client, env=env)
+    response = fuzzbucket.delete_box(event, None, client=client, env=env)
     assert response["statusCode"] == 403
 
 
@@ -113,8 +113,8 @@ def test_delete_box_forbidden(env):
 def test_reboot_box(authd_event, env, monkeypatch, pubkey):
     client = boto3.client("ec2")
     with monkeypatch.context() as mp:
-        mp.setattr(boxbot, "_fetch_first_github_key", lambda u: pubkey)
-        response = boxbot.create_box(authd_event, None, client=client, env=env)
+        mp.setattr(fuzzbucket, "_fetch_first_github_key", lambda u: pubkey)
+        response = fuzzbucket.create_box(authd_event, None, client=client, env=env)
     assert response is not None
     assert "body" in response
     body = json.loads(response["body"])
@@ -129,7 +129,7 @@ def test_reboot_box(authd_event, env, monkeypatch, pubkey):
             return all_instances
 
         mp.setattr(client, "describe_instances", fake_describe_instances)
-        response = boxbot.reboot_box(event, None, client=client, env=env)
+        response = fuzzbucket.reboot_box(event, None, client=client, env=env)
         assert response["statusCode"] == 204
 
 
@@ -137,12 +137,12 @@ def test_reboot_box(authd_event, env, monkeypatch, pubkey):
 def test_reboot_box_forbidden(env):
     client = boto3.client("ec2")
     event = {"pathParameters": {"id": "i-fafafafafafaf"}}
-    response = boxbot.reboot_box(event, None, client=client, env=env)
+    response = fuzzbucket.reboot_box(event, None, client=client, env=env)
     assert response["statusCode"] == 403
 
 
 def test_box():
-    box = boxbot.Box()
+    box = fuzzbucket.Box()
     box.instance_id = "i-fafafafafafafaf"
     assert box.age == "?"
 

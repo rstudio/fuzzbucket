@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-import boxbot_client
+import fuzzbucket_client
 
 
 @pytest.fixture(autouse=True)
@@ -13,12 +13,14 @@ def patched_env(tmpdir, monkeypatch):
     fake_home = tmpdir.join("home")
     fake_home.mkdir()
     monkeypatch.setenv("HOME", str(fake_home))
-    monkeypatch.setenv("BOXBOT_CREDENTIALS", "admin:token")
-    monkeypatch.setenv("BOXBOT_URL", "http://boxbot.example.org/bleep/bloop/dev")
+    monkeypatch.setenv("FUZZBUCKET_CREDENTIALS", "admin:token")
+    monkeypatch.setenv(
+        "FUZZBUCKET_URL", "http://fuzzbucket.example.org/bleep/bloop/dev"
+    )
 
 
 def test_client_setup():
-    client = boxbot_client.Client()
+    client = fuzzbucket_client.Client()
     client._setup()
     assert client is not None
 
@@ -32,19 +34,19 @@ def gen_fake_urlopen(response):
 
 
 def test_client_list(monkeypatch):
-    client = boxbot_client.Client()
-    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
         gen_fake_urlopen(io.StringIO(json.dumps({"boxes": [{"fancy": "probably"}]}))),
     )
-    boxbot_client.main(["boxbot-client", "list"])
+    fuzzbucket_client.main(["fuzzbucket-client", "list"])
 
 
 def test_client_create(monkeypatch):
-    client = boxbot_client.Client()
-    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
@@ -56,8 +58,14 @@ def test_client_create(monkeypatch):
             )
         ),
     )
-    boxbot_client.main(
-        ["boxbot-client", "create", "ubuntu49", "--instance-type=t8.pico", "--connect"]
+    fuzzbucket_client.main(
+        [
+            "fuzzbucket-client",
+            "create",
+            "ubuntu49",
+            "--instance-type=t8.pico",
+            "--connect",
+        ]
     )
 
     monkeypatch.setattr(
@@ -69,9 +77,9 @@ def test_client_create(monkeypatch):
             )
         ),
     )
-    boxbot_client.main(
+    fuzzbucket_client.main(
         [
-            "boxbot-client",
+            "fuzzbucket-client",
             "create",
             "ami-fafbafabcadabfabcdabcbaf",
             "--instance-type=t8.nano",
@@ -80,26 +88,26 @@ def test_client_create(monkeypatch):
 
 
 def test_client_delete(monkeypatch):
-    client = boxbot_client.Client()
-    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
     )
-    boxbot_client.main(["boxbot-client", "delete", "welp"])
+    fuzzbucket_client.main(["fuzzbucket-client", "delete", "welp"])
 
 
 def test_client_reboot(monkeypatch):
-    client = boxbot_client.Client()
-    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
     )
-    boxbot_client.main(["boxbot-client", "reboot", "zombie-skills"])
+    fuzzbucket_client.main(["fuzzbucket-client", "reboot", "zombie-skills"])
 
 
 def test_client_ssh(monkeypatch):
-    client = boxbot_client.Client()
-    monkeypatch.setattr(boxbot_client, "default_client", lambda: client)
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
 
     def fake_execvp(file, args):
         assert file == "ssh"
@@ -111,4 +119,6 @@ def test_client_ssh(monkeypatch):
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
-    boxbot_client.main(["boxbot-client", "ssh", "koolthing", "--ssh-user=cornelius"])
+    fuzzbucket_client.main(
+        ["fuzzbucket-client", "ssh", "koolthing", "--ssh-user=cornelius"]
+    )

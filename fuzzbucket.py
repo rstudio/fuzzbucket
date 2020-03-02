@@ -15,9 +15,9 @@ from image_aliases import image_aliases
 
 
 class Tags(enum.Enum):
-    user = "boxbot:user"
-    created_at = "boxbot:created-at"
-    image_alias = "boxbot:image-alias"
+    user = "fuzzbucket:user"
+    created_at = "fuzzbucket:created-at"
+    image_alias = "fuzzbucket:image-alias"
 
 
 class Box:
@@ -83,7 +83,7 @@ DEFAULT_FILTERS = [
 
 
 ROOT_LOG = logging.getLogger()
-log = ROOT_LOG.getChild("boxbot")
+log = ROOT_LOG.getChild("fuzzbucket")
 log.setLevel(getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()))
 
 
@@ -156,7 +156,7 @@ def create_box(event, context, client=None, env=None):
 
         name = body.get("name")
         if name is None:
-            name = f"boxbot-{user}-{image_alias}"
+            name = f"fuzzbucket-{user}-{image_alias}"
 
         for instance in _list_user_boxes(client, user, vpc_id):
             if instance.name == name:
@@ -170,13 +170,14 @@ def create_box(event, context, client=None, env=None):
         if subnet_id is not None:
             network_interface["SubnetId"] = subnet_id
         security_groups = [
-            sg.strip() for sg in env.get("CF_BoxbotDefaultSecurityGroup", "").split(" ")
+            sg.strip()
+            for sg in env.get("CF_FuzzbucketDefaultSecurityGroup", "").split(" ")
         ]
 
         if body.get("connect") is not None:
             security_groups += [
                 sg.strip()
-                for sg in env.get("CF_BoxbotConnectSecurityGroup", "").split(" ")
+                for sg in env.get("CF_FuzzbucketConnectSecurityGroup", "").split(" ")
             ]
         if len(security_groups) > 0:
             network_interface["Groups"] = security_groups
@@ -184,7 +185,8 @@ def create_box(event, context, client=None, env=None):
         response = client.run_instances(
             ImageId=ami,
             InstanceType=body.get(
-                "instance_type", env.get("BOXBOT_DEFAULT_INSTANCE_TYPE", "t3.small"),
+                "instance_type",
+                env.get("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
             ),
             KeyName=user,
             MinCount=1,
