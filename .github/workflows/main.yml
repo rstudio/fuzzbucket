@@ -1,13 +1,5 @@
 name: main
-on:
-  push:
-    branches:
-    - master
-    tags:
-    - .*
-  pull_request:
-    branches-ignore:
-    - master
+on: [push, pull_request]
 env:
   AWS_DEFAULT_REGION: us-east-1
 jobs:
