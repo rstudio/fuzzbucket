@@ -267,7 +267,9 @@ def delete_box(event, context, client=None, env=None):
 
 @lambda_function
 def reap_boxes(event, context, client=None, env=None):
-    for box in _list_boxes_filtered(client, []):
+    for box in _list_boxes_filtered(
+        client, DEFAULT_FILTERS + [dict(Name="vpc-id", Values=[env["CF_VPC"]])]
+    ):
         if box.created_at is None:
             log.warning("skipping box without created_at")
             continue
