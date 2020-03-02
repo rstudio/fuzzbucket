@@ -198,6 +198,10 @@ functions:
       - VPC
     events:
     - http: { path: /, method: get, private: true }
+  list-aliases:
+    handler: fuzzbucket.list_aliases
+    events:
+    - http: { path: /aliases, method: get, private: true}
   create:
     handler: fuzzbucket.create_box
     environment:

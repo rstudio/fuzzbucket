@@ -106,6 +106,7 @@ def lambda_function(wrapped):
         try:
             client = client if client is not None else boto3.client("ec2")
             env = env if env is not None else dict(os.environ)
+            log.debug(f"handling event={event!r}")
             return wrapped(event, context, client=client, env=env)
         except ClientError:
             log.exception("oh no boto3")
@@ -120,7 +121,6 @@ def lambda_function(wrapped):
 @lambda_function
 def list_boxes(event, context, client=None, env=None):
     vpc_id = env["CF_VPC"]
-    log.debug(f"handling event={event!r}")
     user = _extract_user(event)
     if user is None:
         return {
@@ -135,9 +135,16 @@ def list_boxes(event, context, client=None, env=None):
 
 
 @lambda_function
+def list_aliases(event, context, client=None, env=None):
+    return {
+        "statusCode": 200,
+        "body": _to_json({"image_aliases": image_aliases}),
+    }
+
+
+@lambda_function
 def create_box(event, context, client=None, env=None):
     vpc_id = env["CF_VPC"]
-    log.debug(f"handling event={event!r}")
     user = _extract_user(event)
     if user is None:
         return {
@@ -174,8 +181,13 @@ def create_box(event, context, client=None, env=None):
         )
         log.debug(f"imported public key for user={user}")
 
-    name = body.get("name", f"fuzzbucket-{user}-{image_alias}")
-    ttl = body.get("ttl", str(3600 * 4))
+    name = body.get("name")
+    if str(name or "").strip() == "":
+        name = f"fuzzbucket-{user}-{image_alias}"
+
+    ttl = body.get("ttl")
+    if str(ttl or "").strip() == "":
+        ttl = str(3600 * 4)
 
     for instance in _list_user_boxes(client, user, vpc_id):
         if instance.name == name:
@@ -237,7 +249,6 @@ def create_box(event, context, client=None, env=None):
 @lambda_function
 def reboot_box(event, context, client=None, env=None):
     vpc_id = env["CF_VPC"]
-    log.debug(f"handling event={event!r}")
     user = _extract_user(event)
     if user is None:
         return {
@@ -258,7 +269,6 @@ def reboot_box(event, context, client=None, env=None):
 @lambda_function
 def delete_box(event, context, client=None, env=None):
     vpc_id = env["CF_VPC"]
-    log.debug(f"handling event={event!r}")
     user = _extract_user(event)
     if user is None:
         return {

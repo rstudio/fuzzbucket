@@ -47,6 +47,11 @@ def main(sysargs=sys.argv[:]):
         )
         parser_list.set_defaults(func=client.list)
 
+        parser_list_aliases = subparsers.add_parser(
+            "list-aliases", aliases=["la"], help="List known image aliases."
+        )
+        parser_list_aliases.set_defaults(func=client.list_aliases)
+
         parser_create = subparsers.add_parser(
             "create", aliases=["new"], help="Create a box."
         )
@@ -114,6 +119,18 @@ class Client:
         boxes = self._list_boxes()
         log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
         print(self._boxes_to_ini(boxes), end="")
+        return True
+
+    def list_aliases(self, _):
+        self._setup()
+        req = self._build_request(os.path.join(self._url, "aliases"))
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+        if "image_aliases" not in raw_response:
+            log.error("failed to fetch image aliases")
+            return False
+        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
         return True
 
     def create(self, args):
@@ -257,6 +274,17 @@ class Client:
                 boxes_ini.set(box["name"], str(key), str(value))
         buf = io.StringIO()
         boxes_ini.write(buf)
+        buf.seek(0)
+        return buf.read()
+
+    @staticmethod
+    def _image_aliases_to_ini(image_aliases):
+        image_aliases_ini = configparser.ConfigParser()
+        image_aliases_ini.add_section("image_aliases")
+        for alias, ami in sorted(image_aliases.items()):
+            image_aliases_ini.set("image_aliases", alias, ami)
+        buf = io.StringIO()
+        image_aliases_ini.write(buf)
         buf.seek(0)
         return buf.read()
 
