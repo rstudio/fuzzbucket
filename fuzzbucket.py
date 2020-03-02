@@ -32,6 +32,7 @@ class Box:
         self.public_dns_name = None
         self.public_ip = None
         self.ttl = None
+        self.user = None
 
     def as_json(self):
         return dict(
@@ -54,6 +55,15 @@ class Box:
         return f"{delta.days}d{hours}h{minutes}m{seconds}s"
 
     @classmethod
+    def from_dict(cls, as_dict):
+        box = cls()
+        for key in box.__dict__.keys():
+            if key not in as_dict:
+                continue
+            setattr(box, key, as_dict[key])
+        return box
+
+    @classmethod
     def from_ec2_dict(cls, instance):
         box = cls()
         box.instance_id = instance["InstanceId"]
@@ -64,14 +74,15 @@ class Box:
         )
         box.public_ip = instance.get("PublicIpAddress", None)
         for tag in instance.get("Tags", []):
-            if tag["Key"] == "Name":
-                box.name = tag["Value"]
-            elif tag["Key"] == Tags.created_at.value:
-                box.created_at = float(tag["Value"])
-            elif tag["Key"] == Tags.image_alias.value:
-                box.image_alias = tag["Value"]
-            elif tag["Key"] == Tags.ttl.value:
-                box.ttl = int(tag["Value"])
+            attr, cast = {
+                "Name": ["name", str],
+                Tags.created_at.value: ["created_at", float],
+                Tags.image_alias.value: ["image_alias", str],
+                Tags.ttl.value: ["ttl", int],
+                Tags.user.value: ["user", str],
+            }.get(tag["Key"])
+            if attr is not None:
+                setattr(box, attr, cast(tag["Value"]))
         return box
 
 
@@ -267,9 +278,8 @@ def delete_box(event, context, client=None, env=None):
 
 @lambda_function
 def reap_boxes(event, context, client=None, env=None):
-    for box in _list_boxes_filtered(
-        client, DEFAULT_FILTERS + [dict(Name="vpc-id", Values=[env["CF_VPC"]])]
-    ):
+    reaped_instance_ids = []
+    for box in _list_vpc_boxes(client, env["CF_VPC"]):
         if box.created_at is None:
             log.warning("skipping box without created_at")
             continue
@@ -285,8 +295,13 @@ def reap_boxes(event, context, client=None, env=None):
                 + f"expires_at={expires_at!r} expires_in={expires_at - now!r}"
             )
             continue
-        log.info(f"terminating stale box instance_id={box.instance_id!r}")
+        log.info(
+            f"terminating stale box instance_id={box.instance_id!r} name={box.name!r} "
+            + f"created_at={box.created_at!r} user={box.user!r}"
+        )
         client.terminate_instances(InstanceIds=[box.instance_id])
+        reaped_instance_ids.append(box.instance_id)
+    return {"body": _to_json({"reaped_instance_ids": reaped_instance_ids})}
 
 
 def _to_json(thing):
@@ -309,6 +324,12 @@ def _list_user_boxes(client, user, vpc_id):
             dict(Name=f"tag:{Tags.user.value}", Values=[user]),
             dict(Name="vpc-id", Values=[vpc_id]),
         ],
+    )
+
+
+def _list_vpc_boxes(client, vpc_id):
+    return _list_boxes_filtered(
+        client, DEFAULT_FILTERS + [dict(Name="vpc-id", Values=[vpc_id])]
     )
 
 
