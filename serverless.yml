@@ -240,5 +240,5 @@ functions:
       env-resources:
       - VPC
     events:
-    - schedule: rate(1 hour)
+    - schedule: ${self:custom.reapSchedule, 'rate(10 minutes)'}
       enabled: true
