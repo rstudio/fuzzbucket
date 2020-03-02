@@ -93,8 +93,8 @@ def main(sysargs=sys.argv[:]):
         parser_ssh.add_argument("-u", "--ssh-user", default="")
         parser_ssh.set_defaults(func=client.ssh)
 
-        args = parser.parse_args(sysargs[1:])
-        if args.func(args):
+        known_args, unknown_args = parser.parse_known_args(sysargs[1:])
+        if known_args.func(known_args, unknown_args):
             return 0
         return 86
     except Exception:
@@ -113,7 +113,7 @@ class Client:
         if self._credentials is None:
             raise ValueError("missing credentials")
 
-    def list(self, args):
+    def list(self, *_):
         self._setup()
         log.debug(f"fetching boxes for user={self._user!r}")
         boxes = self._list_boxes()
@@ -121,7 +121,7 @@ class Client:
         print(self._boxes_to_ini(boxes), end="")
         return True
 
-    def list_aliases(self, _):
+    def list_aliases(self, *_):
         self._setup()
         req = self._build_request(os.path.join(self._url, "aliases"))
         raw_response = {}
@@ -133,20 +133,20 @@ class Client:
         print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
         return True
 
-    def create(self, args):
+    def create(self, known_args, _):
         self._setup()
         payload = {
-            "instance_type": args.instance_type,
-            "ttl": args.ttl,
+            "instance_type": known_args.instance_type,
+            "ttl": known_args.ttl,
         }
-        if args.image.startswith("ami-"):
-            payload["ami"] = args.image
+        if known_args.image.startswith("ami-"):
+            payload["ami"] = known_args.image
         else:
-            payload["image_alias"] = args.image
-        if args.connect:
+            payload["image_alias"] = known_args.image
+        if known_args.connect:
             payload["connect"] = "1"
-        if args.name != "":
-            payload["name"] = args.name
+        if known_args.name != "":
+            payload["name"] = known_args.name
         req = self._build_request(
             os.path.join(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),
@@ -167,11 +167,11 @@ class Client:
         print(self._boxes_to_ini(raw_response["boxes"]), end="")
         return True
 
-    def delete(self, args):
+    def delete(self, known_args, _):
         self._setup()
-        matching_box = self._find_box(args.box)
+        matching_box = self._find_box(known_args.box)
         if matching_box is None:
-            log.error(f"no box found matching {args.box!r}")
+            log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
             os.path.join(self._url, "box", matching_box["instance_id"]), method="DELETE"
@@ -182,11 +182,11 @@ class Client:
         print(self._boxes_to_ini([matching_box]), end="")
         return True
 
-    def reboot(self, args):
+    def reboot(self, known_args, _):
         self._setup()
-        matching_box = self._find_box(args.box)
+        matching_box = self._find_box(known_args.box)
         if matching_box is None:
-            log.error(f"no box found matching {args.box!r}")
+            log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
             os.path.join(self._url, "reboot", matching_box["instance_id"]),
@@ -198,25 +198,27 @@ class Client:
         print(self._boxes_to_ini([matching_box]), end="")
         return True
 
-    def ssh(self, args):
+    def ssh(self, known_args, unknown_args):
         self._setup()
-        matching_box = self._find_box(args.box)
+        matching_box = self._find_box(known_args.box)
         if matching_box is None:
-            log.error(f"no box found matching {args.box!r}")
+            log.error(f"no box found matching {known_args.box!r}")
             return False
-        if args.ssh_user == "":
-            args.ssh_user = self._guess_ssh_user(
+        if known_args.ssh_user == "":
+            known_args.ssh_user = self._guess_ssh_user(
                 matching_box["image_alias"], "ec2-user"
             )
         log.info(
             f"ssh'ing into matching_box={matching_box['name']!r} "
-            + f"ssh_user={args.ssh_user!r}"
+            + f"ssh_user={known_args.ssh_user!r}"
         )
         print(self._boxes_to_ini([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
         os.execvp(
-            "ssh", ["ssh", f"{args.ssh_user}@{matching_box.get('public_dns_name')}"]
+            "ssh",
+            ["ssh", f"{known_args.ssh_user}@{matching_box.get('public_dns_name')}"]
+            + unknown_args,
         )
         return True
 
