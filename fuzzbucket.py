@@ -67,11 +67,11 @@ class Box:
             if tag["Key"] == "Name":
                 box.name = tag["Value"]
             elif tag["Key"] == Tags.created_at.value:
-                box.created_at = tag["Value"]
+                box.created_at = float(tag["Value"])
             elif tag["Key"] == Tags.image_alias.value:
                 box.image_alias = tag["Value"]
             elif tag["Key"] == Tags.ttl.value:
-                box.ttl = tag["Value"]
+                box.ttl = int(tag["Value"])
         return box
 
 
@@ -276,11 +276,13 @@ def reap_boxes(event, context, client=None, env=None):
         ttl = box.ttl
         if ttl is None:
             ttl = 3600 * 4
-        ttl = int(ttl)
-        if (box.created_at + ttl) < time.time():
+        expires_at = box.created_at + ttl
+        now = time.time()
+        if expires_at > now:
             log.warning(
                 f"skipping box that is not stale instance_id={box.instance_id!r} "
-                + f"created_at={box.created_at!r} ttl={box.ttl!r}"
+                + f"created_at={box.created_at!r} ttl={box.ttl!r} "
+                + f"expires_at={expires_at!r} expires_in={expires_at - now!r}"
             )
             continue
         log.info(f"terminating stale box instance_id={box.instance_id!r}")
