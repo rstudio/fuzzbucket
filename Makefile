@@ -29,7 +29,7 @@ lint:
 
 .PHONY: test
 test:
-	pipenv run pytest --cov=fuzzbucket --cov=fuzzbucket_client --cov-fail-under=$(COVERAGE_THRESHOLD) -v --disable-warnings
+	pipenv run pytest --cov-fail-under=$(COVERAGE_THRESHOLD)
 
 .PHONY: deploy
 deploy:

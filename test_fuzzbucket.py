@@ -141,6 +141,36 @@ def test_reboot_box_forbidden(env):
     assert response["statusCode"] == 403
 
 
+@mock_ec2
+def test_reap_boxes(authd_event, env, monkeypatch, pubkey):
+    client = boto3.client("ec2")
+    authd_event["body"] = json.dumps({"ttl": "-1"})
+    with monkeypatch.context() as mp:
+        mp.setattr(fuzzbucket, "_fetch_first_github_key", lambda u: pubkey)
+        response = fuzzbucket.create_box(authd_event, None, client=client, env=env)
+    assert response is not None
+    assert "body" in response
+    body = json.loads(response["body"])
+    assert "boxes" in body
+    instance_id = body["boxes"][0]["instance_id"]
+    assert instance_id != ""
+
+    the_future = time.time() + 3600
+    with monkeypatch.context() as mp:
+
+        def fake_list_vpc_boxes(client, vpc_id):
+            return [fuzzbucket.Box.from_dict(box) for box in body["boxes"]]
+
+        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "_list_vpc_boxes", fake_list_vpc_boxes)
+        response = fuzzbucket.reap_boxes(None, None, client=client, env=env)
+        assert response != {}
+    assert instance_id not in [
+        box.instance_id
+        for box in fuzzbucket._list_boxes_filtered(client, fuzzbucket.DEFAULT_FILTERS)
+    ]
+
+
 def test_box():
     box = fuzzbucket.Box()
     box.instance_id = "i-fafafafafafafaf"

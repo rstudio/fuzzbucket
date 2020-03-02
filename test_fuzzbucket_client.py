@@ -39,9 +39,14 @@ def test_client_list(monkeypatch):
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO(json.dumps({"boxes": [{"fancy": "probably"}]}))),
+        gen_fake_urlopen(
+            io.StringIO(
+                json.dumps({"boxes": [{"name": "sparkles", "fancy": "probably"}]})
+            )
+        ),
     )
-    fuzzbucket_client.main(["fuzzbucket-client", "list"])
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "list"])
+    assert ret == 0
 
 
 def test_client_create(monkeypatch):
@@ -53,12 +58,20 @@ def test_client_create(monkeypatch):
         gen_fake_urlopen(
             io.StringIO(
                 json.dumps(
-                    {"boxes": [{"public_ip": None, "special": "like all the others"}]}
+                    {
+                        "boxes": [
+                            {
+                                "name": "ubuntu49",
+                                "public_ip": None,
+                                "special": "like all the others",
+                            }
+                        ]
+                    }
                 )
             )
         ),
     )
-    fuzzbucket_client.main(
+    ret = fuzzbucket_client.main(
         [
             "fuzzbucket-client",
             "create",
@@ -67,17 +80,28 @@ def test_client_create(monkeypatch):
             "--connect",
         ]
     )
+    assert ret == 0
 
     monkeypatch.setattr(
         client,
         "_urlopen",
         gen_fake_urlopen(
             io.StringIO(
-                json.dumps({"boxes": [{"public_ip": None, "worth": "immeasurable"}]})
+                json.dumps(
+                    {
+                        "boxes": [
+                            {
+                                "name": "snowflek",
+                                "public_ip": None,
+                                "worth": "immeasurable",
+                            }
+                        ]
+                    }
+                )
             )
         ),
     )
-    fuzzbucket_client.main(
+    ret = fuzzbucket_client.main(
         [
             "fuzzbucket-client",
             "create",
@@ -85,24 +109,71 @@ def test_client_create(monkeypatch):
             "--instance-type=t8.nano",
         ]
     )
+    assert ret == 0
 
 
 def test_client_delete(monkeypatch):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
-    monkeypatch.setattr(
-        client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
-    )
-    fuzzbucket_client.main(["fuzzbucket-client", "delete", "welp"])
+
+    request_counter = {"count": 0}
+
+    def fake_urlopen(req):
+        response = [
+            io.StringIO(
+                json.dumps(
+                    {
+                        "boxes": [
+                            {
+                                "name": "welp",
+                                "public_ip": None,
+                                "instance_id": "i-fafafafafaf",
+                                "special": "is this the end",
+                            }
+                        ]
+                    }
+                )
+            ),
+            io.StringIO(""),
+        ][request_counter["count"]]
+        request_counter["count"] += 1
+        return response
+
+    monkeypatch.setattr(client, "_urlopen", fake_urlopen)
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "delete", "welp"])
+    assert ret == 0
 
 
 def test_client_reboot(monkeypatch):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
-    monkeypatch.setattr(
-        client, "_urlopen", gen_fake_urlopen(io.StringIO("")),
-    )
-    fuzzbucket_client.main(["fuzzbucket-client", "reboot", "zombie-skills"])
+
+    request_counter = {"count": 0}
+
+    def fake_urlopen(req):
+        response = [
+            io.StringIO(
+                json.dumps(
+                    {
+                        "boxes": [
+                            {
+                                "name": "zombie-skills",
+                                "public_ip": None,
+                                "instance_id": "i-fafafafafaf",
+                                "brainzzz": "eating",
+                            }
+                        ]
+                    }
+                )
+            ),
+            io.StringIO(""),
+        ][request_counter["count"]]
+        request_counter["count"] += 1
+        return response
+
+    monkeypatch.setattr(client, "_urlopen", fake_urlopen)
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "reboot", "zombie-skills"])
+    assert ret == 0
 
 
 def test_client_ssh(monkeypatch):
@@ -119,6 +190,7 @@ def test_client_ssh(monkeypatch):
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
-    fuzzbucket_client.main(
+    ret = fuzzbucket_client.main(
         ["fuzzbucket-client", "ssh", "koolthing", "--ssh-user=cornelius"]
     )
+    assert ret == 0

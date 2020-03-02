@@ -62,6 +62,12 @@ def main(sysargs=sys.argv[:]):
             action="store_true",
             help="add connect-specific security group for accessing ports 3939 and 13939",
         )
+        parser_create.add_argument(
+            "-T",
+            "--ttl",
+            default=str(3600 * 4),
+            help="set the TTL for the box, after which it will be reaped",
+        )
         parser_create.add_argument("-t", "--instance-type", default="t3.small")
         parser_create.set_defaults(func=client.create)
 
@@ -114,6 +120,7 @@ class Client:
         self._setup()
         payload = {
             "instance_type": args.instance_type,
+            "ttl": args.ttl,
         }
         if args.image.startswith("ami-"):
             payload["ami"] = args.image
@@ -194,6 +201,7 @@ class Client:
         os.execvp(
             "ssh", ["ssh", f"{args.ssh_user}@{matching_box.get('public_dns_name')}"]
         )
+        return True
 
     def _find_box(self, box_search):
         boxes = self._list_boxes()
@@ -240,9 +248,13 @@ class Client:
     def _boxes_to_ini(boxes):
         boxes_ini = configparser.ConfigParser()
         for box in boxes:
-            boxes_ini[box["name"]] = box
+            boxes_ini.add_section(box["name"])
             if box.get("public_ip") is None:
                 box["public_ip"] = "(pending)"
+            for key, value in box.items():
+                if value is None:
+                    continue
+                boxes_ini.set(box["name"], str(key), str(value))
         buf = io.StringIO()
         boxes_ini.write(buf)
         buf.seek(0)
