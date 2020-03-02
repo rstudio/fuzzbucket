@@ -2,7 +2,7 @@
 
 The `fuzzbucket` API and `fuzzbucket-client` command line tool are intended to
 work together to provide humans with a simplified means to perform the
-following operations on EC2 instances ("boxes") in a managed VPC:
+following operations on ephemeral EC2 instances ("boxes") in a managed VPC:
 
 -    list
 -    create
@@ -10,6 +10,17 @@ following operations on EC2 instances ("boxes") in a managed VPC:
 -    delete
 
 Additionally, there is a periodic function that will terminate stale boxes.
+
+## is this for me?
+
+Maybe.
+
+If you are comfortable with direct access to EC2 via AWS authz for the purpose
+of managing instances launched from arbitrary AMIs, then `fuzzbucket` is
+probably not what you need.
+
+If you need your EC2 instances to be running for more than a few hours/days by
+default, then `fuzzbucket` is probably not what you need.
 
 ## development
 
