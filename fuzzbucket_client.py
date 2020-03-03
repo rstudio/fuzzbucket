@@ -108,6 +108,9 @@ def main(sysargs=sys.argv[:]):
         parser_ssh.set_defaults(func=client.ssh)
 
         known_args, unknown_args = parser.parse_known_args(sysargs[1:])
+        if not hasattr(known_args, "func"):
+            parser.print_help()
+            return 2
         if known_args.func(known_args, unknown_args):
             return 0
         return 86
