@@ -1,7 +1,5 @@
 COVERAGE_THRESHOLD ?= 75
 FUNCTION ?= list
-GITHUB_ORG ?= rstudio
-GITHUB_TEAM ?= connect
 REGION ?= us-east-1
 STAGE ?= dev
 
@@ -41,14 +39,11 @@ logs:
 
 .PHONY: clean
 clean:
-	$(RM) image_aliases.py custom.yml
+	$(RM) image_aliases.py
 
 image_aliases.py: generate_image_aliases.py
 	pipenv run python ./generate_image_aliases.py $@
 	pipenv run black $@
-
-custom.yml: generate_api_key_names.py
-	pipenv run python ./generate_api_key_names.py $(GITHUB_ORG) $(GITHUB_TEAM) $@
 
 .PHONY: install-client
 install-client:

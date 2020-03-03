@@ -207,7 +207,6 @@ functions:
     environment:
       FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
       FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
-      FUZZBUCKET_IMAGE_ALIASES: ${self:custom.imageAliases, 'default-image-aliases.json'}
     custom:
       env-resources:
       - VPC
