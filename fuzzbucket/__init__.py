@@ -4,8 +4,9 @@ import os
 from .tags import Tags
 
 ROOT_LOG = logging.getLogger()
+LOG_LEVEL = os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper()
 log = ROOT_LOG.getChild("fuzzbucket")
-log.setLevel(getattr(logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper()))
+log.setLevel(getattr(logging, LOG_LEVEL))
 
 
 def deferred_app(environ, start_response):

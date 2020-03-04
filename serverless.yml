@@ -215,19 +215,9 @@ resources:
       Type: AWS::DynamoDB::Table
       Properties:
         AttributeDefinitions:
-        -
-          AttributeName: Alias
-          AttributeType: S
-        -
-          AttributeName: User
-          AttributeType: S
-        -
-          AttributeName: AMI
-          AttributeType: S
+        - { AttributeName: alias, AttributeType: S }
         KeySchema:
-        -
-          AttributeName: Alias
-          KeyType: HASH
+        - { AttributeName: alias, KeyType: HASH }
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1

@@ -63,17 +63,17 @@ def get_ec2_client():
     return g.ec2_client
 
 
-def get_dynamodb_client():
-    if "dynamodb_client" not in g:
+def get_dynamodb():
+    if "dynamodb" not in g:
         if os.getenv("IS_OFFLINE") is not None:
-            g.dynamodb_client = boto3.client(
+            g.dynamodb = boto3.resource(
                 "dynamodb",
                 region_name="localhost",
                 endpoint_url="http://localhost:8000",
             )
         else:
-            g.dynamodb_client = boto3.client("dynamodb")
-    return g.dynamodb_client
+            g.dynamodb = boto3.resource("dynamodb")
+    return g.dynamodb
 
 
 @app.before_first_request
@@ -216,51 +216,50 @@ def delete_box(instance_id):
 
 @app.route("/image-alias", methods=["GET"])
 def list_image_aliases():
-    try:
-        resp = get_dynamodb_client().scan(
-            TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
-            Select="ALL_ATTRIBUTES",
-        )
-        image_aliases = {}
-        for item in resp.get("Items", []):
-            image_aliases[item["Alias"]["S"]] = item["AMI"]["S"]
-        return jsonify(image_aliases=image_aliases), 200
-    except ClientError:
-        log.exception("oh no boto3")
-        return jsonify(error="failed to get image aliases"), 500
+    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    image_aliases = {}
+    for item in table.scan().get("Items", []):
+        image_aliases[item["alias"]] = item["ami"]
+    return jsonify(image_aliases=image_aliases), 200
 
 
 @app.route("/image-alias", methods=["POST"])
 def create_image_alias():
     if not request.is_json:
         return jsonify(error="request is not json"), 400
-    resp = get_dynamodb_client().put_item(
-        TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
+    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    resp = table.put_item(
         Item=dict(
-            User=dict(S=request.remote_user),
-            Alias=dict(S=request.json["alias"]),
-            AMI=dict(S=request.json["ami"]),
+            user=request.remote_user,
+            alias=request.json["alias"],
+            ami=request.json["ami"],
         ),
     )
-    log.warning(f"raw dynamodb response={resp!r}")
-    if resp.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
-        return (
-            jsonify(
-                error=f"failed to store alias={request.json['alias']} "
-                + f"ami={request.json['ami']}"
-            ),
-            500,
-        )
+    log.debug(f"raw dynamodb response={resp!r}")
     return jsonify(image_aliases=[{request.json["alias"]: request.json["ami"]}]), 201
+
+
+@app.route("/image-alias/<string:alias>", methods=["DELETE"])
+def delete_image_alias(alias):
+    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    existing_alias = table.get_item(Key=dict(alias=alias))
+    if existing_alias.get("Item") in (None, {}):
+        return jsonify(error=f"no alias {alias!r}"), 404
+    if existing_alias.get("Item").get("user") != request.remote_user:
+        return jsonify(error="no touching"), 403
+    resp = table.delete_item(Key=dict(alias=alias))
+    log.debug(f"raw dynamodb response={resp!r}")
+    return "", 204
 
 
 def _resolve_ami_alias(image_alias, user):
     try:
-        resp = get_dynamodb_client().get_item(
-            TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
-            Key=dict(Alias=dict(S=image_alias), User=dict(S=user),),
+        resp = (
+            get_dynamodb()
+            .Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+            .get_item(Key=dict(alias=image_alias, user=user))
         )
-        return resp.get("Item", {}).get("AMI")
+        return resp.get("Item", {}).get("ami")
     except ClientError:
         log.exception("oh no boto3")
         return None

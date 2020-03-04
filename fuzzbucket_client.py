@@ -21,13 +21,14 @@ import textwrap
 import urllib.parse
 import urllib.request
 
+LOG_LEVEL = os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper()
 log = logging.getLogger("fuzzbucket")
 logging.basicConfig(
     stream=sys.stdout,
     style="{",
     format="# {name}:{levelname}:{asctime}:: {message}",
     datefmt="%Y-%m-%dT%H%M%S",
-    level=getattr(logging, os.environ.get("LOG_LEVEL", "info").upper()),
+    level=getattr(logging, LOG_LEVEL),
 )
 
 
@@ -36,87 +37,110 @@ def default_client():
 
 
 def main(sysargs=sys.argv[:]):
-    try:
-        client = default_client()
-        parser = argparse.ArgumentParser(
-            description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-        subparsers = parser.add_subparsers(title="subcommands", help="additional help")
+    client = default_client()
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    subparsers = parser.add_subparsers(title="subcommands", help="additional help")
 
-        parser_list = subparsers.add_parser(
-            "list", aliases=["ls"], help="List your boxes."
-        )
-        parser_list.set_defaults(func=client.list)
+    parser_list = subparsers.add_parser("list", aliases=["ls"], help="List your boxes.")
+    parser_list.set_defaults(func=client.list)
 
-        parser_list_aliases = subparsers.add_parser(
-            "list-aliases", aliases=["la"], help="List known image aliases."
-        )
-        parser_list_aliases.set_defaults(func=client.list_aliases)
+    parser_create = subparsers.add_parser(
+        "create", aliases=["new"], help="Create a box."
+    )
+    parser_create.add_argument(
+        "image", default="ubuntu18", help="image alias or full AMI id"
+    )
+    parser_create.add_argument(
+        "-n", "--name", help="custom name for box (generated if omitted)"
+    )
+    parser_create.add_argument(
+        "-c",
+        "--connect",
+        action="store_true",
+        help="add connect-specific security group for accessing ports 3939 and 13939",
+    )
+    parser_create.add_argument(
+        "-T",
+        "--ttl",
+        default=str(3600 * 4),
+        help="set the TTL for the box, after which it will be reaped",
+    )
+    parser_create.add_argument("-t", "--instance-type", default="t3.small")
+    parser_create.set_defaults(func=client.create)
 
-        parser_create = subparsers.add_parser(
-            "create", aliases=["new"], help="Create a box."
-        )
-        parser_create.add_argument(
-            "image", default="ubuntu18", help="image alias or full AMI id"
-        )
-        parser_create.add_argument(
-            "-n", "--name", help="custom name for box (generated if omitted)"
-        )
-        parser_create.add_argument(
-            "-c",
-            "--connect",
-            action="store_true",
-            help="add connect-specific security group for accessing ports 3939 and 13939",
-        )
-        parser_create.add_argument(
-            "-T",
-            "--ttl",
-            default=str(3600 * 4),
-            help="set the TTL for the box, after which it will be reaped",
-        )
-        parser_create.add_argument("-t", "--instance-type", default="t3.small")
-        parser_create.set_defaults(func=client.create)
+    parser_delete = subparsers.add_parser(
+        "delete", aliases=["rm"], help="Delete a box."
+    )
+    parser_delete.add_argument("box")
+    parser_delete.set_defaults(func=client.delete)
 
-        parser_delete = subparsers.add_parser(
-            "delete", aliases=["rm"], help="Delete a box."
-        )
-        parser_delete.add_argument("box")
-        parser_delete.set_defaults(func=client.delete)
+    parser_reboot = subparsers.add_parser(
+        "reboot", aliases=["restart"], help="Reboot a box."
+    )
+    parser_reboot.add_argument("box")
+    parser_reboot.set_defaults(func=client.reboot)
 
-        parser_reboot = subparsers.add_parser(
-            "reboot", aliases=["restart"], help="Reboot a box."
-        )
-        parser_reboot.add_argument("box")
-        parser_reboot.set_defaults(func=client.reboot)
-
-        parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
-        parser_ssh.usage = "usage: %(prog)s [-h] box [ssh-arguments]"
-        parser_ssh.description = textwrap.dedent(
-            """
-            SSH into a box, optionally passing arbitrary commands as positional
-            arguments.  Additionally, stdio streams will be inherited by the ssh
-            process in order to support piping.
-            """
-        )
-        parser_ssh.epilog = textwrap.dedent(
-            """
-            NOTE: If no login is provided via the "-l" ssh option, a value will
-            be guessed based on the box image alias.
+    parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
+    parser_ssh.usage = "usage: %(prog)s [-h] box [ssh-arguments]"
+    parser_ssh.description = textwrap.dedent(
         """
-        )
-        parser_ssh.add_argument("box")
-        parser_ssh.set_defaults(func=client.ssh)
+        SSH into a box, optionally passing arbitrary commands as positional
+        arguments.  Additionally, stdio streams will be inherited by the ssh
+        process in order to support piping.
+        """
+    )
+    parser_ssh.epilog = textwrap.dedent(
+        """
+        NOTE: If no login is provided via the "-l" ssh option, a value will
+        be guessed based on the box image alias.
+    """
+    )
+    parser_ssh.add_argument("box")
+    parser_ssh.set_defaults(func=client.ssh)
 
-        known_args, unknown_args = parser.parse_known_args(sysargs[1:])
-        if not hasattr(known_args, "func"):
-            parser.print_help()
-            return 2
-        if known_args.func(known_args, unknown_args):
-            return 0
-        return 86
-    except Exception:
-        log.exception("oh no")
-        return 1
+    parser_list_aliases = subparsers.add_parser(
+        "list-aliases", aliases=["la"], help="List known image aliases."
+    )
+    parser_list_aliases.set_defaults(func=client.list_aliases)
+
+    parser_create_alias = subparsers.add_parser(
+        "create-alias", help="Create an image alias."
+    )
+    parser_create_alias.add_argument("alias")
+    parser_create_alias.add_argument("ami")
+    parser_create_alias.set_defaults(func=client.create_alias)
+
+    parser_delete_alias = subparsers.add_parser(
+        "delete-alias", help="Delete an image alias."
+    )
+    parser_delete_alias.add_argument("alias")
+    parser_delete_alias.set_defaults(func=client.delete_alias)
+
+    known_args, unknown_args = parser.parse_known_args(sysargs[1:])
+    if not hasattr(known_args, "func"):
+        parser.print_help()
+        return 2
+    if known_args.func(known_args, unknown_args):
+        return 0
+    return 86
+
+
+def _command(method):
+    def wrapper(self, known_args, unknown_args):
+        try:
+            self._setup()
+            return method(self, known_args, unknown_args)
+        except Exception as exc:
+            msg = f"command {method.__name__!r} failed"
+            if LOG_LEVEL == "DEBUG":
+                log.exception(msg)
+            else:
+                log.error(f"{msg} err={exc}")
+            return False
+
+    return wrapper
 
 
 class Client:
@@ -130,28 +154,16 @@ class Client:
         if self._credentials is None:
             raise ValueError("missing credentials")
 
+    @_command
     def list(self, *_):
-        self._setup()
         log.debug(f"fetching boxes for user={self._user!r}")
         boxes = self._list_boxes()
         log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
         print(self._boxes_to_ini(boxes), end="")
         return True
 
-    def list_aliases(self, *_):
-        self._setup()
-        req = self._build_request(os.path.join(self._url, "image-alias"))
-        raw_response = {}
-        with self._urlopen(req) as response:
-            raw_response = json.load(response)
-        if "image_aliases" not in raw_response:
-            log.error("failed to fetch image aliases")
-            return False
-        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
-        return True
-
+    @_command
     def create(self, known_args, _):
-        self._setup()
         payload = {
             "instance_type": known_args.instance_type,
             "ttl": known_args.ttl,
@@ -185,8 +197,8 @@ class Client:
         print(self._boxes_to_ini(raw_response["boxes"]), end="")
         return True
 
+    @_command
     def delete(self, known_args, _):
-        self._setup()
         matching_box = self._find_box(known_args.box)
         if matching_box is None:
             log.error(f"no box found matching {known_args.box!r}")
@@ -200,8 +212,8 @@ class Client:
         print(self._boxes_to_ini([matching_box]), end="")
         return True
 
+    @_command
     def reboot(self, known_args, _):
-        self._setup()
         matching_box = self._find_box(known_args.box)
         if matching_box is None:
             log.error(f"no box found matching {known_args.box!r}")
@@ -216,8 +228,8 @@ class Client:
         print(self._boxes_to_ini([matching_box]), end="")
         return True
 
+    @_command
     def ssh(self, known_args, unknown_args):
-        self._setup()
         matching_box = self._find_box(known_args.box)
         if matching_box is None:
             log.error(f"no box found matching {known_args.box!r}")
@@ -239,6 +251,49 @@ class Client:
         os.execvp(
             "ssh", ["ssh", matching_box.get("public_dns_name")] + unknown_args,
         )
+        return True
+
+    @_command
+    def list_aliases(self, *_):
+        req = self._build_request(os.path.join(self._url, "image-alias"))
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+        if "image_aliases" not in raw_response:
+            log.error("failed to fetch image aliases")
+            return False
+        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
+        return True
+
+    @_command
+    def create_alias(self, known_args, _):
+        payload = {"alias": known_args.alias, "ami": known_args.ami}
+        req = self._build_request(
+            os.path.join(self._url, "image-alias"),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+        log.debug(f"raw created alias response={raw_response!r}")
+        created = raw_response["image_aliases"][0]
+        for key, value in created.items():
+            log.info(
+                f"created alias for user={self._user!r} alias={key} " + f"ami={value}"
+            )
+        print(self._image_aliases_to_ini(created), end="")
+        return True
+
+    @_command
+    def delete_alias(self, known_args, _):
+        req = self._build_request(
+            os.path.join(self._url, "image-alias", known_args.alias), method="DELETE"
+        )
+        with self._urlopen(req) as response:
+            _ = response.read()
+        log.info(f"deleted alias for user={self._user!r} alias={known_args.alias}")
         return True
 
     def _find_box(self, box_search):
@@ -271,7 +326,7 @@ class Client:
 
     @property
     def _user(self):
-        return self._credentials.split(":")[0]
+        return self._credentials.split(":")[0].split("--")[0]
 
     def _build_request(self, url, data=None, headers=None, method="GET"):
         headers = headers if headers is not None else {}
