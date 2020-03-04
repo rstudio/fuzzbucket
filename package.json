@@ -5,7 +5,10 @@
   "dependencies": {
     "serverless": "*",
     "serverless-basic-authentication": "*",
+    "serverless-dynamodb-local": "<=0.2.35",
+    "serverless-offline": "*",
+    "serverless-python-requirements": "*",
     "serverless-resources-env": "*",
-    "serverless-offline": "*"
+    "serverless-wsgi": "*"
   }
 }

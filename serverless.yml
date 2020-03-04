@@ -5,8 +5,12 @@ provider:
   runtime: python3.8
   memorySize: ${self:custom.memorySize, 128}
   apiKeys: ${self:custom.apiKeys}
+  region: ${self:custom.awsRegion, 'us-east-1'}
   environment:
-    LOG_LEVEL: info
+    FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
+    FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
+    FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
+    FUZZBUCKET_DEFAULT_TTL: ${self:custom.defaultTtl, '14400'}
   iamRoleStatements:
   - Effect: Allow
     Action:
@@ -47,16 +51,32 @@ provider:
     - ec2:ImportKeyPair
     - ec2:RunInstances
     Resource: '*'
+  - Effect: Allow
+    Action:
+    - dynamodb:Query
+    - dynamodb:Scan
+    - dynamodb:GetItem
+    - dynamodb:PutItem
+    - dynamodb:UpdateItem
+    - dynamodb:DeleteItem
+    Resource:
+    - Fn::GetAtt:
+      - ImageAliasesDynamoDBTable
+      - Arn
 package:
   include:
   - basic_auth.py
-  - fuzzbucket.py
-  - image_aliases.py
+  - fuzzbucket/*.py
+  - wsgi_handler.py
   exclude:
   - "./**/**"
 plugins:
 - serverless-basic-authentication
+- serverless-dynamodb-local
+- serverless-python-requirements
 - serverless-resources-env
+- serverless-wsgi
+- serverless-offline
 resources:
   Resources:
     VPC:
@@ -190,23 +210,24 @@ resources:
         Tags:
         - Key: Name
           Value: fuzzbucket-${opt:stage, 'dev'}-connect-sg
+    ImageAliasesDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+        -
+          AttributeName: imageAlias
+          AttributeType: S
+        KeySchema:
+        -
+          AttributeName: imageAlias
+          KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
 functions:
-  list:
-    handler: fuzzbucket.list_boxes
-    custom:
-      env-resources:
-      - VPC
-    events:
-    - http: { path: /, method: get, private: true }
-  list-aliases:
-    handler: fuzzbucket.list_aliases
-    events:
-    - http: { path: /aliases, method: get, private: true}
-  create:
-    handler: fuzzbucket.create_box
-    environment:
-      FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
-      FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
+  api:
+    handler: wsgi_handler.handler
     custom:
       env-resources:
       - VPC
@@ -214,31 +235,10 @@ functions:
       - FuzzbucketDefaultSecurityGroup
       - FuzzbucketConnectSecurityGroup
     events:
-    - http: { path: /box, method: post, private: true }
-  delete:
-    handler: fuzzbucket.delete_box
-    custom:
-      env-resources:
-      - VPC
-    events:
-    - http:
-        path: '/box/{id}'
-        method: delete
-        private: true
-        request: { parameters: { paths: { id: true } } }
-  reboot:
-    handler: fuzzbucket.reboot_box
-    custom:
-      env-resources:
-      - VPC
-    events:
-    - http:
-        path: '/reboot/{id}'
-        method: post
-        private: true
-        request: { parameters: { paths: { id: true } } }
+    - http: { method: ANY, path: /, private: true }
+    - http: { method: ANY, path: '{proxy+}', private: true }
   reap:
-    handler: fuzzbucket.reap_boxes
+    handler: fuzzbucket.deferred_reap_boxes
     custom:
       env-resources:
       - VPC

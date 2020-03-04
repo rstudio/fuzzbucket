@@ -140,7 +140,7 @@ class Client:
 
     def list_aliases(self, *_):
         self._setup()
-        req = self._build_request(os.path.join(self._url, "aliases"))
+        req = self._build_request(os.path.join(self._url, "image-alias"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -167,6 +167,7 @@ class Client:
         req = self._build_request(
             os.path.join(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
             method="POST",
         )
         raw_response = {}

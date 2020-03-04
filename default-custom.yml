@@ -1,9 +1,20 @@
 apiKeys:
 - admin
-defaultInstanceType: t3.small
+awsRegion: us-east-1
 defaultImageAlias: ubuntu18
+defaultInstanceType: t3.small
+defaultTtl: 14400
+dynamodb:
+  start:
+    migrate: true
+  stages:
+  - test
+logLevel: info
 memorySize: 128
 publicSubnetAvailabilityZone: us-east-1a
 publicSubnetCidrBlock: 172.98.0.0/19
 reapSchedule: rate(10 minutes)
 vpcCidrBlock: 172.98.0.0/18
+wsgi:
+  app: fuzzbucket.deferred_app
+  packRequirements: false

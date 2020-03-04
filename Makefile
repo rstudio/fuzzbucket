@@ -1,5 +1,5 @@
 COVERAGE_THRESHOLD ?= 75
-FUNCTION ?= list
+FUNCTION ?= api
 REGION ?= us-east-1
 STAGE ?= dev
 
@@ -39,9 +39,9 @@ logs:
 
 .PHONY: clean
 clean:
-	$(RM) image_aliases.py
+	$(RM) fuzzbucket/image_aliases.py
 
-image_aliases.py: generate_image_aliases.py
+fuzzbucket/image_aliases.py: generate_image_aliases.py
 	pipenv run python ./generate_image_aliases.py $@
 	pipenv run black $@
 

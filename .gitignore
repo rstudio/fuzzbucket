@@ -4,12 +4,13 @@
 .*env
 .Python
 .coverage
+.dynamodb/
 .eggs/
 .installed.cfg
 .serverless-resources-env/
 .serverless/
 build/
-custom.yml
+custom*.yml
 develop-eggs/
 dist/
 downloads/
