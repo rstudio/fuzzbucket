@@ -11,6 +11,8 @@ following operations on ephemeral EC2 instances ("boxes") in a managed VPC:
 
 Additionally, there is a periodic function that will terminate stale boxes.
 
+[![asciicast](https://asciinema.org/a/4lO70eoiBq9qBhbem9i5dd768.svg)](https://asciinema.org/a/4lO70eoiBq9qBhbem9i5dd768)
+
 ## is this for me?
 
 Maybe.
