@@ -5,11 +5,17 @@ verify_ssl = true
 
 [dev-packages]
 black = "*"
+boto3 = "*"
 coverage = "*"
 flake8 = "*"
+ipython = "*"
 moto = "*"
 pytest = "*"
 pytest-cover = "*"
+
+[packages]
+Flask = "*"
+werkzeug = "*"
 
 [requires]
 python_version = "3.8"
