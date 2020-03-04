@@ -5,12 +5,13 @@ import urllib.request
 
 import boto3
 
+from botocore.exceptions import ClientError
+
 from flask import Flask, jsonify, request, g
 from flask.json import JSONEncoder
 
 from werkzeug.exceptions import Forbidden as WerkzeugForbidden
 
-from .image_aliases import image_aliases
 from .box import Box
 from .tags import Tags
 from . import list_user_boxes, log
@@ -92,11 +93,6 @@ def list_boxes():
     )
 
 
-@app.route("/image-alias", methods=["GET"])
-def list_image_aliases():
-    return jsonify(image_aliases=image_aliases), 200
-
-
 @app.route("/box", methods=["POST"])
 def create_box():
     if not request.is_json:
@@ -106,7 +102,7 @@ def create_box():
         image_alias = "custom"
     else:
         image_alias = request.json.get("image_alias", "ubuntu18")
-        ami = _resolve_ami_alias(image_alias)
+        ami = _resolve_ami_alias(image_alias, request.remote_user)
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
@@ -188,7 +184,7 @@ def create_box():
         jsonify(
             boxes=[Box.from_ec2_dict(inst) for inst in response.get("Instances", [])]
         ),
-        200,
+        201,
     )
 
 
@@ -218,8 +214,56 @@ def delete_box(instance_id):
     return "", 204
 
 
-def _resolve_ami_alias(image_alias):
-    return image_aliases.get(image_alias, None)
+@app.route("/image-alias", methods=["GET"])
+def list_image_aliases():
+    try:
+        resp = get_dynamodb_client().scan(
+            TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
+            Select="ALL_ATTRIBUTES",
+        )
+        image_aliases = {}
+        for item in resp.get("Items", []):
+            image_aliases[item["Alias"]["S"]] = item["AMI"]["S"]
+        return jsonify(image_aliases=image_aliases), 200
+    except ClientError:
+        log.exception("oh no boto3")
+        return jsonify(error="failed to get image aliases"), 500
+
+
+@app.route("/image-alias", methods=["POST"])
+def create_image_alias():
+    if not request.is_json:
+        return jsonify(error="request is not json"), 400
+    resp = get_dynamodb_client().put_item(
+        TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
+        Item=dict(
+            User=dict(S=request.remote_user),
+            Alias=dict(S=request.json["alias"]),
+            AMI=dict(S=request.json["ami"]),
+        ),
+    )
+    log.warning(f"raw dynamodb response={resp!r}")
+    if resp.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
+        return (
+            jsonify(
+                error=f"failed to store alias={request.json['alias']} "
+                + f"ami={request.json['ami']}"
+            ),
+            500,
+        )
+    return jsonify(image_aliases=[{request.json["alias"]: request.json["ami"]}]), 201
+
+
+def _resolve_ami_alias(image_alias, user):
+    try:
+        resp = get_dynamodb_client().get_item(
+            TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
+            Key=dict(Alias=dict(S=image_alias), User=dict(S=user),),
+        )
+        return resp.get("Item", {}).get("AMI")
+    except ClientError:
+        log.exception("oh no boto3")
+        return None
 
 
 def _fetch_first_github_key(user):

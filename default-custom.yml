@@ -9,6 +9,7 @@ dynamodb:
     migrate: true
   stages:
   - test
+imageAliasesTableName: fuzzbucket-${opt:stage, 'dev'}-image-aliases
 logLevel: info
 memorySize: 128
 publicSubnetAvailabilityZone: us-east-1a

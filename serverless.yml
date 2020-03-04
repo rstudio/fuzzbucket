@@ -11,6 +11,7 @@ provider:
     FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
     FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
     FUZZBUCKET_DEFAULT_TTL: ${self:custom.defaultTtl, '14400'}
+    FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
   iamRoleStatements:
   - Effect: Allow
     Action:
@@ -215,11 +216,17 @@ resources:
       Properties:
         AttributeDefinitions:
         -
-          AttributeName: imageAlias
+          AttributeName: Alias
+          AttributeType: S
+        -
+          AttributeName: User
+          AttributeType: S
+        -
+          AttributeName: AMI
           AttributeType: S
         KeySchema:
         -
-          AttributeName: imageAlias
+          AttributeName: Alias
           KeyType: HASH
         ProvisionedThroughput:
           ReadCapacityUnits: 1

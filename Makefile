@@ -6,7 +6,6 @@ STAGE ?= dev
 .PHONY: help
 help:
 	@echo "Choose your own adventure:"
-	@echo "- clean"
 	@echo "- deploy (STAGE=$(STAGE), REGION=$(REGION))"
 	@echo "- deps"
 	@echo "- help"
@@ -36,14 +35,6 @@ deploy:
 .PHONY: logs
 logs:
 	npx sls logs --function $(FUNCTION) --region $(REGION) --stage $(STAGE) --tail
-
-.PHONY: clean
-clean:
-	$(RM) fuzzbucket/image_aliases.py
-
-fuzzbucket/image_aliases.py: generate_image_aliases.py
-	pipenv run python ./generate_image_aliases.py $@
-	pipenv run black $@
 
 .PHONY: install-client
 install-client:

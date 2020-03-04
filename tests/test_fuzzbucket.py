@@ -6,7 +6,7 @@ import time
 import boto3
 import pytest
 
-from moto import mock_ec2
+from moto import mock_ec2, mock_dynamodb2
 
 import fuzzbucket
 import fuzzbucket.app
@@ -19,6 +19,7 @@ from fuzzbucket.box import Box
 @pytest.fixture(autouse=True)
 def env_setup():
     os.environ.setdefault("CF_VPC", "vpc-fafafafaf")
+    os.environ.setdefault("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME", "image-aliases")
     app.testing = True
 
 
@@ -39,6 +40,30 @@ def pubkey():
             f"SFQFMNhHnnMwcnx pytest@nowhere{random.randint(100, 999)}",
         ]
     )
+
+
+def setup_dynamodb_tables(dynamodb_client):
+    dynamodb_client.create_table(
+        AttributeDefinitions=[
+            dict(AttributeName="Alias", AttributeType="S"),
+            dict(AttributeName="AMI", AttributeType="S"),
+            dict(AttributeName="User", AttributeType="S"),
+        ],
+        KeySchema=[
+            dict(AttributeName="Alias", KeyType="HASH"),
+            dict(AttributeName="AMI", KeyType="HASH"),
+            dict(AttributeName="User", KeyType="HASH"),
+        ],
+        TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
+    )
+    for alias, ami in {
+        "ubuntu18": "ami-fafafafafaf",
+        "rhel8": "ami-fafafafafaa",
+    }.items():
+        dynamodb_client.put_item(
+            TableName=os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"),
+            Item=dict(User=dict(S="testing"), Alias=dict(S=alias), AMI=dict(S=ami),),
+        )
 
 
 @mock_ec2
@@ -64,40 +89,56 @@ def test_list_boxes_forbidden(monkeypatch):
 
 
 @mock_ec2
+@mock_dynamodb2
 def test_create_box(authd_headers, monkeypatch, pubkey):
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
+    monkeypatch.setattr(
+        fuzzbucket.app, "get_dynamodb_client", lambda: boto3.client("dynamodb")
+    )
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
         with app.test_client() as c:
-            response = c.post("/box", json={}, headers=authd_headers,)
+            response = c.post(
+                "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers,
+            )
     assert response is not None
-    assert response.status_code == 200
+    assert response.status_code == 201
     assert response.json is not None
     assert "boxes" in response.json
     assert response.json["boxes"] != []
 
 
 @mock_ec2
+@mock_dynamodb2
 def test_create_box_forbidden(monkeypatch):
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
+    monkeypatch.setattr(
+        fuzzbucket.app, "get_dynamodb_client", lambda: boto3.client("dynamodb")
+    )
     response = None
     with app.test_client() as c:
-        response = c.post("/box", json={})
+        response = c.post("/box", json={"ami": "ami-fafafafafafaf"})
     assert response is not None
     assert response.status_code == 403
 
 
 @mock_ec2
+@mock_dynamodb2
 def test_delete_box(authd_headers, monkeypatch, pubkey):
     with app.app_context():
         ec2_client = boto3.client("ec2")
         monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+        monkeypatch.setattr(
+            fuzzbucket.app, "get_dynamodb_client", lambda: boto3.client("dynamodb")
+        )
         response = None
         with monkeypatch.context() as mp:
             mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
             with app.test_client() as c:
-                response = c.post("/box", json={}, headers=authd_headers)
+                response = c.post(
+                    "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
+                )
         assert response is not None
         assert "boxes" in response.json
 
@@ -129,15 +170,21 @@ def test_delete_box_forbidden(monkeypatch):
 
 
 @mock_ec2
+@mock_dynamodb2
 def test_reboot_box(authd_headers, monkeypatch, pubkey):
     with app.app_context():
         ec2_client = boto3.client("ec2")
         monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+        monkeypatch.setattr(
+            fuzzbucket.app, "get_dynamodb_client", lambda: boto3.client("dynamodb")
+        )
         response = None
         with monkeypatch.context() as mp:
             mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
             with app.test_client() as c:
-                response = c.post("/box", json={}, headers=authd_headers)
+                response = c.post(
+                    "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
+                )
         assert response is not None
         assert "boxes" in response.json
 
@@ -169,16 +216,67 @@ def test_reboot_box_forbidden(monkeypatch):
 
 
 @mock_ec2
+@mock_dynamodb2
+def test_list_image_aliases(authd_headers, monkeypatch):
+    dynamodb_client = boto3.client("dynamodb")
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb_client", lambda: dynamodb_client)
+    setup_dynamodb_tables(dynamodb_client)
+    response = None
+    with app.test_client() as c:
+        response = c.get("/image-alias", headers=authd_headers)
+    assert response is not None
+    assert response.status_code == 200
+
+
+@mock_ec2
+@mock_dynamodb2
+def test_list_image_aliases_forbidden(monkeypatch):
+    monkeypatch.setattr(
+        fuzzbucket.app, "get_dynamodb_client", lambda: boto3.client("dynamodb")
+    )
+    response = None
+    with app.test_client() as c:
+        response = c.get("/image-alias")
+    assert response is not None
+    assert response.status_code == 403
+
+
+@mock_ec2
+@mock_dynamodb2
+def test_create_image_alias(authd_headers, monkeypatch):
+    dynamodb_client = boto3.client("dynamodb")
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb_client", lambda: dynamodb_client)
+    setup_dynamodb_tables(dynamodb_client)
+    response = None
+    with app.test_client() as c:
+        response = c.post(
+            "/image-alias",
+            json={"alias": "yikes", "ami": "ami-fafababacaca"},
+            headers=authd_headers,
+        )
+    assert response is not None
+    assert response.status_code == 201
+
+
+@mock_ec2
+@mock_dynamodb2
 def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
     monkeypatch.setattr(
         fuzzbucket.reaper, "get_ec2_client", lambda: boto3.client("ec2")
     )
+    monkeypatch.setattr(
+        fuzzbucket.app, "get_dynamodb_client", lambda: boto3.client("dynamodb")
+    )
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
         with app.test_client() as c:
-            response = c.post("/box", json={"ttl": "-1"}, headers=authd_headers)
+            response = c.post(
+                "/box",
+                json={"ttl": "-1", "ami": "ami-fafafafafaf"},
+                headers=authd_headers,
+            )
     assert response is not None
     assert "boxes" in response.json
     instance_id = response.json["boxes"][0]["instance_id"]
