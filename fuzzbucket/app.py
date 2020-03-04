@@ -102,7 +102,7 @@ def create_box():
         image_alias = "custom"
     else:
         image_alias = request.json.get("image_alias", "ubuntu18")
-        ami = _resolve_ami_alias(image_alias, request.remote_user)
+        ami = _resolve_ami_alias(image_alias)
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
@@ -252,12 +252,12 @@ def delete_image_alias(alias):
     return "", 204
 
 
-def _resolve_ami_alias(image_alias, user):
+def _resolve_ami_alias(image_alias):
     try:
         resp = (
             get_dynamodb()
             .Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
-            .get_item(Key=dict(alias=image_alias, user=user))
+            .get_item(Key=dict(alias=image_alias))
         )
         return resp.get("Item", {}).get("ami")
     except ClientError:
