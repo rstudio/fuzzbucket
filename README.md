@@ -85,8 +85,12 @@ fuzzbucket-client --help
 ```
 
 As described in this help text, the client tool requires configuration of the
-API URL and credentials, which are printed at the end of deployment and also
-available via the `serverless`/`sls` tool:
+API URL and credentials.
+
+
+If you have access to the API provisioning tooling and resources, these values
+are printed at the end of deployment and also available via the
+`serverless`/`sls` tool:
 
 ```bash
 # show info for STAGE=prod
@@ -111,6 +115,9 @@ then the necessary environment variable configuration would be:
 FUZZBUCKET_URL=https://babacaca9000.execute-api.us-east-1.amazonaws.com/prod
 FUZZBUCKET_CREDENTIALS=githubperson01:fafaeaeadadacacababaaaaa
 ```
+
+> :warning: Without having the `serverless`/`sls` tooling and necessary AWS
+> access, you must get these values from someone who does.
 
 Exactly how you choose to manage these environment variables is up to you, but
 the default development workflow which uses `pipenv` will automatically source
