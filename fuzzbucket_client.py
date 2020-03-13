@@ -67,7 +67,7 @@ def main(sysargs=sys.argv[:]):
         default=str(3600 * 4),
         help="set the TTL for the box, after which it will be reaped",
     )
-    parser_create.add_argument("-t", "--instance-type", default="t3.small")
+    parser_create.add_argument("-t", "--instance-type", default=None)
     parser_create.set_defaults(func=client.create)
 
     parser_delete = subparsers.add_parser(
@@ -172,6 +172,13 @@ class Client:
             payload["ami"] = known_args.image
         else:
             payload["image_alias"] = known_args.image
+        if (
+            payload.get("image_alias", "").startswith("rhel6")
+            and payload["instance_type"] is None
+        ):
+            payload["instance_type"] = "t2.small"
+        if payload["instance_type"] is None:
+            payload["instance_type"] = "t3.small"
         if known_args.connect:
             payload["connect"] = "1"
         if known_args.name != "":
