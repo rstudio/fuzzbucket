@@ -65,7 +65,7 @@ def main(sysargs=sys.argv[:]):
         "-T",
         "--ttl",
         default=str(3600 * 4),
-        help="set the TTL for the box, after which it will be reaped",
+        help="set the TTL for the box in seconds, after which it will be reaped",
     )
     parser_create.add_argument("-t", "--instance-type", default=None)
     parser_create.set_defaults(func=client.create)
