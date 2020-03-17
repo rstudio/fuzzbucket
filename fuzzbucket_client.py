@@ -6,6 +6,7 @@ Configuration is accepted via the following environment variables:
 
     FUZZBUCKET_URL - string URL of the fuzzbucket instance including path prefix
     FUZZBUCKET_CREDENTIALS - "github-user:fuzzbucket-token" string
+    FUZZBUCKET_LOG_LEVEL - log level name (default="INFO")
 
 """
 import argparse
@@ -21,25 +22,43 @@ import textwrap
 import urllib.parse
 import urllib.request
 
-LOG_LEVEL = os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper()
-log = logging.getLogger("fuzzbucket")
-logging.basicConfig(
-    stream=sys.stdout,
-    style="{",
-    format="# {name}:{levelname}:{asctime}:: {message}",
-    datefmt="%Y-%m-%dT%H%M%S",
-    level=getattr(logging, LOG_LEVEL),
-)
+
+LOG_LEVEL_DEBUG = "DEBUG"
+DEFAULT_LOG_LEVEL = "INFO"
 
 
 def default_client():
     return Client()
 
 
+def config_logging(level_name=DEFAULT_LOG_LEVEL):
+    logging.basicConfig(
+        stream=sys.stdout,
+        style="{",
+        format="# {name}:{levelname}:{asctime}:: {message}",
+        datefmt="%Y-%m-%dT%H%M%S",
+        level=getattr(logging, level_name),
+    )
+
+
+def log_level():
+    return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
+
+
+log = logging.getLogger("fuzzbucket")
+
+
 def main(sysargs=sys.argv[:]):
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "-D",
+        "--debug",
+        action="store_true",
+        default=log_level() == LOG_LEVEL_DEBUG,
+        help="enable debug logging",
     )
     subparsers = parser.add_subparsers(title="subcommands", help="additional help")
 
@@ -159,7 +178,11 @@ def main(sysargs=sys.argv[:]):
     parser_delete_alias.set_defaults(func=client.delete_alias)
 
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
+    config_logging(
+        level_name=LOG_LEVEL_DEBUG if known_args.debug else DEFAULT_LOG_LEVEL
+    )
     if not hasattr(known_args, "func"):
+        log.debug(f"no subcommand func defined in namespace={known_args!r}")
         parser.print_help()
         return 2
     if known_args.func(known_args, unknown_args):
@@ -174,7 +197,7 @@ def _command(method):
             return method(self, known_args, unknown_args)
         except Exception as exc:
             msg = f"command {method.__name__!r} failed"
-            if LOG_LEVEL == "DEBUG":
+            if log_level() == LOG_LEVEL_DEBUG:
                 log.exception(msg)
             else:
                 log.error(f"{msg} err={exc}")
