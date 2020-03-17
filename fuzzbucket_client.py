@@ -231,8 +231,7 @@ class Client:
 
         if payload["instance_type"] is None:
             payload["instance_type"] = self.default_instance_types.get(
-                payload.get("image_alias", self.default_image_alias),
-                self.default_instance_type,
+                payload.get("image_alias"), self.default_instance_type,
             )
         if known_args.connect:
             payload["connect"] = "1"
