@@ -194,3 +194,35 @@ def test_client_ssh(monkeypatch):
         ["fuzzbucket-client", "ssh", "koolthing", "-l", "cornelius"]
     )
     assert ret == 0
+
+
+def test_client_scp(monkeypatch):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    def fake_execvp(file, args):
+        assert file == "scp"
+        assert args == [
+            "scp",
+            "-r",
+            "cornelius@ethereal-plane.example.org:/var/log/",
+            "./local/dump",
+        ]
+
+    def fake_list_boxes():
+        return [{"name": "koolthing", "public_dns_name": "ethereal-plane.example.org"}]
+
+    monkeypatch.setattr(os, "execvp", fake_execvp)
+    monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
+
+    ret = fuzzbucket_client.main(
+        [
+            "fuzzbucket-client",
+            "scp",
+            "koolthing",
+            "-r",
+            "cornelius@__BOX__:/var/log/",
+            "./local/dump",
+        ]
+    )
+    assert ret == 0

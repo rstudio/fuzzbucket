@@ -95,10 +95,50 @@ def main(sysargs=sys.argv[:]):
         """
         NOTE: If no login is provided via the "-l" ssh option, a value will
         be guessed based on the box image alias.
-    """
+        """
     )
     parser_ssh.add_argument("box")
     parser_ssh.set_defaults(func=client.ssh)
+
+    parser_scp = subparsers.add_parser(
+        "scp",
+        help="SCP things into or out of a box.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser_scp.usage = "usage: %(prog)s [-h] box [scp-arguments]"
+    parser_scp.description = textwrap.dedent(
+        """
+        SCP things into or out of a box, optionally passing arbitrary commands
+        as positional arguments. Additionally, stdio streams will be inherited
+        by the scp process in order to support piping.
+        """
+    )
+    parser_scp.epilog = textwrap.dedent(
+        """
+        NOTE: If no login is provided in at least one of the source or
+        destination arguments, a value will be guessed based on the box image
+        alias.
+
+        IMPORTANT: The fully-qualified address of the box will be substituted in
+        the remaining command arguments wherever the literal "__BOX__" appears,
+        e.g.:
+
+        the command:
+            %(prog)s boxname -r ./some/local/path __BOX__:/tmp/
+
+        becomes:
+            scp -r ./some/local/path username@boxname.fully.qualified.example.com:/tmp/
+
+        the command:
+            %(prog)s boxname -r 'altuser@__BOX__:/var/log/*.log' ./some/local/path/
+
+        becomes:
+            scp -r altuser@boxname.fully.qualified.example.com:/var/log/*.log \\
+                   ./some/local/path/
+        """
+    )
+    parser_scp.add_argument("box")
+    parser_scp.set_defaults(func=client.scp)
 
     parser_list_aliases = subparsers.add_parser(
         "list-aliases", aliases=["la"], help="List known image aliases."
@@ -237,27 +277,34 @@ class Client:
 
     @_command
     def ssh(self, known_args, unknown_args):
-        matching_box = self._find_box(known_args.box)
-        if matching_box is None:
-            log.error(f"no box found matching {known_args.box!r}")
+        matching_box, ok = self._resolve_sshable_box(known_args.box)
+        if not ok:
             return False
-        if "-l" not in unknown_args:
-            unknown_args = [
-                "-l",
-                self._guess_ssh_user(
-                    matching_box.get("image_alias", "ubuntu18"), "ec2-user"
-                ),
-            ] + unknown_args
+        ssh_command = self._build_ssh_command(matching_box, unknown_args)
         log.info(
             f"sshing into matching_box={matching_box['name']!r} "
-            + f"ssh_args={unknown_args!r}"
+            + f"ssh_command={ssh_command!r}"
         )
         print(self._boxes_to_ini([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
-        os.execvp(
-            "ssh", ["ssh", matching_box.get("public_dns_name")] + unknown_args,
+        os.execvp("ssh", ssh_command)
+        return True
+
+    @_command
+    def scp(self, known_args, unknown_args):
+        matching_box, ok = self._resolve_sshable_box(known_args.box)
+        if not ok:
+            return False
+        scp_command = self._build_scp_command(matching_box, unknown_args)
+        log.info(
+            f"scping with matching_box={matching_box['name']!r} "
+            + f"scp_command={scp_command!r}"
         )
+        print(self._boxes_to_ini([matching_box]), end="")
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.execvp("scp", scp_command)
         return True
 
     @_command
@@ -343,6 +390,44 @@ class Client:
             creds_b64 = creds_b64.decode("utf-8")
             req.headers["Authorization"] = f"basic {creds_b64}"
         return req
+
+    def _resolve_sshable_box(self, box):
+        matching_box = self._find_box(box)
+        if matching_box is None:
+            log.error(f"no box found matching {box!r}")
+            return None, False
+        if matching_box.get("public_dns_name") is None:
+            log.error(f"no public dns name found for box={matching_box['name']}")
+            return None, False
+        return matching_box, True
+
+    def _build_ssh_command(self, box, unknown_args):
+        if "-l" not in unknown_args:
+            unknown_args = [
+                "-l",
+                self._guess_ssh_user(box.get("image_alias", "ubuntu18"), "ec2-user"),
+            ] + unknown_args
+
+        return ["ssh", box.get("public_dns_name")] + unknown_args
+
+    def _build_scp_command(self, box, unknown_args):
+        for i, value in enumerate(unknown_args):
+            if "__BOX__" not in value:
+                continue
+
+            box_value = box["public_dns_name"]
+            if "@" not in value:
+                box_value = "@".join(
+                    [
+                        self._guess_ssh_user(
+                            box.get("image_alias", "ubuntu18"), "ec2-user"
+                        ),
+                        box_value,
+                    ]
+                )
+
+            unknown_args[i] = value.replace("__BOX__", box_value)
+        return ["scp"] + unknown_args
 
     @staticmethod
     def _boxes_to_ini(boxes):
