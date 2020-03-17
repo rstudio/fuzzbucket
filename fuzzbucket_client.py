@@ -187,6 +187,7 @@ class Client:
     default_instance_type = "t3.small"
     default_image_alias = "ubuntu18"
     default_instance_types = {
+        "centos6": "t2.small",
         "rhel6": "t2.small",
         "sles12": "t2.small",
         None: default_instance_type,
