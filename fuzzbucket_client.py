@@ -193,10 +193,11 @@ class Client:
     }
     default_ssh_user = "ec2-user"
     default_ssh_users = {
-        "ubuntu": "ubuntu",
         "centos": "centos",
         "rhel": default_ssh_user,
+        "sles": default_ssh_user,
         "suse": default_ssh_user,
+        "ubuntu": "ubuntu",
     }
 
     def __init__(self, env=None):
@@ -419,7 +420,10 @@ class Client:
         if "-l" not in unknown_args:
             unknown_args = [
                 "-l",
-                self._guess_ssh_user(box.get("image_alias", "ubuntu18"), "ec2-user"),
+                self._guess_ssh_user(
+                    box.get("image_alias", self.default_image_alias),
+                    self.default_ssh_user,
+                ),
             ] + unknown_args
 
         return ["ssh", box.get("public_dns_name")] + unknown_args
@@ -434,7 +438,8 @@ class Client:
                 box_value = "@".join(
                     [
                         self._guess_ssh_user(
-                            box.get("image_alias", "ubuntu18"), "ec2-user"
+                            box.get("image_alias", self.default_image_alias),
+                            self.default_ssh_user,
                         ),
                         box_value,
                     ]
