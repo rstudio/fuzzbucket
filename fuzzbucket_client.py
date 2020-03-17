@@ -50,7 +50,7 @@ def main(sysargs=sys.argv[:]):
         "create", aliases=["new"], help="Create a box."
     )
     parser_create.add_argument(
-        "image", default="ubuntu18", help="image alias or full AMI id"
+        "image", default=Client.default_image_alias, help="image alias or full AMI id"
     )
     parser_create.add_argument(
         "-n", "--name", help="custom name for box (generated if omitted)"
@@ -184,6 +184,21 @@ def _command(method):
 
 
 class Client:
+    default_instance_type = "t3.small"
+    default_image_alias = "ubuntu18"
+    default_instance_types = {
+        "rhel6": "t2.small",
+        "sles12": "t2.small",
+        None: default_instance_type,
+    }
+    default_ssh_user = "ec2-user"
+    default_ssh_users = {
+        "ubuntu": "ubuntu",
+        "centos": "centos",
+        "rhel": default_ssh_user,
+        "suse": default_ssh_user,
+    }
+
     def __init__(self, env=None):
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
@@ -212,13 +227,12 @@ class Client:
             payload["ami"] = known_args.image
         else:
             payload["image_alias"] = known_args.image
-        if (
-            payload.get("image_alias", "").startswith("rhel6")
-            and payload["instance_type"] is None
-        ):
-            payload["instance_type"] = "t2.small"
+
         if payload["instance_type"] is None:
-            payload["instance_type"] = "t3.small"
+            payload["instance_type"] = self.default_instance_types.get(
+                payload.get("image_alias", self.default_image_alias),
+                self.default_instance_type,
+            )
         if known_args.connect:
             payload["connect"] = "1"
         if known_args.name != "":
@@ -456,15 +470,12 @@ class Client:
         buf.seek(0)
         return buf.read()
 
-    @staticmethod
-    def _guess_ssh_user(image_alias, default="root"):
+    @classmethod
+    def _guess_ssh_user(cls, image_alias, default=default_ssh_user):
         image_alias = image_alias.lower()
-        if image_alias.startswith("ubuntu"):
-            return "ubuntu"
-        if image_alias.startswith("centos"):
-            return "centos"
-        if image_alias.startswith("rhel") or image_alias.startswith("suse"):
-            return "ec2-user"
+        for prefix, user in cls.default_ssh_users.items():
+            if image_alias.startswith(prefix):
+                return user
         return default
 
 
