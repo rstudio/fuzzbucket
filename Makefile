@@ -32,7 +32,7 @@ lint:
 
 .PHONY: test
 test:
-	pipenv run pytest --mypy --cov-fail-under=$(COVERAGE_THRESHOLD)
+	pipenv run pytest -vv --mypy --cov-fail-under=$(COVERAGE_THRESHOLD)
 
 .PHONY: deploy
 deploy:

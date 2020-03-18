@@ -18,6 +18,7 @@ import io
 import json
 import logging
 import os
+import re
 import sys
 import textwrap
 import typing
@@ -473,8 +474,9 @@ class Client:
                     self.default_ssh_user,
                 ),
             ] + unknown_args
-
-        return ["ssh", box.get("public_dns_name")] + unknown_args
+        return (
+            ["ssh"] + self._with_ssh_opts(unknown_args) + [box.get("public_dns_name")]
+        )
 
     def _build_scp_command(self, box, unknown_args):
         for i, value in enumerate(unknown_args):
@@ -494,7 +496,23 @@ class Client:
                 )
 
             unknown_args[i] = value.replace("__BOX__", box_value)
-        return ["scp"] + unknown_args
+        return ["scp"] + self._with_ssh_opts(unknown_args)
+
+    def _with_ssh_opts(self, unknown_args: typing.List[str]) -> typing.List[str]:
+        unknown_args_string = " ".join(unknown_args)
+        if (
+            re.search(
+                " -o StrictHostKeyChecking=.+", unknown_args_string, re.IGNORECASE
+            )
+            is None
+        ):
+            unknown_args = ["-o", "StrictHostKeyChecking=no"] + unknown_args
+        if (
+            re.search(" -o UserKnownHostsFile=.+", unknown_args_string, re.IGNORECASE)
+            is None
+        ):
+            unknown_args = ["-o", "UserKnownHostsFile=/dev/null"] + unknown_args
+        return unknown_args
 
     @staticmethod
     def _boxes_to_ini(boxes):
