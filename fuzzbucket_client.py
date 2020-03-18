@@ -102,7 +102,10 @@ def main(sysargs=sys.argv[:]):
     parser_reboot.set_defaults(func=client.reboot)
 
     parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
-    parser_ssh.usage = "usage: %(prog)s [-h] box [ssh-arguments]"
+    parser_ssh.add_argument(
+        "-q", "--quiet", action="store_true", help="suppress box info header",
+    )
+    parser_ssh.usage = "usage: %(prog)s [-hq] box [ssh-arguments]"
     parser_ssh.description = textwrap.dedent(
         """
         SSH into a box, optionally passing arbitrary commands as positional
@@ -319,11 +322,12 @@ class Client:
         if not ok:
             return False
         ssh_command = self._build_ssh_command(matching_box, unknown_args)
-        log.info(
-            f"sshing into matching_box={matching_box['name']!r} "
-            + f"ssh_command={ssh_command!r}"
-        )
-        print(self._boxes_to_ini([matching_box]), end="")
+        if not known_args.quiet:
+            log.info(
+                f"sshing into matching_box={matching_box['name']!r} "
+                + f"ssh_command={ssh_command!r}"
+            )
+            print(self._boxes_to_ini([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
         os.execvp("ssh", ssh_command)
