@@ -103,10 +103,7 @@ def main(sysargs=sys.argv[:]):
 
     parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
     parser_ssh.add_argument(
-        "-q",
-        "--quiet",
-        action="store_true",
-        help="suppress box info header",
+        "-q", "--quiet", action="store_true", help="suppress box info header",
     )
     parser_ssh.usage = "usage: %(prog)s [-hq] box [ssh-arguments]"
     parser_ssh.description = textwrap.dedent(
