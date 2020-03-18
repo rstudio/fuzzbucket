@@ -431,6 +431,7 @@ class Client:
 
     @contextlib.contextmanager
     def _urlopen(self, request):
+        log.debug(f"attempting request for user={self._user!r} request={request!r}")
         with urllib.request.urlopen(request) as response:
             yield response
 
@@ -474,9 +475,7 @@ class Client:
                     self.default_ssh_user,
                 ),
             ] + unknown_args
-        return (
-            ["ssh"] + self._with_ssh_opts(unknown_args) + [box.get("public_dns_name")]
-        )
+        return ["ssh", box.get("public_dns_name")] + self._with_ssh_opts(unknown_args)
 
     def _build_scp_command(self, box, unknown_args):
         for i, value in enumerate(unknown_args):
