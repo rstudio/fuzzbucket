@@ -192,7 +192,16 @@ def test_client_ssh(monkeypatch):
 
     def fake_execvp(file, args):
         assert file == "ssh"
-        assert args == ["ssh", "ethereal-plane.example.org", "-l", "cornelius"]
+        assert args == [
+            "ssh",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-l",
+            "cornelius",
+            "ethereal-plane.example.org",
+        ]
 
     def fake_list_boxes():
         return [{"name": "koolthing", "public_dns_name": "ethereal-plane.example.org"}]
@@ -214,6 +223,10 @@ def test_client_scp(monkeypatch):
         assert file == "scp"
         assert args == [
             "scp",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "StrictHostKeyChecking=no",
             "-r",
             "cornelius@ethereal-plane.example.org:/var/log/",
             "./local/dump",
