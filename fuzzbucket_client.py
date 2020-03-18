@@ -197,17 +197,28 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
 
 
 def _command(method):
+    def handle_exc(exc):
+        msg = f"command {method.__name__!r} failed"
+        if log_level() == LOG_LEVEL_DEBUG:
+            log.exception(msg)
+        else:
+            log.error(f"{msg} err={exc!r}")
+        return False
+
     def wrapper(self, known_args, unknown_args):
         try:
             self._setup()
             return method(self, known_args, unknown_args)
+        except urllib.request.HTTPError as exc:
+            try:
+                response = json.load(exc)
+                log.error(
+                    f"command {method.__name__!r} failed error={response.get('error')!r}"
+                )
+            except Exception as exc:
+                return handle_exc(exc)
         except Exception as exc:
-            msg = f"command {method.__name__!r} failed"
-            if log_level() == LOG_LEVEL_DEBUG:
-                log.exception(msg)
-            else:
-                log.error(f"{msg} err={exc!r}")
-            return False
+            return handle_exc(exc)
 
     return wrapper
 
@@ -431,7 +442,10 @@ class Client:
 
     @contextlib.contextmanager
     def _urlopen(self, request):
-        log.debug(f"attempting request for user={self._user!r} request={request!r}")
+        log.debug(
+            f"attempting request user={self._user!r} method={request.method!r} "
+            + f"url={request.full_url!r}"
+        )
         with urllib.request.urlopen(request) as response:
             yield response
 
