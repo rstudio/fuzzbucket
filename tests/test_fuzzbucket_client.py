@@ -194,13 +194,15 @@ def test_client_ssh(monkeypatch):
         assert file == "ssh"
         assert args == [
             "ssh",
+            "ethereal-plane.example.org",
             "-o",
             "UserKnownHostsFile=/dev/null",
             "-o",
             "StrictHostKeyChecking=no",
             "-l",
-            "cornelius",
-            "ethereal-plane.example.org",
+            "ubuntu",
+            "ls",
+            "-la",
         ]
 
     def fake_list_boxes():
@@ -209,9 +211,7 @@ def test_client_ssh(monkeypatch):
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
-    ret = fuzzbucket_client.main(
-        ["fuzzbucket-client", "ssh", "koolthing", "-l", "cornelius"]
-    )
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "ssh", "koolthing", "ls", "-la"])
     assert ret == 0
 
 
