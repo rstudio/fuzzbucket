@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import re
 
 import pytest
 
@@ -112,7 +113,7 @@ def test_client_create(monkeypatch):
     assert ret == 0
 
 
-def test_client_delete(monkeypatch):
+def test_client_delete(monkeypatch, caplog):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
 
@@ -129,19 +130,28 @@ def test_client_delete(monkeypatch):
                                 "public_ip": None,
                                 "instance_id": "i-fafafafafaf",
                                 "special": "is this the end",
-                            }
+                            },
+                            {
+                                "name": "welpington",
+                                "public_ip": None,
+                                "instance_id": "i-fafafababab",
+                            },
                         ]
                     }
                 )
             ),
+            io.StringIO(""),
             io.StringIO(""),
         ][request_counter["count"]]
         request_counter["count"] += 1
         return response
 
     monkeypatch.setattr(client, "_urlopen", fake_urlopen)
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "delete", "welp"])
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "delete", "welp*"])
     assert ret == 0
+
+    assert re.search(".*deleted box for.*name=welp$", caplog.text, re.MULTILINE)
+    assert re.search(".*deleted box for.*name=welpington$", caplog.text, re.MULTILINE)
 
 
 def test_client_reboot(monkeypatch):

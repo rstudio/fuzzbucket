@@ -6,6 +6,7 @@ STAGE ?= dev
 .PHONY: help
 help:
 	@echo "Choose your own adventure:"
+	@echo "- clean"
 	@echo "- deploy (STAGE=$(STAGE), REGION=$(REGION))"
 	@echo "- deps"
 	@echo "- help"
@@ -13,6 +14,10 @@ help:
 	@echo "- lint"
 	@echo "- logs (STAGE=$(STAGE), REGION=$(REGION), FUNCTION=$(FUNCTION))"
 	@echo "- test (COVERAGE_THRESHOLD=$(COVERAGE_THRESHOLD))"
+
+.PHONY: clean
+clean:
+	$(RM) -r ./build ./dist ./fuzzbucket_client.egg-info ./htmlcov ./.coverage ./.mypy_cache ./.pytest_cache
 
 .PHONY: deps
 deps:
@@ -23,10 +28,11 @@ deps:
 lint:
 	pipenv run black --check --diff .
 	pipenv run flake8 .
+	pipenv run pytest --mypy -m mypy --no-cov
 
 .PHONY: test
 test:
-	pipenv run pytest --cov-fail-under=$(COVERAGE_THRESHOLD)
+	pipenv run pytest --mypy --cov-fail-under=$(COVERAGE_THRESHOLD)
 
 .PHONY: deploy
 deploy:

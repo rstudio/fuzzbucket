@@ -13,12 +13,14 @@ import argparse
 import configparser
 import contextlib
 import base64
+import fnmatch
 import io
 import json
 import logging
 import os
 import sys
 import textwrap
+import typing
 import urllib.parse
 import urllib.request
 
@@ -27,11 +29,11 @@ LOG_LEVEL_DEBUG = "DEBUG"
 DEFAULT_LOG_LEVEL = "INFO"
 
 
-def default_client():
+def default_client() -> "Client":
     return Client()
 
 
-def config_logging(level_name=DEFAULT_LOG_LEVEL):
+def config_logging(level_name: str = DEFAULT_LOG_LEVEL):
     logging.basicConfig(
         stream=sys.stdout,
         style="{",
@@ -41,14 +43,14 @@ def config_logging(level_name=DEFAULT_LOG_LEVEL):
     )
 
 
-def log_level():
+def log_level() -> str:
     return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
 
 
 log = logging.getLogger("fuzzbucket")
 
 
-def main(sysargs=sys.argv[:]):
+def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -90,9 +92,9 @@ def main(sysargs=sys.argv[:]):
     parser_create.set_defaults(func=client.create)
 
     parser_delete = subparsers.add_parser(
-        "delete", aliases=["rm"], help="Delete a box."
+        "delete", aliases=["rm"], help="Delete matching boxes."
     )
-    parser_delete.add_argument("box")
+    parser_delete.add_argument("box_match")
     parser_delete.set_defaults(func=client.delete)
 
     parser_reboot = subparsers.add_parser(
@@ -203,7 +205,7 @@ def _command(method):
             if log_level() == LOG_LEVEL_DEBUG:
                 log.exception(msg)
             else:
-                log.error(f"{msg} err={exc}")
+                log.error(f"{msg} err={exc!r}")
             return False
 
     return wrapper
@@ -287,17 +289,19 @@ class Client:
 
     @_command
     def delete(self, known_args, _):
-        matching_box = self._find_box(known_args.box)
-        if matching_box is None:
-            log.error(f"no box found matching {known_args.box!r}")
+        matching_boxes = self._find_boxes(known_args.box_match)
+        if matching_boxes is None:
+            log.error(f"no boxes found matching {known_args.box_match!r}")
             return False
-        req = self._build_request(
-            os.path.join(self._url, "box", matching_box["instance_id"]), method="DELETE"
-        )
-        with self._urlopen(req) as response:
-            _ = response.read()
-        log.info(f"deleted box for user={self._user!r} name={matching_box['name']}")
-        print(self._boxes_to_ini([matching_box]), end="")
+        for matching_box in matching_boxes:
+            req = self._build_request(
+                os.path.join(self._url, "box", matching_box["instance_id"]),
+                method="DELETE",
+            )
+            with self._urlopen(req) as response:
+                _ = response.read()
+            log.info(f"deleted box for user={self._user!r} name={matching_box['name']}")
+            print(self._boxes_to_ini([matching_box]), end="")
         return True
 
     @_command
@@ -393,12 +397,29 @@ class Client:
         return True
 
     def _find_box(self, box_search):
+        results = self._find_boxes(box_search)
+        if results is None:
+            return None
+        return results[0]
+
+    def _find_boxes(self, box_search):
         boxes = self._list_boxes()
+        results = []
         for box in boxes:
             log.debug(f"finding box_search={box_search!r} considering box={box!r}")
-            if box.get("name") == box_search or box.get("image_alias") == box_search:
-                return box
-        return None
+            if box.get("name") is not None and fnmatch.fnmatchcase(
+                box["name"], box_search
+            ):
+                results.append(box)
+                continue
+            if box.get("image_alias") is not None and fnmatch.fnmatchcase(
+                box["image_alias"], box_search
+            ):
+                results.append(box)
+                continue
+        if len(results) == 0:
+            return None
+        return results
 
     def _list_boxes(self):
         req = self._build_request(self._url)

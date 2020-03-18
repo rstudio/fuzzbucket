@@ -1,6 +1,7 @@
 import base64
 import os
 import time
+import typing
 import urllib.request
 
 import boto3
@@ -14,13 +15,13 @@ from werkzeug.exceptions import Forbidden as WerkzeugForbidden
 
 from .box import Box
 from .tags import Tags
-from . import list_user_boxes, log
+from . import list_user_boxes, log, NoneString
 
 app = Flask(__name__)
 
 
 class _JSONEncoder(JSONEncoder):
-    def default(self, o):
+    def default(self, o: typing.Any) -> typing.Any:
         if hasattr(o, "as_json") and callable(o.as_json):
             return o.as_json()
         if hasattr(o, "__dict__"):
@@ -35,14 +36,16 @@ class _UserMiddleware:
     def __init__(self, app):
         self._app = app
 
-    def __call__(self, environ, start_response):
+    def __call__(
+        self, environ: typing.Dict[str, str], start_response: typing.Callable,
+    ) -> typing.Iterable[bytes]:
         user = self._extract_user(environ)
         if user is None:
             return WerkzeugForbidden()(environ, start_response)
         environ["REMOTE_USER"] = user
         return self._app(environ, start_response)
 
-    def _extract_user(self, environ):
+    def _extract_user(self, environ: typing.Dict[str, str]) -> NoneString:
         auth_header = environ.get("HTTP_AUTHORIZATION")
         if auth_header is not None:
             b64_token = auth_header.split(" ")[-1]
@@ -54,7 +57,7 @@ class _UserMiddleware:
         return None
 
 
-app.wsgi_app = _UserMiddleware(app.wsgi_app)
+app.wsgi_app = _UserMiddleware(app.wsgi_app)  # type: ignore
 
 
 def get_ec2_client():
@@ -252,7 +255,7 @@ def delete_image_alias(alias):
     return "", 204
 
 
-def _resolve_ami_alias(image_alias):
+def _resolve_ami_alias(image_alias: str) -> typing.Union[str, None]:
     try:
         resp = (
             get_dynamodb()
@@ -265,10 +268,10 @@ def _resolve_ami_alias(image_alias):
         return None
 
 
-def _fetch_first_github_key(user):
+def _fetch_first_github_key(user: str) -> str:
     try:
         with urllib.request.urlopen(f"https://github.com/{user}.keys") as response:
             return response.read().decode("utf-8").split("\n")[0].strip()
-    except urllib.request.HTTPError as exc:
+    except urllib.request.HTTPError as exc:  # type: ignore
         log.warning(f"error while fetching keys for user={user} err={exc}")
         return ""
