@@ -10,8 +10,10 @@ coverage = "*"
 flake8 = "*"
 ipython = "*"
 moto = "*"
+mypy = "*"
 pytest = "*"
 pytest-cover = "*"
+pytest-mypy = "*"
 
 [packages]
 Flask = "*"

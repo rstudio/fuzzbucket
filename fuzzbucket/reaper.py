@@ -14,7 +14,7 @@ def get_ec2_client():
     return _CACHED["ec2_client"]
 
 
-def reap_boxes(event, context, ec2_client=None, env=None):
+def reap_boxes(event: dict, context: dict, ec2_client=None, env: dict = None) -> dict:
     ec2_client = ec2_client if ec2_client is not None else get_ec2_client()
     env = env if env is not None else dict(os.environ)
     reaped_instance_ids = []

@@ -1,20 +1,22 @@
+import dataclasses
 import datetime
 
 from .tags import Tags
+from . import NoneString
 
 
+@dataclasses.dataclass
 class Box:
-    def __init__(self):
-        self.created_at = None
-        self.image_alias = None
-        self.image_id = None
-        self.instance_id = None
-        self.instance_type = None
-        self.name = None
-        self.public_dns_name = None
-        self.public_ip = None
-        self.ttl = None
-        self.user = None
+    created_at: NoneString = None
+    image_alias: NoneString = None
+    image_id: NoneString = None
+    instance_id: NoneString = None
+    instance_type: NoneString = None
+    name: NoneString = None
+    public_dns_name: NoneString = None
+    public_ip: NoneString = None
+    ttl: int = 0
+    user: NoneString = None
 
     def as_json(self):
         return dict(
@@ -26,7 +28,7 @@ class Box:
         )
 
     @property
-    def age(self):
+    def age(self) -> str:
         if not self.created_at:
             return "?"
         delta = datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(
@@ -37,7 +39,7 @@ class Box:
         return f"{delta.days}d{hours}h{minutes}m{seconds}s"
 
     @classmethod
-    def from_dict(cls, as_dict):
+    def from_dict(cls, as_dict: dict) -> "Box":
         box = cls()
         for key in box.__dict__.keys():
             if key not in as_dict:
@@ -46,15 +48,16 @@ class Box:
         return box
 
     @classmethod
-    def from_ec2_dict(cls, instance):
-        box = cls()
-        box.instance_id = instance["InstanceId"]
-        box.instance_type = instance["InstanceType"]
-        box.image_id = instance["ImageId"]
-        box.public_dns_name = (
-            instance["PublicDnsName"] if instance["PublicDnsName"] != "" else None
+    def from_ec2_dict(cls, instance: dict) -> "Box":
+        box = cls(
+            instance_id=instance["InstanceId"],
+            instance_type=instance["InstanceType"],
+            image_id=instance["ImageId"],
+            public_dns_name=(
+                instance["PublicDnsName"] if instance["PublicDnsName"] != "" else None
+            ),
+            public_ip=instance.get("PublicIpAddress", None),
         )
-        box.public_ip = instance.get("PublicIpAddress", None)
         for tag in instance.get("Tags", []):
             attr, cast = {
                 "Name": ["name", str],
@@ -62,7 +65,7 @@ class Box:
                 Tags.image_alias.value: ["image_alias", str],
                 Tags.ttl.value: ["ttl", int],
                 Tags.user.value: ["user", str],
-            }.get(tag["Key"])
+            }.get(tag["Key"], [None, str])
             if attr is not None:
-                setattr(box, attr, cast(tag["Value"]))
+                setattr(box, attr, cast(tag["Value"]))  # type: ignore
         return box

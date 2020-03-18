@@ -1,5 +1,6 @@
 import logging
 import os
+import typing
 
 from .tags import Tags
 
@@ -9,7 +10,12 @@ log = ROOT_LOG.getChild("fuzzbucket")
 log.setLevel(getattr(logging, LOG_LEVEL))
 
 
-def deferred_app(environ, start_response):
+NoneString = typing.Optional[str]
+
+
+def deferred_app(
+    environ: typing.Dict[str, str], start_response: typing.Callable
+) -> typing.Iterable[str]:
     from .app import app
 
     return app(environ, start_response)

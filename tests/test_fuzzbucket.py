@@ -2,6 +2,7 @@ import base64
 import os
 import random
 import time
+import typing
 
 import boto3
 import pytest
@@ -24,12 +25,12 @@ def env_setup():
 
 
 @pytest.fixture
-def authd_headers():
+def authd_headers() -> typing.List[typing.Tuple[str, str]]:
     return [("Authorization", base64.b64encode(b"pytest:zzz").decode("utf-8"))]
 
 
 @pytest.fixture
-def pubkey():
+def pubkey() -> str:
     return "".join(
         [
             "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCcKKyTEzdI6zFMEmhbXSLemjTskw620yumv",
@@ -344,8 +345,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
 
 def test_box():
-    box = Box()
-    box.instance_id = "i-fafafafafafafaf"
+    box = Box(instance_id="i-fafafafafafafaf")
     assert box.age == "?"
 
     box.created_at = str(time.time() - 1000)

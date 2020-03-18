@@ -7,6 +7,8 @@
 .dynamodb/
 .eggs/
 .installed.cfg
+.mypy_cache/
+.pytest_cache/
 .serverless-resources-env/
 .serverless/
 build/
