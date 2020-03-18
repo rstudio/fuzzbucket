@@ -18,13 +18,17 @@ import io
 import json
 import logging
 import os
+import pathlib
 import re
+import subprocess
 import sys
 import textwrap
 import typing
 import urllib.parse
 import urllib.request
 
+
+__version__ = "0.2.0"
 
 LOG_LEVEL_DEBUG = "DEBUG"
 DEFAULT_LOG_LEVEL = "INFO"
@@ -48,13 +52,41 @@ def log_level() -> str:
     return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
 
 
+def full_version() -> str:
+    source_dir = pathlib.Path(__file__).parent
+    try:
+        git_desc = (
+            subprocess.check_output(
+                [
+                    "git",
+                    f"--work-tree={source_dir}",
+                    f"--git-dir={source_dir.joinpath('.git')}",
+                    "describe",
+                    "--always",
+                    "--dirty",
+                ]
+            )
+            .strip()
+            .decode("utf-8")
+            .replace("-", ".")
+        )
+        return f"{__version__}+{git_desc}"
+    except Exception:
+        if log_level() == LOG_LEVEL_DEBUG:
+            log.exception("failed to get the extended version info")
+        return __version__
+
+
 log = logging.getLogger("fuzzbucket")
 
 
 def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {full_version()}",
     )
     parser.add_argument(
         "-D",
