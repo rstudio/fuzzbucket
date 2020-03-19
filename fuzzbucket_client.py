@@ -10,10 +10,11 @@ Configuration is accepted via the following environment variables:
 
 """
 import argparse
+import base64
 import configparser
 import contextlib
-import base64
 import fnmatch
+import functools
 import io
 import json
 import logging
@@ -52,6 +53,7 @@ def log_level() -> str:
     return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
 
 
+@functools.lru_cache
 def full_version() -> str:
     source_dir = pathlib.Path(__file__).parent
     try:
@@ -81,14 +83,27 @@ def full_version() -> str:
 log = logging.getLogger("fuzzbucket")
 
 
+class DeferredVersionString(str):
+    def splitlines(self, *_, **__) -> typing.List[str]:
+        return self._version().splitlines()
+
+    def __str__(self) -> str:
+        return self._version()
+
+    def __iter__(self) -> typing.Generator[str, None, None]:
+        yield self._version()
+        return None
+
+    def _version(self) -> str:
+        return f"fuzzbucket-client {full_version()}"
+
+
 def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {full_version()}",
-    )
+    parser.add_argument("--version", action="version", version=DeferredVersionString())
     parser.add_argument(
         "-D",
         "--debug",
