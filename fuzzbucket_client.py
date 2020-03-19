@@ -66,14 +66,16 @@ def full_version() -> str:
                     "describe",
                     "--always",
                     "--dirty",
+                    "--tags",
                 ],
                 stderr=subprocess.DEVNULL,
             )
             .strip()
             .decode("utf-8")
+            .replace("-", "+", 1)
             .replace("-", ".")
         )
-        return f"{__version__}+{git_desc}"
+        return git_desc
     except Exception:
         if log_level() == LOG_LEVEL_DEBUG:
             log.exception("failed to get the extended version info")
