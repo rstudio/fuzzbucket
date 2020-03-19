@@ -10,10 +10,11 @@ Configuration is accepted via the following environment variables:
 
 """
 import argparse
+import base64
 import configparser
 import contextlib
-import base64
 import fnmatch
+import functools
 import io
 import json
 import logging
@@ -52,6 +53,7 @@ def log_level() -> str:
     return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
 
 
+@functools.lru_cache
 def full_version() -> str:
     source_dir = pathlib.Path(__file__).parent
     try:
