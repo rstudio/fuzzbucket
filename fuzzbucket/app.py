@@ -24,7 +24,7 @@ class _JSONEncoder(JSONEncoder):
             return o.as_json()
         if hasattr(o, "__dict__"):
             return o.__dict__
-        return JSONEncoder.default(self, o)
+        return JSONEncoder.default(self, o)  # pragma: no cover
 
 
 app.json_encoder = _JSONEncoder
@@ -234,7 +234,7 @@ def delete_image_alias(alias):
     return "", 204
 
 
-def _resolve_ami_alias(image_alias: str) -> typing.Union[str, None]:
+def _resolve_ami_alias(image_alias: str) -> NoneString:
     try:
         resp = (
             get_dynamodb()

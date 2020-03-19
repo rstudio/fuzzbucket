@@ -6,6 +6,7 @@ import time
 import typing
 
 import boto3
+import botocore.exceptions
 import pytest
 
 from moto import mock_ec2, mock_dynamodb2
@@ -159,6 +160,53 @@ def test_list_vpc_boxes(monkeypatch):
     for default_filter in fuzzbucket.DEFAULT_FILTERS:
         assert default_filter in state["filters"]
     assert {"Name": "vpc-id", "Values": [vpc_id]} in state["filters"]
+
+
+@pytest.mark.parametrize(
+    "auth_header,offline,expected_user,expected_status",
+    [
+        pytest.param(None, False, None, "403 FORBIDDEN", id="forbidden"),
+        pytest.param(
+            "basic ZmFuY3k6cGFudHM=", False, "fancy", "200 OK", id="basic_authd_user"
+        ),
+        pytest.param(
+            "basic ZmFuY3ktLWRldjpwYW50cw==",
+            False,
+            "fancy",
+            "200 OK",
+            id="basic_authd_dev_user",
+        ),
+        pytest.param(None, True, "offline", "200 OK", id="offline"),
+    ],
+)
+def test_user_middleware(
+    monkeypatch, auth_header, offline, expected_user, expected_status
+):
+    state = {}
+
+    def fake_app(environ, start_response):
+        state.update(environ=environ, called=True)
+        start_response("200 OK", [])
+        return ["ok"]
+
+    def fake_start_response(status, headers):
+        state.update(status=status, headers=headers)
+
+    if offline:
+        monkeypatch.setenv("IS_OFFLINE", "yep")
+
+    environ = {"HTTP_AUTHORIZATION": auth_header, "REQUEST_METHOD": "BORK"}
+    app = fuzzbucket.app._UserMiddleware(fake_app)
+    response = app(environ, fake_start_response)
+    assert "status" in state
+    assert "headers" in state
+    if expected_user is not None:
+        assert state["environ"]["REMOTE_USER"] == expected_user
+    if expected_status is not None:
+        assert state["status"] == expected_status
+    if expected_status == "200 OK":
+        assert state["called"]
+        assert response[0] == "ok"
 
 
 @mock_ec2
@@ -399,6 +447,36 @@ def test_delete_image_alias_not_yours(monkeypatch):
         )
     assert response is not None
     assert response.status_code == 403
+
+
+@mock_dynamodb2
+@pytest.mark.parametrize(
+    "image_alias,raises,expected",
+    [
+        pytest.param("noice", False, None, id="invalid"),
+        pytest.param("rhel8", True, None, id="errored"),
+        pytest.param("rhel8", False, "ami-fafafafafaa", id="valid"),
+    ],
+)
+def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
+    table_name = "just_imagine"
+    monkeypatch.setenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME", table_name)
+
+    dynamodb = boto3.resource("dynamodb")
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+    setup_dynamodb_tables(dynamodb)
+
+    if raises:
+
+        def boom(*_):
+            raise botocore.exceptions.ClientError(
+                {"Error": {"Code": 1312, "Message": "nah"}}, "wut"
+            )
+
+        monkeypatch.setattr(dynamodb, "Table", boom)
+
+    response = fuzzbucket.app._resolve_ami_alias(image_alias)
+    assert response == expected
 
 
 @mock_ec2
