@@ -84,16 +84,17 @@ log = logging.getLogger("fuzzbucket")
 
 
 class DeferredVersionString(str):
-    def splitlines(self, *_, **__):
+    def splitlines(self, *_, **__) -> typing.List[str]:
         return self._version().splitlines()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self._version()
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Generator[str, None, None]:
         yield self._version()
+        return None
 
-    def _version(self):
+    def _version(self) -> str:
         return f"fuzzbucket-client {full_version()}"
 
 
