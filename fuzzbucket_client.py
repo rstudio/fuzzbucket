@@ -53,7 +53,7 @@ def log_level() -> str:
     return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
 
 
-@functools.lru_cache
+@functools.lru_cache(maxsize=2)
 def full_version() -> str:
     source_dir = pathlib.Path(__file__).parent
     try:
