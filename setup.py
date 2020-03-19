@@ -4,6 +4,12 @@ from setuptools import setup
 
 
 def main():
+    if sys.version_info[:2] < (3, 5):
+        print("ERROR: fuzzbucket-client requires python 3.5+")
+        print("This python is:")
+        print(sys.version)
+        return 86
+
     from fuzzbucket_client import full_version
 
     setup(
