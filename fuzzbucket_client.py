@@ -81,14 +81,26 @@ def full_version() -> str:
 log = logging.getLogger("fuzzbucket")
 
 
+class DeferredVersionString:
+    def splitlines(self, *_, **__):
+        return self._version().splitlines()
+
+    def __str__(self):
+        return self._version()
+
+    def __iter__(self):
+        yield self._version()
+
+    def _version(self):
+        return f"fuzzbucket-client {full_version()}"
+
+
 def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {full_version()}",
-    )
+    parser.add_argument("--version", action="version", version=DeferredVersionString())
     parser.add_argument(
         "-D",
         "--debug",
