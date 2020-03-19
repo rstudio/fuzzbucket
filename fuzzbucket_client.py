@@ -76,6 +76,10 @@ def full_version() -> str:
             .replace("-", ".")
         )
         return git_desc
+    except subprocess.CalledProcessError:
+        import pkg_resources
+
+        return pkg_resources.get_distribution("fuzzbucket-client").version
     except Exception:
         if log_level() == LOG_LEVEL_DEBUG:
             log.exception("failed to get the extended version info")
