@@ -64,7 +64,8 @@ def full_version() -> str:
                     "describe",
                     "--always",
                     "--dirty",
-                ]
+                ],
+                stderr=subprocess.DEVNULL,
             )
             .strip()
             .decode("utf-8")
