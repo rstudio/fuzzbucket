@@ -86,6 +86,42 @@ def test_deferred_reap_boxes(monkeypatch):
     assert state["context"] == {"pro": "image"}
 
 
+def test_get_ec2_client(monkeypatch):
+    state = {}
+
+    def fake_client(name):
+        state.update(name=name)
+        return "client"
+
+    monkeypatch.setattr(boto3, "client", fake_client)
+    client = fuzzbucket.get_ec2_client()
+    assert state["name"] == "ec2"
+    assert client == "client"
+
+
+@pytest.mark.parametrize("offline", [True, False], ids=["offline", "online"])
+def test_get_dynamodb(monkeypatch, offline):
+    state = {}
+
+    def fake_resource(name, **kwargs):
+        state.update(name=name, kwargs=kwargs)
+        return "resource"
+
+    monkeypatch.setattr(boto3, "resource", fake_resource)
+    if offline:
+        monkeypatch.setenv("IS_OFFLINE", "yep")
+    elif "IS_OFFLINE" in os.environ:
+        monkeypatch.delenv("IS_OFFLINE")
+
+    fuzzbucket.get_dynamodb.cache_clear()
+    resource = fuzzbucket.get_dynamodb()
+    assert state["name"] == "dynamodb"
+    assert resource == "resource"
+    if offline:
+        assert state["kwargs"]["region_name"] == "localhost"
+        assert state["kwargs"]["endpoint_url"] == "http://localhost:8000"
+
+
 def test_json_encoder():
     class WithAsJson:
         def as_json(self):
@@ -390,18 +426,66 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     assert instance_id != ""
 
     the_future = time.time() + 3600
+
     with monkeypatch.context() as mp:
         ec2_client = boto3.client("ec2")
 
         def fake_list_vpc_boxes(ec2_client, vpc_id):
-            return [Box.from_dict(box) for box in response.json["boxes"]]
+            ret = []
+            for box_dict in response.json["boxes"]:
+                if "age" in box_dict:
+                    box_dict.pop("age")
+                box = Box(**box_dict)
+                box.created_at = None
+                ret.append(box)
+            return ret
 
         mp.setattr(time, "time", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
-        response = fuzzbucket.reaper.reap_boxes(
+        reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
         )
-        assert response != {}
+        assert reap_response["reaped_instance_ids"] == []
+
+    with monkeypatch.context() as mp:
+        ec2_client = boto3.client("ec2")
+
+        def fake_list_vpc_boxes(ec2_client, vpc_id):
+            ret = []
+            for box_dict in response.json["boxes"]:
+                if "age" in box_dict:
+                    box_dict.pop("age")
+                box = Box(**box_dict)
+                box.ttl = None
+                ret.append(box)
+            return ret
+
+        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
+        reap_response = fuzzbucket.reaper.reap_boxes(
+            None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
+        )
+        assert reap_response["reaped_instance_ids"] == []
+
+    with monkeypatch.context() as mp:
+        ec2_client = boto3.client("ec2")
+
+        def fake_list_vpc_boxes(ec2_client, vpc_id):
+            ret = []
+            for box_dict in response.json["boxes"]:
+                if "age" in box_dict:
+                    box_dict.pop("age")
+                box = Box(**box_dict)
+                ret.append(box)
+            return ret
+
+        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
+        reap_response = fuzzbucket.reaper.reap_boxes(
+            None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
+        )
+        assert reap_response["reaped_instance_ids"] != []
+
     assert instance_id not in [
         box.instance_id
         for box in fuzzbucket.list_boxes_filtered(
@@ -420,3 +504,6 @@ def test_box():
 
     assert "instance_id" in box.as_json()
     assert "age" in box.as_json()
+
+    with pytest.raises(TypeError):
+        Box(instance_id="i-fafafafbabacaca", frobs=9001)

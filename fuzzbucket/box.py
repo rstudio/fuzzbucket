@@ -39,15 +39,6 @@ class Box:
         return f"{delta.days}d{hours}h{minutes}m{seconds}s"
 
     @classmethod
-    def from_dict(cls, as_dict: dict) -> "Box":
-        box = cls()
-        for key in box.__dict__.keys():
-            if key not in as_dict:
-                continue
-            setattr(box, key, as_dict[key])
-        return box
-
-    @classmethod
     def from_ec2_dict(cls, instance: dict) -> "Box":
         box = cls(
             instance_id=instance["InstanceId"],
