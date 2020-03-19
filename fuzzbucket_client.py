@@ -66,14 +66,16 @@ def full_version() -> str:
                     "describe",
                     "--always",
                     "--dirty",
+                    "--tags",
                 ],
                 stderr=subprocess.DEVNULL,
             )
             .strip()
             .decode("utf-8")
+            .replace("-", "+", 1)
             .replace("-", ".")
         )
-        return f"{__version__}+{git_desc}"
+        return git_desc
     except Exception:
         if log_level() == LOG_LEVEL_DEBUG:
             log.exception("failed to get the extended version info")
@@ -83,27 +85,12 @@ def full_version() -> str:
 log = logging.getLogger("fuzzbucket")
 
 
-class DeferredVersionString(str):
-    def splitlines(self, *_, **__) -> typing.List[str]:
-        return self._version().splitlines()
-
-    def __str__(self) -> str:
-        return self._version()
-
-    def __iter__(self) -> typing.Generator[str, None, None]:
-        yield self._version()
-        return None
-
-    def _version(self) -> str:
-        return f"fuzzbucket-client {full_version()}"
-
-
 def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--version", action="version", version=DeferredVersionString())
+    parser.add_argument("--version", action="store_true")
     parser.add_argument(
         "-D",
         "--debug",
@@ -235,6 +222,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     config_logging(
         level_name=LOG_LEVEL_DEBUG if known_args.debug else DEFAULT_LOG_LEVEL
     )
+    if known_args.version:
+        print(f"fuzzbucket-client {full_version()}")
+        return 0
     if not hasattr(known_args, "func"):
         log.debug(f"no subcommand func defined in namespace={known_args!r}")
         parser.print_help()
