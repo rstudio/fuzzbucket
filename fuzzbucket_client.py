@@ -83,7 +83,7 @@ def full_version() -> str:
 log = logging.getLogger("fuzzbucket")
 
 
-class DeferredVersionString:
+class DeferredVersionString(str):
     def splitlines(self, *_, **__):
         return self._version().splitlines()
 
