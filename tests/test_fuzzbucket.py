@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import random
 import time
@@ -57,6 +58,71 @@ def setup_dynamodb_tables(dynamodb):
         "rhel8": "ami-fafafafafaa",
     }.items():
         table.put_item(Item=dict(user="pytest", alias=alias, ami=ami))
+
+
+def test_deferred_app():
+    state = {}
+
+    def fake_start_response(status, headers):
+        state.update(status=status, headers=headers)
+
+    response = fuzzbucket.deferred_app(
+        {"BUSTED_ENV": True, "REQUEST_METHOD": "BORK"}, fake_start_response
+    )
+    assert response is not None
+    assert state["status"] == "403 FORBIDDEN"
+    assert dict(state["headers"])["Content-Length"] > "0"
+
+
+def test_deferred_reap_boxes(monkeypatch):
+    state = {}
+
+    def fake_reap_boxes(event, context):
+        state.update(event=event, context=context)
+
+    monkeypatch.setattr(fuzzbucket.reaper, "reap_boxes", fake_reap_boxes)
+    fuzzbucket.deferred_reap_boxes({"oh": "hai"}, {"pro": "image"})
+    assert state["event"] == {"oh": "hai"}
+    assert state["context"] == {"pro": "image"}
+
+
+def test_json_encoder():
+    class WithAsJson:
+        def as_json(self):
+            return {"golden": "feelings"}
+
+    class Dictish:
+        def __init__(self):
+            self.mellow = "gold"
+
+    other = ("odelay", ["mut", "ati", "ons"])
+
+    def enc(thing):
+        return json.dumps(thing, cls=fuzzbucket.app._JSONEncoder)
+
+    assert enc(WithAsJson()) == '{"golden": "feelings"}'
+    assert enc(Dictish()) == '{"mellow": "gold"}'
+    assert enc(other) == '["odelay", ["mut", "ati", "ons"]]'
+
+
+@mock_ec2
+def test_list_vpc_boxes(monkeypatch):
+    state = {}
+
+    def fake_list_boxes_filtered(ec2_client, filters):
+        state.update(ec2_client=ec2_client, filters=filters)
+        return ["ok"]
+
+    monkeypatch.setattr(fuzzbucket, "list_boxes_filtered", fake_list_boxes_filtered)
+
+    ec2_client = {"ec2_client": "sure"}
+    vpc_id = "vpc-fafafafaf"
+    listed = fuzzbucket.list_vpc_boxes(ec2_client, vpc_id)
+    assert listed == ["ok"]
+    assert state["ec2_client"] == ec2_client
+    for default_filter in fuzzbucket.DEFAULT_FILTERS:
+        assert default_filter in state["filters"]
+    assert {"Name": "vpc-id", "Values": [vpc_id]} in state["filters"]
 
 
 @mock_ec2
