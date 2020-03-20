@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover
     pkg_resources = None  # type: ignore
 
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 LOG_LEVEL_DEBUG = "DEBUG"
 DEFAULT_LOG_LEVEL = "INFO"
