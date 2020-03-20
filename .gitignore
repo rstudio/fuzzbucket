@@ -12,6 +12,7 @@
 .serverless-resources-env/
 .serverless/
 build/
+coverage.xml
 custom*.yml
 develop-eggs/
 dist/

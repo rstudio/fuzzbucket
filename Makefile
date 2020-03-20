@@ -1,4 +1,4 @@
-COVERAGE_THRESHOLD ?= 75
+COVERAGE_THRESHOLD ?= 92
 FUNCTION ?= api
 REGION ?= us-east-1
 STAGE ?= dev
@@ -10,14 +10,21 @@ help:
 	@echo "- deploy (STAGE=$(STAGE), REGION=$(REGION))"
 	@echo "- deps"
 	@echo "- help"
-	@echo "- install-client"
 	@echo "- lint"
 	@echo "- logs (STAGE=$(STAGE), REGION=$(REGION), FUNCTION=$(FUNCTION))"
 	@echo "- test (COVERAGE_THRESHOLD=$(COVERAGE_THRESHOLD))"
 
 .PHONY: clean
 clean:
-	$(RM) -r ./build ./dist ./fuzzbucket_client.egg-info ./htmlcov ./.coverage ./.mypy_cache ./.pytest_cache
+	$(RM) -r \
+		./.coverage \
+		./.mypy_cache \
+		./.pytest_cache \
+		./__pycache__ \
+		./build \
+		./dist \
+		./fuzzbucket_client.egg-info \
+		./htmlcov
 
 .PHONY: deps
 deps:
@@ -28,11 +35,11 @@ deps:
 lint:
 	pipenv run black --check --diff .
 	pipenv run flake8 .
-	pipenv run pytest --mypy -m mypy --no-cov
+	pipenv run pytest -m mypy --no-cov
 
 .PHONY: test
 test:
-	pipenv run pytest -vv --mypy --cov-fail-under=$(COVERAGE_THRESHOLD)
+	pipenv run pytest --cov-fail-under=$(COVERAGE_THRESHOLD)
 
 .PHONY: deploy
 deploy:
@@ -41,7 +48,3 @@ deploy:
 .PHONY: logs
 logs:
 	npx sls logs --function $(FUNCTION) --region $(REGION) --stage $(STAGE) --tail
-
-.PHONY: install-client
-install-client:
-	python setup.py install

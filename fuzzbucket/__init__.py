@@ -1,8 +1,12 @@
+import functools
 import logging
 import os
 import typing
 
+import boto3
+
 from .tags import Tags
+
 
 ROOT_LOG = logging.getLogger()
 LOG_LEVEL = os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper()
@@ -25,6 +29,20 @@ def deferred_reap_boxes(event, context):
     from .reaper import reap_boxes
 
     return reap_boxes(event, context)
+
+
+@functools.lru_cache(maxsize=2)
+def get_ec2_client():
+    return boto3.client("ec2")
+
+
+@functools.lru_cache(maxsize=2)
+def get_dynamodb():
+    if os.getenv("IS_OFFLINE") is not None:
+        return boto3.resource(
+            "dynamodb", region_name="localhost", endpoint_url="http://localhost:8000",
+        )
+    return boto3.resource("dynamodb")
 
 
 DEFAULT_FILTERS = [

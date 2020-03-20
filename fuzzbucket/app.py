@@ -4,18 +4,16 @@ import time
 import typing
 import urllib.request
 
-import boto3
-
 from botocore.exceptions import ClientError
 
-from flask import Flask, jsonify, request, g
+from flask import Flask, jsonify, request
 from flask.json import JSONEncoder
 
 from werkzeug.exceptions import Forbidden as WerkzeugForbidden
 
 from .box import Box
 from .tags import Tags
-from . import list_user_boxes, log, NoneString
+from . import list_user_boxes, log, NoneString, get_ec2_client, get_dynamodb
 
 app = Flask(__name__)
 
@@ -26,7 +24,7 @@ class _JSONEncoder(JSONEncoder):
             return o.as_json()
         if hasattr(o, "__dict__"):
             return o.__dict__
-        return JSONEncoder.default(self, o)
+        return JSONEncoder.default(self, o)  # pragma: no cover
 
 
 app.json_encoder = _JSONEncoder
@@ -58,25 +56,6 @@ class _UserMiddleware:
 
 
 app.wsgi_app = _UserMiddleware(app.wsgi_app)  # type: ignore
-
-
-def get_ec2_client():
-    if "ec2_client" not in g:
-        g.ec2_client = boto3.client("ec2")
-    return g.ec2_client
-
-
-def get_dynamodb():
-    if "dynamodb" not in g:
-        if os.getenv("IS_OFFLINE") is not None:
-            g.dynamodb = boto3.resource(
-                "dynamodb",
-                region_name="localhost",
-                endpoint_url="http://localhost:8000",
-            )
-        else:
-            g.dynamodb = boto3.resource("dynamodb")
-    return g.dynamodb
 
 
 @app.before_first_request
@@ -239,7 +218,7 @@ def create_image_alias():
         ),
     )
     log.debug(f"raw dynamodb response={resp!r}")
-    return jsonify(image_aliases=[{request.json["alias"]: request.json["ami"]}]), 201
+    return jsonify(image_aliases={request.json["alias"]: request.json["ami"]}), 201
 
 
 @app.route("/image-alias/<string:alias>", methods=["DELETE"])
@@ -255,7 +234,7 @@ def delete_image_alias(alias):
     return "", 204
 
 
-def _resolve_ami_alias(image_alias: str) -> typing.Union[str, None]:
+def _resolve_ami_alias(image_alias: str) -> NoneString:
     try:
         resp = (
             get_dynamodb()

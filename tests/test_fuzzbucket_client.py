@@ -1,9 +1,13 @@
+import argparse
 import contextlib
 import io
 import json
 import os
 import re
+import subprocess
+import urllib.request
 
+import pkg_resources
 import pytest
 
 import fuzzbucket_client
@@ -20,6 +24,46 @@ def patched_env(tmpdir, monkeypatch):
     )
 
 
+def test_default_client():
+    assert fuzzbucket_client.default_client() is not None
+
+
+@pytest.mark.parametrize(
+    "err,git_err,pkg_err,expected",
+    [
+        pytest.param(False, False, False, "stub+version.number.ok", id="from_git"),
+        pytest.param(False, True, False, "stub+version.number.ok", id="from_pkg"),
+        pytest.param(False, True, True, fuzzbucket_client.__version__, id="from_var1"),
+        pytest.param(True, True, True, fuzzbucket_client.__version__, id="from_var2"),
+    ],
+)
+def test_full_version(monkeypatch, err, git_err, pkg_err, expected):
+    def fake_check_output(*_, **__):
+        if err:
+            raise ValueError("boom")
+        if git_err:
+            raise subprocess.CalledProcessError(86, ["ugh"])
+        return "stub-version-number-ok\n".encode("utf-8")
+
+    class FakeDist:
+        def __init__(self, dist):
+            self.dist = dist
+            self.version = "stub+version.number.ok"
+
+    def fake_get_distribution(dist):
+        if pkg_err:
+            raise ValueError("ack")
+        return FakeDist(dist)
+
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(pkg_resources, "get_distribution", fake_get_distribution)
+    monkeypatch.setattr(
+        fuzzbucket_client, "log_level", lambda: fuzzbucket_client.LOG_LEVEL_DEBUG
+    )
+    fuzzbucket_client.full_version.cache_clear()
+    assert fuzzbucket_client.full_version() == expected
+
+
 def test_client_setup():
     client = fuzzbucket_client.Client()
     client._setup()
@@ -32,6 +76,65 @@ def gen_fake_urlopen(response):
         yield response
 
     return fake_urlopen
+
+
+@pytest.mark.parametrize(
+    "errors,log_level,log_match,expected",
+    [
+        pytest.param((), fuzzbucket_client.DEFAULT_LOG_LEVEL, None, True, id="happy"),
+        pytest.param(
+            ("setup",),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+setup error",
+            False,
+            id="setup_err",
+        ),
+        pytest.param(
+            ("method",),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+method error",
+            False,
+            id="method_err",
+        ),
+        pytest.param(
+            ("http",),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+http error",
+            False,
+            id="http_err",
+        ),
+        pytest.param(
+            ("http", "json"),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+json error",
+            False,
+            id="http_json_err",
+        ),
+    ],
+)
+def test_command_decorator(monkeypatch, caplog, errors, log_level, log_match, expected):
+    class FakeClient:
+        def _setup(self):
+            if "setup" in errors:
+                raise ValueError("setup error")
+
+    def fake_method(self, known_args, unknown_args):
+        if "method" in errors:
+            raise ValueError("method error")
+        if "http" in errors:
+            raise urllib.request.HTTPError("http://nope", 599, "ugh", [], None)
+        return True
+
+    def fake_load(fp):
+        if "json" in errors:
+            raise ValueError("json error")
+        return {"error": "http error"}
+
+    monkeypatch.setattr(json, "load", fake_load)
+    decorated = fuzzbucket_client._command(fake_method)
+    assert decorated(FakeClient(), "known", "unknown") == expected
+    if log_match is not None:
+        assert re.search(log_match, caplog.text) is not None
 
 
 def test_client_list(monkeypatch):
@@ -249,3 +352,70 @@ def test_client_scp(monkeypatch):
         ]
     )
     assert ret == 0
+
+
+@pytest.mark.parametrize(
+    "api_response,stdout_match,expected",
+    [
+        pytest.param(
+            {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
+            "(chonk = ami-fafababacaca|wee = ami-0a0a0a0a0a)",
+            True,
+            id="ok",
+        ),
+        pytest.param({"error": "oh no"}, None, False, id="err",),
+    ],
+)
+def test_client_list_aliases(monkeypatch, capsys, api_response, stdout_match, expected):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+    )
+
+    assert client.list_aliases("known", "unknown") == expected
+    if stdout_match is not None:
+        captured = capsys.readouterr()
+        assert re.search(stdout_match, captured.out) is not None
+
+
+@pytest.mark.parametrize(
+    "api_response,stdout_match,expected",
+    [
+        pytest.param(
+            {"image_aliases": {"blep": "ami-babacacafafa"}},
+            "blep = ami-babacacafafa",
+            True,
+            id="ok",
+        ),
+        pytest.param({"error": "oh no"}, None, False, id="err"),
+    ],
+)
+def test_client_create_alias(monkeypatch, capsys, api_response, stdout_match, expected):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+    )
+
+    assert (
+        client.create_alias(
+            argparse.Namespace(alias="blep", ami="ami-babacacafafa"), "unknown"
+        )
+        == expected
+    )
+    if stdout_match is not None:
+        captured = capsys.readouterr()
+        assert re.search(stdout_match, captured.out) is not None
+
+
+def test_client_delete_alias(monkeypatch, caplog):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.StringIO("")))
+
+    assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
+    assert "deleted alias" in caplog.text

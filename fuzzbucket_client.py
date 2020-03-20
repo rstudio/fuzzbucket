@@ -28,6 +28,11 @@ import typing
 import urllib.parse
 import urllib.request
 
+try:
+    import pkg_resources
+except ImportError:  # pragma: no cover
+    pkg_resources = None  # type: ignore
+
 
 __version__ = "0.2.0"
 
@@ -55,9 +60,9 @@ def log_level() -> str:
 
 @functools.lru_cache(maxsize=2)
 def full_version() -> str:
-    source_dir = pathlib.Path(__file__).parent
     try:
-        git_desc = (
+        source_dir = pathlib.Path(__file__).parent
+        return (
             subprocess.check_output(
                 [
                     "git",
@@ -75,11 +80,11 @@ def full_version() -> str:
             .replace("-", "+", 1)
             .replace("-", ".")
         )
-        return git_desc
     except subprocess.CalledProcessError:
-        import pkg_resources
-
-        return pkg_resources.get_distribution("fuzzbucket-client").version
+        try:
+            return pkg_resources.get_distribution("fuzzbucket-client").version
+        except Exception:
+            return __version__
     except Exception:
         if log_level() == LOG_LEVEL_DEBUG:
             log.exception("failed to get the extended version info")
@@ -255,8 +260,9 @@ def _command(method):
             try:
                 response = json.load(exc)
                 log.error(
-                    f"command {method.__name__!r} failed error={response.get('error')!r}"
+                    f"command {method.__name__!r} failed err={response.get('error')!r}"
                 )
+                return False
             except Exception as exc:
                 return handle_exc(exc)
         except Exception as exc:
@@ -432,12 +438,14 @@ class Client:
         with self._urlopen(req) as response:
             raw_response = json.load(response)
         log.debug(f"raw created alias response={raw_response!r}")
-        created = raw_response["image_aliases"][0]
-        for key, value in created.items():
+        if "image_aliases" not in raw_response:
+            log.error("failed to create image alias")
+            return False
+        for key, value in raw_response["image_aliases"].items():
             log.info(
                 f"created alias for user={self._user!r} alias={key} " + f"ami={value}"
             )
-        print(self._image_aliases_to_ini(created), end="")
+        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
         return True
 
     @_command
@@ -605,5 +613,5 @@ class Client:
         return default
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
