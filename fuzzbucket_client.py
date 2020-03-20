@@ -438,12 +438,14 @@ class Client:
         with self._urlopen(req) as response:
             raw_response = json.load(response)
         log.debug(f"raw created alias response={raw_response!r}")
-        created = raw_response["image_aliases"][0]
-        for key, value in created.items():
+        if "image_aliases" not in raw_response:
+            log.error("failed to create image alias")
+            return False
+        for key, value in raw_response["image_aliases"].items():
             log.info(
                 f"created alias for user={self._user!r} alias={key} " + f"ami={value}"
             )
-        print(self._image_aliases_to_ini(created), end="")
+        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
         return True
 
     @_command

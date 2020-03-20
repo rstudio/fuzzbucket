@@ -218,7 +218,7 @@ def create_image_alias():
         ),
     )
     log.debug(f"raw dynamodb response={resp!r}")
-    return jsonify(image_aliases=[{request.json["alias"]: request.json["ami"]}]), 201
+    return jsonify(image_aliases={request.json["alias"]: request.json["ami"]}), 201
 
 
 @app.route("/image-alias/<string:alias>", methods=["DELETE"])

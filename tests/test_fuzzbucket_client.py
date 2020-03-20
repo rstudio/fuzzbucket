@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import io
 import json
@@ -351,3 +352,70 @@ def test_client_scp(monkeypatch):
         ]
     )
     assert ret == 0
+
+
+@pytest.mark.parametrize(
+    "api_response,stdout_match,expected",
+    [
+        pytest.param(
+            {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
+            "(chonk = ami-fafababacaca|wee = ami-0a0a0a0a0a)",
+            True,
+            id="ok",
+        ),
+        pytest.param({"error": "oh no"}, None, False, id="err",),
+    ],
+)
+def test_client_list_aliases(monkeypatch, capsys, api_response, stdout_match, expected):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+    )
+
+    assert client.list_aliases("known", "unknown") == expected
+    if stdout_match is not None:
+        captured = capsys.readouterr()
+        assert re.search(stdout_match, captured.out) is not None
+
+
+@pytest.mark.parametrize(
+    "api_response,stdout_match,expected",
+    [
+        pytest.param(
+            {"image_aliases": {"blep": "ami-babacacafafa"}},
+            "blep = ami-babacacafafa",
+            True,
+            id="ok",
+        ),
+        pytest.param({"error": "oh no"}, None, False, id="err"),
+    ],
+)
+def test_client_create_alias(monkeypatch, capsys, api_response, stdout_match, expected):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+    )
+
+    assert (
+        client.create_alias(
+            argparse.Namespace(alias="blep", ami="ami-babacacafafa"), "unknown"
+        )
+        == expected
+    )
+    if stdout_match is not None:
+        captured = capsys.readouterr()
+        assert re.search(stdout_match, captured.out) is not None
+
+
+def test_client_delete_alias(monkeypatch, caplog):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.StringIO("")))
+
+    assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
+    assert "deleted alias" in caplog.text
