@@ -260,8 +260,9 @@ def _command(method):
             try:
                 response = json.load(exc)
                 log.error(
-                    f"command {method.__name__!r} failed error={response.get('error')!r}"
+                    f"command {method.__name__!r} failed err={response.get('error')!r}"
                 )
+                return False
             except Exception as exc:
                 return handle_exc(exc)
         except Exception as exc:

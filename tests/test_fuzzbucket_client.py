@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import urllib.request
 
 import pkg_resources
 import pytest
@@ -74,6 +75,65 @@ def gen_fake_urlopen(response):
         yield response
 
     return fake_urlopen
+
+
+@pytest.mark.parametrize(
+    "errors,log_level,log_match,expected",
+    [
+        pytest.param((), fuzzbucket_client.DEFAULT_LOG_LEVEL, None, True, id="happy"),
+        pytest.param(
+            ("setup",),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+setup error",
+            False,
+            id="setup_err",
+        ),
+        pytest.param(
+            ("method",),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+method error",
+            False,
+            id="method_err",
+        ),
+        pytest.param(
+            ("http",),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+http error",
+            False,
+            id="http_err",
+        ),
+        pytest.param(
+            ("http", "json"),
+            fuzzbucket_client.DEFAULT_LOG_LEVEL,
+            "command.+failed err=.+json error",
+            False,
+            id="http_json_err",
+        ),
+    ],
+)
+def test_command_decorator(monkeypatch, caplog, errors, log_level, log_match, expected):
+    class FakeClient:
+        def _setup(self):
+            if "setup" in errors:
+                raise ValueError("setup error")
+
+    def fake_method(self, known_args, unknown_args):
+        if "method" in errors:
+            raise ValueError("method error")
+        if "http" in errors:
+            raise urllib.request.HTTPError("http://nope", 599, "ugh", [], None)
+        return True
+
+    def fake_load(fp):
+        if "json" in errors:
+            raise ValueError("json error")
+        return {"error": "http error"}
+
+    monkeypatch.setattr(json, "load", fake_load)
+    decorated = fuzzbucket_client._command(fake_method)
+    assert decorated(FakeClient(), "known", "unknown") == expected
+    if log_match is not None:
+        assert re.search(log_match, caplog.text) is not None
 
 
 def test_client_list(monkeypatch):
