@@ -69,6 +69,15 @@ def test_client_setup():
     client._setup()
     assert client is not None
 
+    client._env.pop("FUZZBUCKET_URL")
+    with pytest.raises(ValueError):
+        client._setup()
+
+    client._env["FUZZBUCKET_URL"] = "not none"
+    client._env.pop("FUZZBUCKET_CREDENTIALS")
+    with pytest.raises(ValueError):
+        client._setup()
+
 
 def gen_fake_urlopen(response):
     @contextlib.contextmanager
