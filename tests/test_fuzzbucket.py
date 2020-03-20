@@ -1,9 +1,11 @@
 import base64
+import contextlib
 import json
 import os
 import random
 import time
 import typing
+import urllib.request
 
 import boto3
 import botocore.exceptions
@@ -477,6 +479,35 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
 
     response = fuzzbucket.app._resolve_ami_alias(image_alias)
     assert response == expected
+
+
+@pytest.mark.parametrize(
+    "raises,keys,expected_key",
+    [
+        pytest.param(False, "first\nsecond\nthird\n", "first", id="3_keys"),
+        pytest.param(False, "first", "first", id="1_key"),
+        pytest.param(False, "", "", id="empty"),
+        pytest.param(True, "first\nsecond\nthird\n", "", id="err_3_keys"),
+        pytest.param(True, "first", "", id="err_1_key"),
+        pytest.param(True, "", "", id="err_empty"),
+    ],
+)
+def test_fetch_first_github_key(monkeypatch, raises, keys, expected_key):
+    class FakeResponse:
+        def __init__(self, keys):
+            self.keys = keys
+
+        def read(self):
+            return self.keys.encode("utf-8")
+
+    @contextlib.contextmanager
+    def fake_urlopen(_):
+        if raises:
+            raise urllib.request.HTTPError("http://nope", 599, "oh no", [], None)
+        yield FakeResponse(keys)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert fuzzbucket.app._fetch_first_github_key("user") == expected_key
 
 
 @mock_ec2
