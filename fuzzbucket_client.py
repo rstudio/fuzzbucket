@@ -28,6 +28,11 @@ import typing
 import urllib.parse
 import urllib.request
 
+try:
+    import pkg_resources
+except ImportError:  # pragma: no cover
+    pkg_resources = None  # type: ignore
+
 
 __version__ = "0.2.0"
 
@@ -55,9 +60,9 @@ def log_level() -> str:
 
 @functools.lru_cache(maxsize=2)
 def full_version() -> str:
-    source_dir = pathlib.Path(__file__).parent
     try:
-        git_desc = (
+        source_dir = pathlib.Path(__file__).parent
+        return (
             subprocess.check_output(
                 [
                     "git",
@@ -75,11 +80,11 @@ def full_version() -> str:
             .replace("-", "+", 1)
             .replace("-", ".")
         )
-        return git_desc
     except subprocess.CalledProcessError:
-        import pkg_resources
-
-        return pkg_resources.get_distribution("fuzzbucket-client").version
+        try:
+            return pkg_resources.get_distribution("fuzzbucket-client").version
+        except Exception:
+            return __version__
     except Exception:
         if log_level() == LOG_LEVEL_DEBUG:
             log.exception("failed to get the extended version info")
@@ -605,5 +610,5 @@ class Client:
         return default
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

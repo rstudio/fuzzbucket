@@ -3,7 +3,9 @@ import io
 import json
 import os
 import re
+import subprocess
 
+import pkg_resources
 import pytest
 
 import fuzzbucket_client
@@ -18,6 +20,46 @@ def patched_env(tmpdir, monkeypatch):
     monkeypatch.setenv(
         "FUZZBUCKET_URL", "http://fuzzbucket.example.org/bleep/bloop/dev"
     )
+
+
+def test_default_client():
+    assert fuzzbucket_client.default_client() is not None
+
+
+@pytest.mark.parametrize(
+    "err,git_err,pkg_err,expected",
+    [
+        pytest.param(False, False, False, "stub+version.number.ok", id="from_git"),
+        pytest.param(False, True, False, "stub+version.number.ok", id="from_pkg"),
+        pytest.param(False, True, True, fuzzbucket_client.__version__, id="from_var1"),
+        pytest.param(True, True, True, fuzzbucket_client.__version__, id="from_var2"),
+    ],
+)
+def test_full_version(monkeypatch, err, git_err, pkg_err, expected):
+    def fake_check_output(*_, **__):
+        if err:
+            raise ValueError("boom")
+        if git_err:
+            raise subprocess.CalledProcessError(86, ["ugh"])
+        return "stub-version-number-ok\n".encode("utf-8")
+
+    class FakeDist:
+        def __init__(self, dist):
+            self.dist = dist
+            self.version = "stub+version.number.ok"
+
+    def fake_get_distribution(dist):
+        if pkg_err:
+            raise ValueError("ack")
+        return FakeDist(dist)
+
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(pkg_resources, "get_distribution", fake_get_distribution)
+    monkeypatch.setattr(
+        fuzzbucket_client, "log_level", lambda: fuzzbucket_client.LOG_LEVEL_DEBUG
+    )
+    fuzzbucket_client.full_version.cache_clear()
+    assert fuzzbucket_client.full_version() == expected
 
 
 def test_client_setup():
