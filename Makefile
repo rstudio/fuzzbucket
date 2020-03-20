@@ -35,11 +35,11 @@ deps:
 lint:
 	pipenv run black --check --diff .
 	pipenv run flake8 .
-	pipenv run pytest --mypy -m mypy --no-cov
+	pipenv run pytest -m mypy --no-cov
 
 .PHONY: test
 test:
-	pipenv run pytest -vv --mypy --cov-fail-under=$(COVERAGE_THRESHOLD)
+	pipenv run pytest --cov-fail-under=$(COVERAGE_THRESHOLD)
 
 .PHONY: deploy
 deploy:
