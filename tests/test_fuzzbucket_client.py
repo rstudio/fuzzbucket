@@ -137,6 +137,35 @@ def test_command_decorator(monkeypatch, caplog, errors, log_level, log_match, ex
         assert re.search(log_match, caplog.text) is not None
 
 
+def test_client_version(capsys):
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "--version"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert re.match("fuzzbucket-client .+", captured.out) is not None
+
+
+def test_client_no_func(capsys):
+    ret = fuzzbucket_client.main(["fuzzbucket-client"])
+    assert ret == 2
+    captured = capsys.readouterr()
+    for match in (
+        "^usage: .+--version.+",
+        "^A client for fuzzbucket",
+        "^optional arguments:",
+        "^subcommands:",
+        "^ +delete-alias.+Delete an image alias",
+    ):
+        assert re.search(match, captured.out, re.MULTILINE) is not None
+
+
+def test_client_failing_func(monkeypatch, capsys):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    monkeypatch.setattr(client, "list", lambda _, __: False)
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "list"])
+    assert ret == 86
+
+
 def test_client_list(monkeypatch):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
