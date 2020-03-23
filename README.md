@@ -24,6 +24,41 @@ probably not what you need.
 If you need your EC2 instances to be running for more than a few hours/days by
 default, then `fuzzbucket` is probably not what you need.
 
+
+## usage
+
+When working with a deployed `fuzzbucket` API, the `fuzzbucket-client` may be
+used to do all the things:
+
+```bash
+# install fuzzbucket-client via setup.py with python3.6+
+python setup.py install
+```
+
+```bash
+# get some help
+fuzzbucket-client --help
+```
+
+As described in this help text, the client tool requires configuration of the
+API URL and credentials via the following environment variables:
+
+```bash
+export FUZZBUCKET_URL='https://fuzzbucket.example.com/prod'
+export FUZZBUCKET_CREDENTIALS='githubperson:abcxyz456123abcxyz456123abcxyz456123'
+```
+
+> If you have access to the API provisioning tooling and resources, these values
+> are printed at the end of deployment and also available via the
+> `serverless`/`sls` tool with `npx sls info --stage prod`.
+>
+> :warning: Without having the `serverless`/`sls` tooling and necessary AWS
+> access, you must get these values from someone who does.
+
+Exactly how you choose to manage these environment variables is up to you, such
+as by including them in your shell configuration (`~/.bashrc`, `~/.zshrc`) or
+by using a tool like [autoenv](https://github.com/inishchith/autoenv).
+
 ## development
 
 Prerequisites for development are:
@@ -70,58 +105,3 @@ make deploy
 # deploy to STAGE=prod in REGION=us-west-2
 make deploy STAGE=prod REGION=us-west-2
 ```
-
-## usage
-
-Once the `fuzzbucket` API is deployed, the `fuzzbucket-client` may be used to
-do all the things:
-
-```bash
-# install fuzzbucket-client via setup.py
-python setup.py install
-```
-
-```bash
-# get some help
-fuzzbucket-client --help
-```
-
-As described in this help text, the client tool requires configuration of the
-API URL and credentials.
-
-
-If you have access to the API provisioning tooling and resources, these values
-are printed at the end of deployment and also available via the
-`serverless`/`sls` tool:
-
-```bash
-# show info for STAGE=prod
-npx sls info --stage prod
-```
-
-For example, if the output of `sls info` were to include values of:
-
-```
-...
-api keys:
-  githubperson01: fafaeaeadadacacababaaaaa
-  ...
-endpoints:
-  GET - https://babacaca9000.execute-api.us-east-1.amazonaws.com/prod
-  ...
-```
-
-then the necessary environment variable configuration would be:
-
-```bash
-FUZZBUCKET_URL=https://babacaca9000.execute-api.us-east-1.amazonaws.com/prod
-FUZZBUCKET_CREDENTIALS=githubperson01:fafaeaeadadacacababaaaaa
-```
-
-> :warning: Without having the `serverless`/`sls` tooling and necessary AWS
-> access, you must get these values from someone who does.
-
-Exactly how you choose to manage these environment variables is up to you, but
-the default development workflow which uses `pipenv` will automatically source
-variables defined in `./.env`. See [the example env](./.example.env) for an
-example... env.
