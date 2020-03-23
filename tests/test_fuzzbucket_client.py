@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import io
 import json
+import logging
 import os
 import re
 import subprocess
@@ -29,7 +30,7 @@ def test_default_client():
 
 
 @pytest.mark.parametrize(
-    "err,git_err,pkg_err,expected",
+    ("err", "git_err", "pkg_err", "expected"),
     [
         pytest.param(False, False, False, "stub+version.number.ok", id="from_git"),
         pytest.param(False, True, False, "stub+version.number.ok", id="from_pkg"),
@@ -57,9 +58,7 @@ def test_full_version(monkeypatch, err, git_err, pkg_err, expected):
 
     monkeypatch.setattr(subprocess, "check_output", fake_check_output)
     monkeypatch.setattr(pkg_resources, "get_distribution", fake_get_distribution)
-    monkeypatch.setattr(
-        fuzzbucket_client, "log_level", lambda: fuzzbucket_client.LOG_LEVEL_DEBUG
-    )
+    monkeypatch.setattr(fuzzbucket_client, "log_level", lambda: logging.DEBUG)
     fuzzbucket_client.full_version.cache_clear()
     assert fuzzbucket_client.full_version() == expected
 
@@ -79,49 +78,67 @@ def test_client_setup():
         client._setup()
 
 
-def gen_fake_urlopen(response):
+def gen_fake_urlopen(response, http_exc=None, empty_methods=()):
     @contextlib.contextmanager
     def fake_urlopen(request):
+        if request.get_method() in empty_methods:
+            yield io.StringIO("")
+            return
+        if http_exc is not None:
+            raise urllib.request.HTTPError(*(list(http_exc) + [response]))
         yield response
 
     return fake_urlopen
 
 
 @pytest.mark.parametrize(
-    "errors,log_level,log_match,expected",
+    ("errors", "log_level", "log_matches", "expected"),
     [
-        pytest.param((), fuzzbucket_client.DEFAULT_LOG_LEVEL, None, True, id="happy"),
+        pytest.param((), logging.INFO, (), True, id="happy"),
         pytest.param(
             ("setup",),
-            fuzzbucket_client.DEFAULT_LOG_LEVEL,
-            "command.+failed err=.+setup error",
+            logging.INFO,
+            ("command.+failed err=.+setup error",),
             False,
             id="setup_err",
         ),
         pytest.param(
             ("method",),
-            fuzzbucket_client.DEFAULT_LOG_LEVEL,
-            "command.+failed err=.+method error",
+            logging.INFO,
+            ("command.+failed err=.+method error",),
             False,
             id="method_err",
         ),
         pytest.param(
             ("http",),
-            fuzzbucket_client.DEFAULT_LOG_LEVEL,
-            "command.+failed err=.+http error",
+            logging.INFO,
+            ("command.+failed err=.+http error",),
             False,
             id="http_err",
         ),
         pytest.param(
             ("http", "json"),
-            fuzzbucket_client.DEFAULT_LOG_LEVEL,
-            "command.+failed err=.+json error",
+            logging.INFO,
+            ("command.+failed err=.+json error",),
+            False,
+            id="http_json_err",
+        ),
+        pytest.param(
+            ("http", "json"),
+            logging.DEBUG,
+            (
+                "command.+failed",
+                "Traceback \\(most recent call last\\):",
+                "ValueError: json error",
+            ),
             False,
             id="http_json_err",
         ),
     ],
 )
-def test_command_decorator(monkeypatch, caplog, errors, log_level, log_match, expected):
+def test_command_decorator(
+    monkeypatch, caplog, errors, log_level, log_matches, expected
+):
     class FakeClient:
         def _setup(self):
             if "setup" in errors:
@@ -139,10 +156,12 @@ def test_command_decorator(monkeypatch, caplog, errors, log_level, log_match, ex
             raise ValueError("json error")
         return {"error": "http error"}
 
+    caplog.set_level(log_level)
+    monkeypatch.setattr(fuzzbucket_client, "log_level", lambda: log_level)
     monkeypatch.setattr(json, "load", fake_load)
     decorated = fuzzbucket_client._command(fake_method)
     assert decorated(FakeClient(), "known", "unknown") == expected
-    if log_match is not None:
+    for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
 
 
@@ -191,140 +210,202 @@ def test_client_list(monkeypatch):
     assert ret == 0
 
 
-def test_client_create(monkeypatch):
+@pytest.mark.parametrize(
+    ("api_response", "http_exc", "cmd_args", "log_matches", "expected"),
+    [
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": None,
+                        "special": "like all the others",
+                    }
+                ]
+            },
+            None,
+            ("ubuntu49", "--connect",),
+            ("created box for user=.+",),
+            0,
+            id="happy_alias",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {"name": "snowflek", "public_ip": None, "worth": "immeasurable"}
+                ]
+            },
+            None,
+            ("ami-fafbafabcadabfabcdabcbaf", "--instance-type=t8.nano"),
+            ("created box for user=.+",),
+            0,
+            id="happy_ami",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.0.-1",
+                        "special": "like the one before",
+                    }
+                ]
+            },
+            (
+                "http://fake",
+                409,
+                "you already did this",
+                [("Content-Type", "application/json")],
+            ),
+            ("ubuntu49", "--instance-type=t8.pico", "--connect",),
+            ("matching box already exists",),
+            0,
+            id="repeat_alias",
+        ),
+        pytest.param(
+            {"error": "not today"},
+            (
+                "http://fake",
+                500,
+                "just cannot",
+                [("Content-Type", "application/json")],
+            ),
+            ("ubuntu49", "--instance-type=t8.pico", "--connect",),
+            ("command [\"']create[\"'] failed",),
+            86,
+            id="api_err",
+        ),
+    ],
+)
+def test_client_create(
+    monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
+):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(
-            io.StringIO(
-                json.dumps(
+        gen_fake_urlopen(io.StringIO(json.dumps(api_response)), http_exc=http_exc),
+    )
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "create"] + list(cmd_args))
+    assert ret == expected
+    for log_match in log_matches:
+        assert re.search(log_match, caplog.text) is not None
+
+
+@pytest.mark.parametrize(
+    ("api_response", "http_exc", "cmd_args", "log_matches", "expected"),
+    [
+        pytest.param(
+            {
+                "boxes": [
                     {
-                        "boxes": [
-                            {
-                                "name": "ubuntu49",
-                                "public_ip": None,
-                                "special": "like all the others",
-                            }
-                        ]
-                    }
-                )
-            )
+                        "name": "welp",
+                        "public_ip": None,
+                        "instance_id": "i-fafafafafaf",
+                        "special": "is this the end",
+                    },
+                    {
+                        "name": "welpington",
+                        "public_ip": None,
+                        "instance_id": "i-fafafababab",
+                    },
+                ]
+            },
+            None,
+            ("welp*",),
+            ("deleted box for.+name=welp$", "deleted box for.+name=welpington$"),
+            0,
+            id="happy",
         ),
-    )
-    ret = fuzzbucket_client.main(
-        [
-            "fuzzbucket-client",
-            "create",
-            "ubuntu49",
-            "--instance-type=t8.pico",
-            "--connect",
-        ]
-    )
-    assert ret == 0
+        pytest.param(
+            {"boxes": []},
+            None,
+            ("welp*",),
+            ("no boxes found matching [\"']welp\\*[\"']",),
+            86,
+            id="no_match",
+        ),
+    ],
+)
+def test_client_delete(
+    monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
+):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client,
         "_urlopen",
         gen_fake_urlopen(
-            io.StringIO(
-                json.dumps(
-                    {
-                        "boxes": [
-                            {
-                                "name": "snowflek",
-                                "public_ip": None,
-                                "worth": "immeasurable",
-                            }
-                        ]
-                    }
-                )
-            )
+            io.StringIO(json.dumps(api_response)),
+            http_exc=http_exc,
+            empty_methods=("DELETE",),
         ),
     )
-    ret = fuzzbucket_client.main(
-        [
-            "fuzzbucket-client",
-            "create",
-            "ami-fafbafabcadabfabcdabcbaf",
-            "--instance-type=t8.nano",
-        ]
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "delete"] + list(cmd_args))
+    assert ret == expected
+    for log_match in log_matches:
+        assert re.search(log_match, caplog.text, re.MULTILINE)
+
+
+@pytest.mark.parametrize(
+    ("api_response", "http_exc", "cmd_args", "log_matches", "expected"),
+    [
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "zombie-skills",
+                        "public_ip": None,
+                        "instance_id": "i-fafafafafaf",
+                        "brainzzz": "eating",
+                    }
+                ]
+            },
+            None,
+            ("zombie-skills",),
+            ("rebooted box for user=.+ box=[\"']zombie-skills[\"']",),
+            0,
+            id="happy",
+        ),
+        pytest.param(
+            {"boxes": []},
+            None,
+            ("nessie",),
+            ("no box found matching [\"']nessie[\"']",),
+            86,
+            id="no_match",
+        ),
+        pytest.param(
+            {"error": "ker-splatz"},
+            ("http://nah", 586, "owwie", []),
+            ("whoopie-pie",),
+            ("command [\"']reboot[\"'] failed err=[\"']ker-splatz[\"']",),
+            86,
+            id="api_err",
+        ),
+    ],
+)
+def test_client_reboot(
+    monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
+):
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(
+            io.StringIO(json.dumps(api_response)),
+            http_exc=http_exc,
+            empty_methods=("POST",),
+        ),
     )
-    assert ret == 0
-
-
-def test_client_delete(monkeypatch, caplog):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
-
-    request_counter = {"count": 0}
-
-    def fake_urlopen(req):
-        response = [
-            io.StringIO(
-                json.dumps(
-                    {
-                        "boxes": [
-                            {
-                                "name": "welp",
-                                "public_ip": None,
-                                "instance_id": "i-fafafafafaf",
-                                "special": "is this the end",
-                            },
-                            {
-                                "name": "welpington",
-                                "public_ip": None,
-                                "instance_id": "i-fafafababab",
-                            },
-                        ]
-                    }
-                )
-            ),
-            io.StringIO(""),
-            io.StringIO(""),
-        ][request_counter["count"]]
-        request_counter["count"] += 1
-        return response
-
-    monkeypatch.setattr(client, "_urlopen", fake_urlopen)
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "delete", "welp*"])
-    assert ret == 0
-
-    assert re.search(".*deleted box for.*name=welp$", caplog.text, re.MULTILINE)
-    assert re.search(".*deleted box for.*name=welpington$", caplog.text, re.MULTILINE)
-
-
-def test_client_reboot(monkeypatch):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
-
-    request_counter = {"count": 0}
-
-    def fake_urlopen(req):
-        response = [
-            io.StringIO(
-                json.dumps(
-                    {
-                        "boxes": [
-                            {
-                                "name": "zombie-skills",
-                                "public_ip": None,
-                                "instance_id": "i-fafafafafaf",
-                                "brainzzz": "eating",
-                            }
-                        ]
-                    }
-                )
-            ),
-            io.StringIO(""),
-        ][request_counter["count"]]
-        request_counter["count"] += 1
-        return response
-
-    monkeypatch.setattr(client, "_urlopen", fake_urlopen)
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "reboot", "zombie-skills"])
-    assert ret == 0
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "reboot"] + list(cmd_args))
+    assert ret == expected
+    for log_match in log_matches:
+        assert re.search(log_match, caplog.text, re.MULTILINE)
 
 
 def test_client_ssh(monkeypatch):
@@ -393,7 +474,7 @@ def test_client_scp(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "api_response,stdout_match,expected",
+    ("api_response", "stdout_match", "expected"),
     [
         pytest.param(
             {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
@@ -419,7 +500,7 @@ def test_client_list_aliases(monkeypatch, capsys, api_response, stdout_match, ex
 
 
 @pytest.mark.parametrize(
-    "api_response,stdout_match,expected",
+    ("api_response", "stdout_match", "expected"),
     [
         pytest.param(
             {"image_aliases": {"blep": "ami-babacacafafa"}},
