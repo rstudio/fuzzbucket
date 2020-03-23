@@ -165,7 +165,7 @@ def test_list_vpc_boxes(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "auth_header,offline,expected_user,expected_status",
+    ("auth_header", "offline", "expected_user", "expected_status"),
     [
         pytest.param(None, False, None, "403 FORBIDDEN", id="forbidden"),
         pytest.param(
@@ -453,7 +453,7 @@ def test_delete_image_alias_not_yours(monkeypatch):
 
 @mock_dynamodb2
 @pytest.mark.parametrize(
-    "image_alias,raises,expected",
+    ("image_alias", "raises", "expected"),
     [
         pytest.param("noice", False, None, id="invalid"),
         pytest.param("rhel8", True, None, id="errored"),
@@ -482,7 +482,7 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
 
 
 @pytest.mark.parametrize(
-    "raises,keys,expected_key",
+    ("raises", "keys", "expected_key"),
     [
         pytest.param(False, "first\nsecond\nthird\n", "first", id="3_keys"),
         pytest.param(False, "first", "first", id="1_key"),

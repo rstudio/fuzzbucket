@@ -36,26 +36,25 @@ except ImportError:  # pragma: no cover
 
 __version__ = "0.2.1"
 
-LOG_LEVEL_DEBUG = "DEBUG"
-DEFAULT_LOG_LEVEL = "INFO"
-
 
 def default_client() -> "Client":
     return Client()
 
 
-def config_logging(level_name: str = DEFAULT_LOG_LEVEL):
+def config_logging(level: int = logging.INFO):
     logging.basicConfig(
         stream=sys.stdout,
         style="{",
         format="# {name}:{levelname}:{asctime}:: {message}",
         datefmt="%Y-%m-%dT%H%M%S",
-        level=getattr(logging, level_name),
+        level=level,
     )
 
 
-def log_level() -> str:
-    return os.environ.get("FUZZBUCKET_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
+def log_level() -> int:
+    return getattr(
+        logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "INFO").strip().upper(),
+    )
 
 
 @functools.lru_cache(maxsize=2)
@@ -86,7 +85,7 @@ def full_version() -> str:
         except Exception:
             return __version__
     except Exception:
-        if log_level() == LOG_LEVEL_DEBUG:
+        if log_level() == logging.DEBUG:
             log.exception("failed to get the extended version info")
         return __version__
 
@@ -104,7 +103,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "-D",
         "--debug",
         action="store_true",
-        default=log_level() == LOG_LEVEL_DEBUG,
+        default=log_level() == logging.DEBUG,
         help="enable debug logging",
     )
     subparsers = parser.add_subparsers(title="subcommands", help="additional help")
@@ -228,9 +227,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_delete_alias.set_defaults(func=client.delete_alias)
 
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
-    config_logging(
-        level_name=LOG_LEVEL_DEBUG if known_args.debug else DEFAULT_LOG_LEVEL
-    )
+    config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
         print(f"fuzzbucket-client {full_version()}")
         return 0
@@ -246,7 +243,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
 def _command(method):
     def handle_exc(exc):
         msg = f"command {method.__name__!r} failed"
-        if log_level() == LOG_LEVEL_DEBUG:
+        if log_level() == logging.DEBUG:
             log.exception(msg)
         else:
             log.error(f"{msg} err={exc!r}")

@@ -1,4 +1,4 @@
-COVERAGE_THRESHOLD ?= 92
+COVERAGE_THRESHOLD ?= 95
 FUNCTION ?= api
 REGION ?= us-east-1
 STAGE ?= dev
@@ -48,3 +48,7 @@ deploy:
 .PHONY: logs
 logs:
 	npx sls logs --function $(FUNCTION) --region $(REGION) --stage $(STAGE) --tail
+
+.PHONY: serve-htmlcov
+serve-htmlcov:
+	pushd ./htmlcov && python -m http.server
