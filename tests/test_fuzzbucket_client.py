@@ -635,8 +635,7 @@ def test_client_delete_alias(monkeypatch, caplog):
 
     monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.StringIO("")))
 
-    # assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
-    client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
+    assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
     assert "deleted alias" in caplog.text
 
 
