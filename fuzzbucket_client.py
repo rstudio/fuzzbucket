@@ -10,11 +10,12 @@ Configuration is accepted via the following environment variables:
 
 """
 import argparse
-import base64
 import configparser
 import contextlib
+import datetime
 import fnmatch
 import functools
+import getpass
 import io
 import json
 import logging
@@ -27,6 +28,8 @@ import textwrap
 import typing
 import urllib.parse
 import urllib.request
+import webbrowser
+
 
 try:
     import pkg_resources
@@ -107,6 +110,10 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         help="enable debug logging",
     )
     subparsers = parser.add_subparsers(title="subcommands", help="additional help")
+
+    parser_login = subparsers.add_parser("login", help="Login with GitHub.")
+    parser_login.add_argument("user", help="GitHub user")
+    parser_login.set_defaults(func=client.login)
 
     parser_list = subparsers.add_parser("list", aliases=["ls"], help="List your boxes.")
     parser_list.set_defaults(func=client.list)
@@ -195,7 +202,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
             %(prog)s boxname -r ./some/local/path __BOX__:/tmp/
 
         becomes:
-            scp -r ./some/local/path username@boxname.fully.qualified.example.com:/tmp/
+            scp -r ./some/local/path user@boxname.fully.qualified.example.com:/tmp/
 
         the command:
             %(prog)s boxname -r 'altuser@__BOX__:/var/log/*.log' ./some/local/path/
@@ -240,6 +247,20 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     return 86
 
 
+def _print_auth_hint():
+    print(
+        textwrap.dedent(
+            """
+        Please run the following command with your GitHub username
+        to grant access to Fuzzbucket:
+
+            fuzzbucket-client login {github-username}
+
+        """
+        )
+    )
+
+
 def _command(method):
     def handle_exc(exc):
         msg = f"command {method.__name__!r} failed"
@@ -251,7 +272,8 @@ def _command(method):
 
     def wrapper(self, known_args, unknown_args):
         try:
-            self._setup()
+            if getattr(method, "nosetup", None) is None:
+                self._setup()
             return method(self, known_args, unknown_args)
         except urllib.request.HTTPError as exc:
             try:
@@ -259,13 +281,34 @@ def _command(method):
                 log.error(
                     f"command {method.__name__!r} failed err={response.get('error')!r}"
                 )
+                if exc.code == 403:
+                    _print_auth_hint()
                 return False
             except Exception as exc:
                 return handle_exc(exc)
+        except CredentialsError as exc:
+            log.error(f"command {method.__name__!r} failed err={exc}")
+            _print_auth_hint()
+            return False
         except Exception as exc:
             return handle_exc(exc)
 
     return wrapper
+
+
+class CredentialsError(ValueError):
+    def __init__(self, url: str, credentials_path: str) -> None:
+        self.url = url
+        self.credentials_path = credentials_path
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.url!r}, {self.credentials_path!r})"
+
+    def __str__(self) -> str:
+        return (
+            f"No credentials found for url={self.url!r} in "
+            + f"file={self.credentials_path!r}"
+        )
 
 
 class Client:
@@ -289,12 +332,52 @@ class Client:
     def __init__(self, env=None):
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
+        self._cached_credentials = None
+        self._patched_credentials_file = None
 
     def _setup(self):
         if self._url is None:
             raise ValueError("missing url")
-        if self._credentials is None:
-            raise ValueError("missing credentials")
+        if self._credentials in (None, ""):
+            raise CredentialsError(self._url, self._credentials_file)
+
+    @_command
+    def login(self, known_args, _):
+        log.debug(f"starting login flow for user={known_args.user}")
+        login_url = "?".join(
+            [
+                os.path.join(self._url, "_login"),
+                urllib.parse.urlencode(dict(user=known_args.user)),
+            ]
+        )
+        webbrowser.open(login_url)
+        print(
+            textwrap.dedent(
+                f"""
+            Attempting to open the following URL in a browser:
+
+                {login_url}
+
+            Please follow the OAuth2 flow and then paste the 'secret' provided
+            by fuzzbucket.
+        """
+            )
+        )
+        secret = None
+        while secret is None:
+            try:
+                raw_secret = getpass.getpass("secret: ").strip()
+                if len(raw_secret) != 42:
+                    print("Invalid secret provided. Please try again.")
+                    continue
+                secret = raw_secret
+            except KeyboardInterrupt:
+                return False
+        self._write_credentials(known_args.user, secret)
+        print(f"Login successful user={known_args.user!r}")
+        return True
+
+    login.nosetup = True
 
     @_command
     def list(self, *_):
@@ -501,20 +584,64 @@ class Client:
         return self._env.get("FUZZBUCKET_URL")
 
     @property
+    def _credentials_section(self):
+        return f'server "{self._url}"'
+
+    @property
     def _credentials(self):
-        return self._env.get("FUZZBUCKET_CREDENTIALS")
+        if self._cached_credentials is None:
+            self._cached_credentials = self._read_credentials()
+        return self._cached_credentials
+
+    @property
+    def _credentials_file(self):
+        if self._patched_credentials_file is not None:
+            return self._patched_credentials_file
+        return pathlib.Path("~/.cache/fuzzbucket/credentials").expanduser()
+
+    @_credentials_file.setter
+    def _credentials_file(self, value):
+        self._patched_credentials_file = value
+
+    def _read_credentials(self):
+        self._credentials_file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+        self._credentials_file.touch()
+        with self._credentials_file.open() as infile:
+            creds = configparser.ConfigParser()
+            creds.read_file(infile)
+            if self._credentials_section not in creds.sections():
+                return ""
+            return creds.get(self._credentials_section, "credentials")
+
+    def _write_credentials(self, user, secret):
+        creds = configparser.ConfigParser()
+        if self._credentials_file.exists():
+            with self._credentials_file.open() as infile:
+                creds.read_file(infile)
+        if self._credentials_section not in creds.sections():
+            creds.add_section(self._credentials_section)
+        creds.set(self._credentials_section, "credentials", f"{user}:{secret}")
+        with self._credentials_file.open("w") as outfile:
+            outfile.write(
+                "# WARNING: this file is generated "
+                + f"(last update {datetime.datetime.utcnow()})\n"
+            )
+            creds.write(outfile)
+        self._cached_credentials = None
 
     @property
     def _user(self):
         return self._credentials.split(":")[0].split("--")[0]
 
+    @property
+    def _secret(self):
+        return self._credentials.split(":")[1]
+
     def _build_request(self, url, data=None, headers=None, method="GET"):
         headers = headers if headers is not None else {}
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        if not req.has_header("Authorization"):
-            creds_b64 = base64.b64encode(self._credentials.encode("utf-8"))
-            creds_b64 = creds_b64.decode("utf-8")
-            req.headers["Authorization"] = f"basic {creds_b64}"
+        req.headers["Fuzzbucket-User"] = self._user
+        req.headers["Fuzzbucket-Secret"] = self._secret
         return req
 
     def _resolve_sshable_box(self, box):

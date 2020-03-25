@@ -7,16 +7,18 @@ provider:
   apiKeys: ${self:custom.apiKeys}
   region: ${self:custom.awsRegion, 'us-east-1'}
   environment:
-    FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
-    FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
+    FUZZBUCKET_ALLOWED_GITHUB_ORGS: ${self:custom.allowedGithubOrgs}
+    FUZZBUCKET_BRANDING: ${self:custom.branding}
     FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
+    FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
     FUZZBUCKET_DEFAULT_TTL: ${self:custom.defaultTtl, '14400'}
+    FUZZBUCKET_FLASK_SECRET_KEY: ${self:custom.flaskSecretKey}
+    FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ${self:custom.oauth.clientID}
+    FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret}
     FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
+    FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
+    FUZZBUCKET_USERS_TABLE_NAME: ${self:custom.usersTableName, 'fuzzbucket-${opt:stage, 'dev'}-users'}
   iamRoleStatements:
-  - Effect: Allow
-    Action:
-    - apigateway:GET
-    Resource: '*'
   - Effect: Allow
     Action:
     - ec2:AssociateIamInstanceProfile
@@ -64,15 +66,17 @@ provider:
     - Fn::GetAtt:
       - ImageAliasesDynamoDBTable
       - Arn
+    - Fn::GetAtt:
+      - UsersDynamoDBTable
+      - Arn
 package:
   include:
-  - basic_auth.py
   - fuzzbucket/*.py
+  - fuzzbucket/templates/*.html
   - wsgi_handler.py
   exclude:
   - "./**/**"
 plugins:
-- serverless-basic-authentication
 - serverless-dynamodb-local
 - serverless-python-requirements
 - serverless-resources-env
@@ -141,15 +145,6 @@ resources:
             - Ref: AWS::Region
             - s3
         VpcId: !Ref VPC
-    GatewayResponse:
-      Type: AWS::ApiGateway::GatewayResponse
-      Properties:
-        ResponseParameters:
-          gatewayresponse.header.WWW-Authenticate: "'Basic'"
-        ResponseType: UNAUTHORIZED
-        RestApiId:
-          Ref: ApiGatewayRestApi
-        StatusCode: '401'
     FuzzbucketDefaultSecurityGroup:
       Type: AWS::EC2::SecurityGroup
       Properties:
@@ -222,6 +217,17 @@ resources:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
         TableName: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
+    UsersDynamoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+        - { AttributeName: user, AttributeType: S }
+        KeySchema:
+        - { AttributeName: user, KeyType: HASH }
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.usersTableName, 'fuzzbucket-${opt:stage, 'dev'}-users'}
 functions:
   api:
     handler: wsgi_handler.handler
@@ -232,8 +238,8 @@ functions:
       - FuzzbucketDefaultSecurityGroup
       - FuzzbucketConnectSecurityGroup
     events:
-    - http: { method: ANY, path: /, private: true }
-    - http: { method: ANY, path: '{proxy+}', private: true }
+    - http: { method: ANY, path: / }
+    - http: { method: ANY, path: '{proxy+}' }
   reap:
     handler: fuzzbucket.deferred_reap_boxes
     custom:

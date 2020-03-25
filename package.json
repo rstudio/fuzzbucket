@@ -4,7 +4,6 @@
   "version": "0.1.0",
   "dependencies": {
     "serverless": "^1.65.0",
-    "serverless-basic-authentication": "^0.14.1",
     "serverless-dynamodb-local": "<=0.2.35",
     "serverless-offline": "^5.12.1",
     "serverless-python-requirements": "^5.1.0",

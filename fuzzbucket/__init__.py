@@ -5,13 +5,14 @@ import typing
 
 import boto3
 
+from flask.json import JSONEncoder
+
 from .tags import Tags
 
-
 ROOT_LOG = logging.getLogger()
-LOG_LEVEL = os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper()
+LOG_LEVEL = getattr(logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper())
 log = ROOT_LOG.getChild("fuzzbucket")
-log.setLevel(getattr(logging, LOG_LEVEL))
+log.setLevel(LOG_LEVEL)
 
 
 NoneString = typing.Optional[str]
@@ -53,6 +54,15 @@ DEFAULT_FILTERS = [
     dict(Name="tag-key", Values=[Tags.created_at.value]),
     dict(Name="tag-key", Values=[Tags.image_alias.value]),
 ]
+
+
+class AsJSONEncoder(JSONEncoder):
+    def default(self, o: typing.Any) -> typing.Any:
+        if hasattr(o, "as_json") and callable(o.as_json):
+            return o.as_json()
+        if hasattr(o, "__dict__"):
+            return o.__dict__
+        return JSONEncoder.default(self, o)  # pragma: no cover
 
 
 def list_vpc_boxes(ec2_client, vpc_id):

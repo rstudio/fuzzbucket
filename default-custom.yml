@@ -1,5 +1,6 @@
-apiKeys:
-- admin
+allowedGithubOrgs: ""
+branding: Not Overridden Branding Value For Fuzzbucket
+flaskSecretKey: not even trying to be secure here ok
 awsRegion: us-east-1
 defaultImageAlias: ubuntu18
 defaultInstanceType: t3.small
@@ -10,6 +11,7 @@ dynamodb:
   stages:
   - test
 imageAliasesTableName: fuzzbucket-${opt:stage, 'dev'}-image-aliases
+usersTableName: fuzzbucket-${opt:stage, 'dev'}-users
 logLevel: info
 memorySize: 128
 publicSubnetAvailabilityZone: us-east-1a
