@@ -17,6 +17,7 @@ pytest-mypy = "*"
 
 [packages]
 Flask = "*"
+Flask-Dance = "*"
 werkzeug = "*"
 
 [requires]

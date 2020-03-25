@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import random
 import re
 import subprocess
 import urllib.request
@@ -15,14 +16,14 @@ import fuzzbucket_client
 
 
 @pytest.fixture(autouse=True)
-def patched_env(tmpdir, monkeypatch):
+def config_setup(tmpdir, monkeypatch):
+    url = f"http://fuzzbucket.example.org/bleep/bloop/dev/{random.randint(42, 666)}"
     fake_home = tmpdir.join("home")
-    fake_home.mkdir()
+    fake_home.mkdir().mkdir(".cache").mkdir("fuzzbucket").join(
+        "credentials"
+    ).write_text(f'[server "{url}"]\ncredentials = whimsy:doodles\n', "utf-8")
     monkeypatch.setenv("HOME", str(fake_home))
-    monkeypatch.setenv("FUZZBUCKET_CREDENTIALS", "admin:token")
-    monkeypatch.setenv(
-        "FUZZBUCKET_URL", "http://fuzzbucket.example.org/bleep/bloop/dev"
-    )
+    monkeypatch.setenv("FUZZBUCKET_URL", url)
 
 
 def test_default_client():
@@ -73,7 +74,8 @@ def test_client_setup():
         client._setup()
 
     client._env["FUZZBUCKET_URL"] = "not none"
-    client._env.pop("FUZZBUCKET_CREDENTIALS")
+    client._cached_credentials = None
+    os.remove(client._credentials_file)
     with pytest.raises(ValueError):
         client._setup()
 
@@ -208,6 +210,60 @@ def test_client_list(monkeypatch):
     )
     ret = fuzzbucket_client.main(["fuzzbucket-client", "list"])
     assert ret == 0
+
+
+@pytest.mark.parametrize(
+    ("user", "secrets", "raises", "written", "expected"),
+    [
+        pytest.param(
+            "bugs",
+            ("wonketywoopwoopwoopwoopwoopwoopwoopwoopwoo",),
+            False,
+            ("bugs", "wonketywoopwoopwoopwoopwoopwoopwoopwoopwoo"),
+            0,
+            id="happy",
+        ),
+        pytest.param(
+            "elmer",
+            (":typing:", "9ccb489abe5c900316fd57482b23c38bb99c727900"),
+            False,
+            ("elmer", "9ccb489abe5c900316fd57482b23c38bb99c727900"),
+            0,
+            id="eventually_happy",
+        ),
+        pytest.param("wylie", ("femmeroadrunner???",), True, (), 86, id="interrupted",),
+    ],
+)
+def test_client_login(monkeypatch, capsys, user, secrets, raises, written, expected):
+    state = {"secret_count": 0}
+
+    def fake_write_credentials(user, secret):
+        state.update(user=user, secret=secret)
+
+    def fake_getpass(prompt):
+        state.update(prompt=prompt)
+        ret = secrets[state["secret_count"]]
+        state["secret_count"] += 1
+        if raises:
+            raise KeyboardInterrupt("control this")
+        return ret
+
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    monkeypatch.setattr(fuzzbucket_client.webbrowser, "open", lambda u: None)
+    monkeypatch.setattr(fuzzbucket_client.getpass, "getpass", fake_getpass)
+    monkeypatch.setattr(client, "_write_credentials", fake_write_credentials)
+
+    ret = fuzzbucket_client.main(["fuzzbucket-client", "login", user])
+    assert ret == expected
+    captured = capsys.readouterr()
+    assert "Attempting to open the following URL" in captured.out
+    if len(secrets) > 1:
+        assert "Invalid secret provided" in captured.out
+    if raises:
+        return
+    assert (state.get("user"), state.get("secret")) == written
+    assert "Login successful" in captured.out
 
 
 @pytest.mark.parametrize(
@@ -536,5 +592,64 @@ def test_client_delete_alias(monkeypatch, caplog):
 
     monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.StringIO("")))
 
-    assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
+    # assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
+    client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
     assert "deleted alias" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("user", "secret", "file_exists", "file_content", "write_matches"),
+    [
+        pytest.param(
+            "daffy",
+            "woohoo",
+            True,
+            '[server "http://weau"]\ncredentials = daffy:bugsdrools\n',
+            ("^credentials = daffy:woohoo", "^credentials = daffy:bugsdrools"),
+            id="existing",
+        ),
+        pytest.param(
+            "sam",
+            "varmint",
+            True,
+            "",
+            ("^credentials = sam:varmint",),
+            id="existing_empty",
+        ),
+        pytest.param(
+            "foghorn",
+            "wellahseenow",
+            False,
+            "",
+            ("^credentials = foghorn:wellahseenow",),
+            id="new_config",
+        ),
+    ],
+)
+def test_client__write_credentials(
+    monkeypatch, user, secret, file_exists, file_content, write_matches
+):
+    state = {"out": io.StringIO()}
+
+    class FakeFile:
+        def exists(self):
+            return file_exists
+
+        @contextlib.contextmanager
+        def open(self, mode: str = "r"):
+            assert mode in ("r", "w")
+            if mode == "r":
+                yield io.StringIO(file_content)
+            elif mode == "w":
+                yield state["out"]
+
+    client = fuzzbucket_client.Client()
+    monkeypatch.setattr(client, "_credentials_file", FakeFile())
+
+    client._write_credentials(user, secret)
+    assert client._cached_credentials is None
+    state["out"].seek(0)
+    written = state["out"].read()
+    assert "# WARNING:" in written
+    for write_match in write_matches:
+        assert re.search(write_match, written, re.MULTILINE) is not None
