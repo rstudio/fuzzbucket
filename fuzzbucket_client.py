@@ -261,6 +261,9 @@ def _print_auth_hint():
     )
 
 
+NOSETUP_COMMANDS = ("login",)
+
+
 def _command(method):
     def handle_exc(exc):
         msg = f"command {method.__name__!r} failed"
@@ -272,7 +275,7 @@ def _command(method):
 
     def wrapper(self, known_args, unknown_args):
         try:
-            if getattr(method, "nosetup", None) is None:
+            if method.__name__ not in NOSETUP_COMMANDS:
                 self._setup()
             return method(self, known_args, unknown_args)
         except urllib.request.HTTPError as exc:
@@ -376,8 +379,6 @@ class Client:
         self._write_credentials(known_args.user, secret)
         print(f"Login successful user={known_args.user!r}")
         return True
-
-    login.nosetup = True
 
     @_command
     def list(self, *_):
