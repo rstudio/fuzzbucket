@@ -94,20 +94,37 @@ def gen_fake_urlopen(response, http_exc=None, empty_methods=()):
 
 
 @pytest.mark.parametrize(
-    ("errors", "log_level", "log_matches", "expected"),
+    ("errors", "log_level", "log_matches", "out_matches", "expected"),
     [
-        pytest.param((), logging.INFO, (), True, id="happy"),
+        pytest.param((), logging.INFO, (), (), True, id="happy"),
         pytest.param(
             ("setup",),
             logging.INFO,
             ("command.+failed err=.+setup error",),
+            (),
             False,
             id="setup_err",
+        ),
+        pytest.param(
+            ("setup_auth",),
+            logging.INFO,
+            (
+                "command.+failed err=No credentials found for "
+                + "url='http://nope' in file='/some/hecking/place'",
+            ),
+            (
+                "^Please run the following command",
+                "to grant access to Fuzzbucket",
+                "fuzzbucket-client login",
+            ),
+            False,
+            id="setup_auth_err",
         ),
         pytest.param(
             ("method",),
             logging.INFO,
             ("command.+failed err=.+method error",),
+            (),
             False,
             id="method_err",
         ),
@@ -115,13 +132,27 @@ def gen_fake_urlopen(response, http_exc=None, empty_methods=()):
             ("http",),
             logging.INFO,
             ("command.+failed err=.+http error",),
+            (),
             False,
             id="http_err",
+        ),
+        pytest.param(
+            ("http_auth",),
+            logging.INFO,
+            ("command.+failed err=.+http_auth error",),
+            (
+                "^Please run the following command",
+                "to grant access to Fuzzbucket",
+                "fuzzbucket-client login",
+            ),
+            False,
+            id="http_auth_err",
         ),
         pytest.param(
             ("http", "json"),
             logging.INFO,
             ("command.+failed err=.+json error",),
+            (),
             False,
             id="http_json_err",
         ),
@@ -133,16 +164,21 @@ def gen_fake_urlopen(response, http_exc=None, empty_methods=()):
                 "Traceback \\(most recent call last\\):",
                 "ValueError: json error",
             ),
+            (),
             False,
             id="http_json_err",
         ),
     ],
 )
 def test_command_decorator(
-    monkeypatch, caplog, errors, log_level, log_matches, expected
+    monkeypatch, caplog, capsys, errors, log_level, log_matches, out_matches, expected
 ):
     class FakeClient:
         def _setup(self):
+            if "setup_auth" in errors:
+                raise fuzzbucket_client.CredentialsError(
+                    "http://nope", "/some/hecking/place"
+                )
             if "setup" in errors:
                 raise ValueError("setup error")
 
@@ -151,11 +187,15 @@ def test_command_decorator(
             raise ValueError("method error")
         if "http" in errors:
             raise urllib.request.HTTPError("http://nope", 599, "ugh", [], None)
+        if "http_auth" in errors:
+            raise urllib.request.HTTPError("http://nope", 403, "no", [], None)
         return True
 
     def fake_load(fp):
         if "json" in errors:
             raise ValueError("json error")
+        if "http_auth" in errors:
+            return {"error": "http_auth error"}
         return {"error": "http error"}
 
     caplog.set_level(log_level)
@@ -165,6 +205,9 @@ def test_command_decorator(
     assert decorated(FakeClient(), "known", "unknown") == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
+    captured = capsys.readouterr()
+    for out_match in out_matches:
+        assert re.search(out_match, captured.out, re.MULTILINE) is not None
 
 
 def test_client_version(capsys):

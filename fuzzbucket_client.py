@@ -247,6 +247,20 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     return 86
 
 
+def _print_auth_hint():
+    print(
+        textwrap.dedent(
+            """
+        Please run the following command with your GitHub username
+        to grant access to Fuzzbucket:
+
+            fuzzbucket-client login {github-username}
+
+        """
+        )
+    )
+
+
 def _command(method):
     def handle_exc(exc):
         msg = f"command {method.__name__!r} failed"
@@ -267,13 +281,34 @@ def _command(method):
                 log.error(
                     f"command {method.__name__!r} failed err={response.get('error')!r}"
                 )
+                if exc.code == 403:
+                    _print_auth_hint()
                 return False
             except Exception as exc:
                 return handle_exc(exc)
+        except CredentialsError as exc:
+            log.error(f"command {method.__name__!r} failed err={exc}")
+            _print_auth_hint()
+            return False
         except Exception as exc:
             return handle_exc(exc)
 
     return wrapper
+
+
+class CredentialsError(ValueError):
+    def __init__(self, url: str, credentials_path: str) -> None:
+        self.url = url
+        self.credentials_path = credentials_path
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.url!r}, {self.credentials_path!r})"
+
+    def __str__(self) -> str:
+        return (
+            f"No credentials found for url={self.url!r} in "
+            + f"file={self.credentials_path!r}"
+        )
 
 
 class Client:
@@ -304,7 +339,7 @@ class Client:
         if self._url is None:
             raise ValueError("missing url")
         if self._credentials in (None, ""):
-            raise ValueError("missing credentials; please run 'login'")
+            raise CredentialsError(self._url, self._credentials_file)
 
     @_command
     def login(self, known_args, _):
