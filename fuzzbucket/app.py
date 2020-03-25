@@ -41,10 +41,21 @@ def handle_500(exc):
     log.debug(f"handling internal server error={exc!r}")
     if getattr(exc, "original_exception", None) is not None:
         return (
-            render_template("error.html", error=f"NOPE={exc.original_exception}"),
+            render_template(
+                "error.html",
+                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                error=f"NOPE={exc.original_exception}",
+            ),
             500,
         )
-    return render_template("error.html", error=f"Unhandled exception={exc}"), 500
+    return (
+        render_template(
+            "error.html",
+            branding=os.getenv("FUZZBUCKET_BRANDING"),
+            error=f"Unhandled exception={exc}",
+        ),
+        500,
+    )
 
 
 @app.before_first_request
@@ -109,7 +120,9 @@ def auth_complete():
     if "message" in raw_user_orgs:
         return (
             render_template(
-                "error.html", error=f"GitHub API error: {raw_user_orgs['message']}"
+                "error.html",
+                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                error=f"GitHub API error: {raw_user_orgs['message']}",
             ),
             500,
         )
@@ -121,6 +134,7 @@ def auth_complete():
         return (
             render_template(
                 "error.html",
+                branding=os.getenv("FUZZBUCKET_BRANDING"),
                 error="You are not a member of an allowed GitHub organization.",
             ),
             403,
@@ -128,13 +142,19 @@ def auth_complete():
     try:
         secret = app.config["gh_storage"].secret()
         return (
-            render_template("auth_complete.html", secret=secret),
+            render_template(
+                "auth_complete.html",
+                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                secret=secret,
+            ),
             200,
         )
     except ValueError:
         return (
             render_template(
-                "error.html", error="There is no secret available for user={user!r}"
+                "error.html",
+                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                error="There is no secret available for user={user!r}",
             ),
             404,
         )

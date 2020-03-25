@@ -93,6 +93,50 @@ Deploying the `fuzzbucket` API requires AWS credentials with rights to
 create all of the resources managed by the `serverless` framework and
 additional resources defined in the [serverless config](./serverless.yml).
 
+### prerequisites
+
+Defining a custom YAML file for use by `serverless.yml`, e.g.:
+
+```yaml
+# custom-path.yml
+allowedGithubOrgs: VerySeriousOrg
+branding: Very Serious Fuzzbucket
+flaskSecretKey: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+dynamodb:
+  start:
+    migrate: true
+  stages:
+  - prod
+oauth:
+  clientID: yyyyyyyyyyyyyyyyyyyy
+  clientSecret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+wsgi:
+  app: fuzzbucket.deferred_app
+  packRequirements: false
+```
+
+* `allowedGithubOrgs` is a space-delimited string of GitHub organizations, to
+  at least one of which any authenticating user *must* belong.
+* `branding` is an arbitrary string which is used in the OAuth2 flow to provide
+  a hint of customization, reduce confusion, nice human things.
+* `flaskSecretKey` is set as the Flask app's `secret_key` attribute for session
+  security.
+* `oauth` section contains `clientID` and `clientSecret` values which must be
+  set to the values provided upon [registering your GitHub OAuth2
+  app](https://developer.github.com/v3/guides/basics-of-authentication/#registering-your-app)
+  specific to your deployment of Fuzzbucket.
+
+:warning: Notably, the custom sections `dynamodb` and `wsgi` _must_ be defined
+when providing a custom YAML file, as the `serverless` framework does not
+provide a way to merge sections by default (although plugins exist). The values
+in the above example are suitable and should work.
+
+```bash
+export FUZZBUCKET_CUSTOM_prod='custom-path.yml'
+```
+
+### cycle
+
 The `make deploy` target will run the necessary `serverless` command to create
 the whole shebang.
 
@@ -105,3 +149,6 @@ make deploy
 # deploy to STAGE=prod in REGION=us-west-2
 make deploy STAGE=prod REGION=us-west-2
 ```
+
+These commands are expected to be re-run as needed, such as after modifying the
+custom YAML described in the prerequisites section above.
