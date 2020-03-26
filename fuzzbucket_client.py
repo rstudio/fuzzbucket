@@ -305,9 +305,6 @@ class CredentialsError(ValueError):
         self.url = url
         self.credentials_path = credentials_path
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.url!r}, {self.credentials_path!r})"
-
     def __str__(self) -> str:
         return (
             f"No credentials found for url={self.url!r} in "
