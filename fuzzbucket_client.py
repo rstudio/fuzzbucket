@@ -599,14 +599,15 @@ class Client:
     def _credentials_file(self):
         if self._patched_credentials_file is not None:
             return self._patched_credentials_file
-        return pathlib.Path("~/.cache/fuzzbucket/credentials").expanduser()
+        file = pathlib.Path("~/.cache/fuzzbucket/credentials").expanduser()
+        file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+        return file
 
     @_credentials_file.setter
     def _credentials_file(self, value):
         self._patched_credentials_file = value
 
     def _read_credentials(self):
-        self._credentials_file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
         self._credentials_file.touch()
         with self._credentials_file.open() as infile:
             creds = configparser.ConfigParser()
