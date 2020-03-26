@@ -225,8 +225,7 @@ def test_client_no_func(capsys):
         "^usage: .+--version.+",
         "^A client for fuzzbucket",
         "^optional arguments:",
-        "^subcommands:",
-        "^ +delete-alias.+Delete an image alias",
+        "^ +delete-alias.+delete an image alias",
     ):
         assert re.search(match, captured.out, re.MULTILINE) is not None
 

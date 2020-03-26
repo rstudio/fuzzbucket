@@ -18,8 +18,9 @@ Additionally, there is a periodic function that will terminate stale boxes.
 Maybe.
 
 If you are comfortable with direct access to EC2 via AWS authz for the purpose
-of managing instances launched from arbitrary AMIs, then `fuzzbucket` is
-probably not what you need.
+of managing instances launched from arbitrary AMIs with anything remotely
+resembling complex networking needs, then `fuzzbucket` is probably not a good
+fit.
 
 If you need your EC2 instances to be running for more than a few hours/days by
 default, then `fuzzbucket` is probably not what you need.
@@ -41,22 +42,21 @@ fuzzbucket-client --help
 ```
 
 As described in this help text, the client tool requires configuration of the
-API URL and credentials via the following environment variables:
+API URL via the following environment variable:
 
 ```bash
 export FUZZBUCKET_URL='https://fuzzbucket.example.com/prod'
-export FUZZBUCKET_CREDENTIALS='githubperson:abcxyz456123abcxyz456123abcxyz456123'
 ```
 
-> If you have access to the API provisioning tooling and resources, these values
-> are printed at the end of deployment and also available via the
+> If you have access to the API provisioning tooling and resources, this value
+> is printed at the end of deployment and also available via the
 > `serverless`/`sls` tool with `npx sls info --stage prod`.
 >
 > :warning: Without having the `serverless`/`sls` tooling and necessary AWS
-> access, you must get these values from someone who does.
+> access, you must get this value from someone who does.
 
-Exactly how you choose to manage these environment variables is up to you, such
-as by including them in your shell configuration (`~/.bashrc`, `~/.zshrc`) or
+Exactly how you choose to manage this environment variable is up to you, such
+as by including it in your shell configuration (`~/.bashrc`, `~/.zshrc`) or
 by using a tool like [autoenv](https://github.com/inishchith/autoenv).
 
 ## development

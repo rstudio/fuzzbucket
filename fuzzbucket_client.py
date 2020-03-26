@@ -5,7 +5,6 @@ A client for fuzzbucket.
 Configuration is accepted via the following environment variables:
 
     FUZZBUCKET_URL - string URL of the fuzzbucket instance including path prefix
-    FUZZBUCKET_CREDENTIALS - "github-user:fuzzbucket-token" string
     FUZZBUCKET_LOG_LEVEL - log level name (default="INFO")
 
 """
@@ -37,7 +36,7 @@ except ImportError:  # pragma: no cover
     pkg_resources = None  # type: ignore
 
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 
 def default_client() -> "Client":
@@ -101,7 +100,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--version", action="store_true")
+    parser.add_argument(
+        "--version", action="store_true", help="print the version and exit"
+    )
     parser.add_argument(
         "-D",
         "--debug",
@@ -109,17 +110,14 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         default=log_level() == logging.DEBUG,
         help="enable debug logging",
     )
-    subparsers = parser.add_subparsers(title="subcommands", help="additional help")
+    subparsers = parser.add_subparsers(title="commands")
 
-    parser_login = subparsers.add_parser("login", help="Login with GitHub.")
+    parser_login = subparsers.add_parser("login", help="login with GitHub")
     parser_login.add_argument("user", help="GitHub user")
     parser_login.set_defaults(func=client.login)
 
-    parser_list = subparsers.add_parser("list", aliases=["ls"], help="List your boxes.")
-    parser_list.set_defaults(func=client.list)
-
     parser_create = subparsers.add_parser(
-        "create", aliases=["new"], help="Create a box."
+        "create", aliases=["new"], help="create a box"
     )
     parser_create.add_argument(
         "image", default=Client.default_image_alias, help="image alias or full AMI id"
@@ -142,26 +140,29 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_create.add_argument("-t", "--instance-type", default=None)
     parser_create.set_defaults(func=client.create)
 
+    parser_list = subparsers.add_parser("list", aliases=["ls"], help="list your boxes")
+    parser_list.set_defaults(func=client.list)
+
     parser_delete = subparsers.add_parser(
-        "delete", aliases=["rm"], help="Delete matching boxes."
+        "delete", aliases=["rm"], help="delete matching boxes"
     )
     parser_delete.add_argument("box_match")
     parser_delete.set_defaults(func=client.delete)
 
     parser_reboot = subparsers.add_parser(
-        "reboot", aliases=["restart"], help="Reboot a box."
+        "reboot", aliases=["restart"], help="reboot a box"
     )
     parser_reboot.add_argument("box")
     parser_reboot.set_defaults(func=client.reboot)
 
-    parser_ssh = subparsers.add_parser("ssh", help="SSH into a box.")
+    parser_ssh = subparsers.add_parser("ssh", help="ssh into a box")
     parser_ssh.add_argument(
         "-q", "--quiet", action="store_true", help="suppress box info header",
     )
     parser_ssh.usage = "usage: %(prog)s [-hq] box [ssh-arguments]"
     parser_ssh.description = textwrap.dedent(
         """
-        SSH into a box, optionally passing arbitrary commands as positional
+        ssh into a box, optionally passing arbitrary commands as positional
         arguments.  Additionally, stdio streams will be inherited by the ssh
         process in order to support piping.
         """
@@ -177,13 +178,13 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
 
     parser_scp = subparsers.add_parser(
         "scp",
-        help="SCP things into or out of a box.",
+        help="scp things into or out of a box",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_scp.usage = "usage: %(prog)s [-h] box [scp-arguments]"
     parser_scp.description = textwrap.dedent(
         """
-        SCP things into or out of a box, optionally passing arbitrary commands
+        scp things into or out of a box, optionally passing arbitrary commands
         as positional arguments. Additionally, stdio streams will be inherited
         by the scp process in order to support piping.
         """
@@ -215,20 +216,20 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_scp.add_argument("box")
     parser_scp.set_defaults(func=client.scp)
 
-    parser_list_aliases = subparsers.add_parser(
-        "list-aliases", aliases=["la"], help="List known image aliases."
-    )
-    parser_list_aliases.set_defaults(func=client.list_aliases)
-
     parser_create_alias = subparsers.add_parser(
-        "create-alias", help="Create an image alias."
+        "create-alias", help="create an image alias"
     )
     parser_create_alias.add_argument("alias")
     parser_create_alias.add_argument("ami")
     parser_create_alias.set_defaults(func=client.create_alias)
 
+    parser_list_aliases = subparsers.add_parser(
+        "list-aliases", aliases=["la"], help="list known image aliases"
+    )
+    parser_list_aliases.set_defaults(func=client.list_aliases)
+
     parser_delete_alias = subparsers.add_parser(
-        "delete-alias", help="Delete an image alias."
+        "delete-alias", help="delete an image alias"
     )
     parser_delete_alias.add_argument("alias")
     parser_delete_alias.set_defaults(func=client.delete_alias)
