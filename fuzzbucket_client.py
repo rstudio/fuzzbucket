@@ -616,6 +616,8 @@ class Client:
             return creds.get(self._credentials_section, "credentials")
 
     def _write_credentials(self, user, secret):
+        self._credentials_file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+
         creds = configparser.ConfigParser()
         if self._credentials_file.exists():
             with self._credentials_file.open() as infile:
