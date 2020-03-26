@@ -341,12 +341,14 @@ class Client:
 
     def _setup(self):
         if self._url is None:
-            raise ValueError("missing url")
+            raise ValueError("missing FUZZBUCKET_URL")
         if self._credentials in (None, ""):
             raise CredentialsError(self._url, self._credentials_file)
 
     @_command
     def login(self, known_args, _):
+        if self._url is None:
+            raise ValueError("missing FUZZBUCKET_URL")
         log.debug(f"starting login flow for user={known_args.user}")
         login_url = "?".join(
             [
