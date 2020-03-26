@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover
     pkg_resources = None  # type: ignore
 
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 
 def default_client() -> "Client":
@@ -305,9 +305,6 @@ class CredentialsError(ValueError):
         self.url = url
         self.credentials_path = credentials_path
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.url!r}, {self.credentials_path!r})"
-
     def __str__(self) -> str:
         return (
             f"No credentials found for url={self.url!r} in "
@@ -341,12 +338,14 @@ class Client:
 
     def _setup(self):
         if self._url is None:
-            raise ValueError("missing url")
+            raise ValueError("missing FUZZBUCKET_URL")
         if self._credentials in (None, ""):
             raise CredentialsError(self._url, self._credentials_file)
 
     @_command
     def login(self, known_args, _):
+        if self._url is None:
+            raise ValueError("missing FUZZBUCKET_URL")
         log.debug(f"starting login flow for user={known_args.user}")
         login_url = "?".join(
             [

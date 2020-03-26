@@ -255,11 +255,12 @@ def test_client_list(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("user", "secrets", "raises", "written", "expected"),
+    ("user", "secrets", "url", "raises", "written", "expected"),
     [
         pytest.param(
             "bugs",
             ("wonketywoopwoopwoopwoopwoopwoopwoopwoopwoo",),
+            "http://sure.example.org",
             False,
             ("bugs", "wonketywoopwoopwoopwoopwoopwoopwoopwoopwoo"),
             0,
@@ -268,15 +269,29 @@ def test_client_list(monkeypatch):
         pytest.param(
             "elmer",
             (":typing:", "9ccb489abe5c900316fd57482b23c38bb99c727900"),
+            "https://vewwyquiet.jobs",
             False,
             ("elmer", "9ccb489abe5c900316fd57482b23c38bb99c727900"),
             0,
             id="eventually_happy",
         ),
-        pytest.param("wylie", ("femmeroadrunner???",), True, (), 86, id="interrupted",),
+        pytest.param(
+            "wylie",
+            ("femmeroadrunner???",),
+            "https://shop.acme.com",
+            True,
+            (),
+            86,
+            id="interrupted",
+        ),
+        pytest.param(
+            "speedy", ("I am more than a stereotype",), None, False, (), 86, id="no_url"
+        ),
     ],
 )
-def test_client_login(monkeypatch, capsys, user, secrets, raises, written, expected):
+def test_client_login(
+    monkeypatch, capsys, user, secrets, url, raises, written, expected
+):
     state = {"secret_count": 0}
 
     def fake_write_credentials(user, secret):
@@ -295,14 +310,16 @@ def test_client_login(monkeypatch, capsys, user, secrets, raises, written, expec
     monkeypatch.setattr(fuzzbucket_client.webbrowser, "open", lambda u: None)
     monkeypatch.setattr(fuzzbucket_client.getpass, "getpass", fake_getpass)
     monkeypatch.setattr(client, "_write_credentials", fake_write_credentials)
+    client._env["FUZZBUCKET_URL"] = url
 
     ret = fuzzbucket_client.main(["fuzzbucket-client", "login", user])
     assert ret == expected
     captured = capsys.readouterr()
-    assert "Attempting to open the following URL" in captured.out
+    if url is not None:
+        assert "Attempting to open the following URL" in captured.out
     if len(secrets) > 1:
         assert "Invalid secret provided" in captured.out
-    if raises:
+    if raises or url is None:
         return
     assert (state.get("user"), state.get("secret")) == written
     assert "Login successful" in captured.out
