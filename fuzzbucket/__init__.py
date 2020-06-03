@@ -10,9 +10,15 @@ from flask.json import JSONEncoder
 from .tags import Tags
 
 ROOT_LOG = logging.getLogger()
-LOG_LEVEL = getattr(logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper())
 log = ROOT_LOG.getChild("fuzzbucket")
+
+LOG_LEVEL = getattr(logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper())
 log.setLevel(LOG_LEVEL)
+
+ROOT_LOG_LEVEL = getattr(
+    logging, os.environ.get("FUZZBUCKET_ROOT_LOG_LEVEL", "info").upper()
+)
+ROOT_LOG.setLevel(ROOT_LOG_LEVEL)
 
 
 NoneString = typing.Optional[str]
