@@ -4,6 +4,7 @@ provider:
   name: aws
   runtime: python3.8
   memorySize: ${self:custom.memorySize, 128}
+  timeout: ${self:custom.timeout, 6}
   apiKeys: ${self:custom.apiKeys}
   region: ${self:custom.awsRegion, 'us-east-1'}
   environment:
@@ -17,6 +18,7 @@ provider:
     FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret}
     FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
     FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
+    FUZZBUCKET_ROOT_LOG_LEVEL: ${self:custom.rootLogLevel, 'info'}
     FUZZBUCKET_USERS_TABLE_NAME: ${self:custom.usersTableName, 'fuzzbucket-${opt:stage, 'dev'}-users'}
   iamRoleStatements:
   - Effect: Allow

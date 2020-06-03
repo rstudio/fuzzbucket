@@ -164,6 +164,7 @@ def auth_complete():
 def list_boxes():
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(f"handling list_boxes for user={request.remote_user!r}")
     return (
         jsonify(
             boxes=list_user_boxes(
@@ -179,6 +180,7 @@ def list_boxes():
 def create_box():
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(f"handling create_box for user={request.remote_user!r}")
     if not request.is_json:
         return jsonify(error="request is not json"), 400
     ami = request.json.get("ami")
@@ -277,6 +279,10 @@ def create_box():
 def reboot_box(instance_id):
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(
+        f"handling reboot_box for user={request.remote_user!r} "
+        + f"instance_id={instance_id!r}"
+    )
     if instance_id not in [
         b.instance_id
         for b in list_user_boxes(
@@ -292,6 +298,10 @@ def reboot_box(instance_id):
 def delete_box(instance_id):
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(
+        f"handling delete_box for user={request.remote_user!r} "
+        + f"instance_id={instance_id!r}"
+    )
     if instance_id not in [
         b.instance_id
         for b in list_user_boxes(
@@ -307,6 +317,7 @@ def delete_box(instance_id):
 def list_image_aliases():
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(f"handling list_image_aliases for user={request.remote_user!r}")
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
     image_aliases = {}
     for item in table.scan().get("Items", []):
@@ -318,6 +329,7 @@ def list_image_aliases():
 def create_image_alias():
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(f"handling create_image_alias for user={request.remote_user!r}")
     if not request.is_json:
         return jsonify(error="request is not json"), 400
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
@@ -342,6 +354,9 @@ def create_image_alias():
 def delete_image_alias(alias):
     if not is_fully_authd():
         return auth_403_github()
+    log.debug(
+        f"handling delete_image_alias for user={request.remote_user!r} alias={alias!r}"
+    )
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
     existing_alias = table.get_item(Key=dict(alias=alias))
     if existing_alias.get("Item") in (None, {}):
