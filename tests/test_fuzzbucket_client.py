@@ -238,7 +238,14 @@ def test_client_failing_func(monkeypatch, capsys):
     assert ret == 86
 
 
-def test_client_list(monkeypatch):
+@pytest.mark.parametrize(
+    ("args",),
+    [
+        pytest.param(("list",), id="empty"),
+        pytest.param(("-j", "list"), id="output_json"),
+    ],
+)
+def test_client_list(monkeypatch, args):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
     monkeypatch.setattr(
@@ -250,7 +257,7 @@ def test_client_list(monkeypatch):
             )
         ),
     )
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "list"])
+    ret = fuzzbucket_client.main(["fuzzbucket-client"] + list(args))
     assert ret == 0
 
 
@@ -589,24 +596,41 @@ def test_client_scp(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("api_response", "stdout_match", "expected"),
+    ("api_response", "data_format", "stdout_match", "expected"),
     [
         pytest.param(
             {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
+            fuzzbucket_client._DataFormats.INI,
             "(chonk = ami-fafababacaca|wee = ami-0a0a0a0a0a)",
             True,
             id="ok",
         ),
-        pytest.param({"error": "oh no"}, None, False, id="err",),
+        pytest.param(
+            {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
+            fuzzbucket_client._DataFormats.JSON,
+            '("chonk": "ami-fafababacaca"|"wee": "ami-0a0a0a0a0a")',
+            True,
+            id="ok",
+        ),
+        pytest.param(
+            {"error": "oh no"},
+            fuzzbucket_client._DataFormats.INI,
+            None,
+            False,
+            id="err",
+        ),
     ],
 )
-def test_client_list_aliases(monkeypatch, capsys, api_response, stdout_match, expected):
+def test_client_list_aliases(
+    monkeypatch, capsys, api_response, data_format, stdout_match, expected
+):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
     )
+    client.data_format = data_format
 
     assert client.list_aliases("known", "unknown") == expected
     if stdout_match is not None:
@@ -615,24 +639,41 @@ def test_client_list_aliases(monkeypatch, capsys, api_response, stdout_match, ex
 
 
 @pytest.mark.parametrize(
-    ("api_response", "stdout_match", "expected"),
+    ("api_response", "data_format", "stdout_match", "expected"),
     [
         pytest.param(
             {"image_aliases": {"blep": "ami-babacacafafa"}},
+            fuzzbucket_client._DataFormats.INI,
             "blep = ami-babacacafafa",
             True,
             id="ok",
         ),
-        pytest.param({"error": "oh no"}, None, False, id="err"),
+        pytest.param(
+            {"image_aliases": {"blep": "ami-babacacafafa"}},
+            fuzzbucket_client._DataFormats.JSON,
+            '"blep": "ami-babacacafafa"',
+            True,
+            id="ok",
+        ),
+        pytest.param(
+            {"error": "oh no"},
+            fuzzbucket_client._DataFormats.INI,
+            None,
+            False,
+            id="err",
+        ),
     ],
 )
-def test_client_create_alias(monkeypatch, capsys, api_response, stdout_match, expected):
+def test_client_create_alias(
+    monkeypatch, capsys, api_response, data_format, stdout_match, expected
+):
     client = fuzzbucket_client.Client()
     monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
     )
+    client.data_format = data_format
 
     assert (
         client.create_alias(
