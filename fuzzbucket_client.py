@@ -12,6 +12,7 @@ import argparse
 import configparser
 import contextlib
 import datetime
+import enum
 import fnmatch
 import functools
 import getpass
@@ -43,9 +44,9 @@ def default_client() -> "Client":
     return Client()
 
 
-def config_logging(level: int = logging.INFO):
+def config_logging(level: int = logging.INFO, stream: typing.TextIO = sys.stderr):
     logging.basicConfig(
-        stream=sys.stdout,
+        stream=stream,
         style="{",
         format="# {name}:{levelname}:{asctime}:: {message}",
         datefmt="%Y-%m-%dT%H%M%S",
@@ -102,6 +103,13 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     )
     parser.add_argument(
         "--version", action="store_true", help="print the version and exit"
+    )
+    parser.add_argument(
+        "-j",
+        "--output-json",
+        action="store_true",
+        default=False,
+        help="format all output as json",
     )
     parser.add_argument(
         "-D",
@@ -239,6 +247,8 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     if known_args.version:
         print(f"fuzzbucket-client {full_version()}")
         return 0
+    if known_args.output_json:
+        client.data_format = _DataFormats.JSON
     if not hasattr(known_args, "func"):
         log.debug(f"no subcommand func defined in namespace={known_args!r}")
         parser.print_help()
@@ -312,6 +322,11 @@ class CredentialsError(ValueError):
         )
 
 
+class _DataFormats(enum.Enum):
+    INI = "ini"
+    JSON = "json"
+
+
 class Client:
     default_instance_type = "t3.small"
     default_image_alias = "ubuntu18"
@@ -330,11 +345,14 @@ class Client:
         "ubuntu": "ubuntu",
     }
 
-    def __init__(self, env=None):
+    def __init__(
+        self, env: typing.Optional[typing.Dict[str, str]] = None,
+    ):
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
         self._cached_credentials = None
         self._patched_credentials_file = None
+        self.data_format = _DataFormats.INI
 
     def _setup(self):
         if self._url is None:
@@ -385,7 +403,7 @@ class Client:
         log.debug(f"fetching boxes for user={self._user!r}")
         boxes = self._list_boxes()
         log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
-        print(self._boxes_to_ini(boxes), end="")
+        print(self._format_boxes(boxes), end="")
         return True
 
     @_command
@@ -425,7 +443,7 @@ class Client:
             else:
                 raise exc
 
-        print(self._boxes_to_ini(raw_response["boxes"]), end="")
+        print(self._format_boxes(raw_response["boxes"]), end="")
         return True
 
     @_command
@@ -442,7 +460,7 @@ class Client:
             with self._urlopen(req) as response:
                 _ = response.read()
             log.info(f"deleted box for user={self._user!r} name={matching_box['name']}")
-            print(self._boxes_to_ini([matching_box]), end="")
+            print(self._format_boxes([matching_box]), end="")
         return True
 
     @_command
@@ -458,7 +476,7 @@ class Client:
         with self._urlopen(req) as response:
             _ = response.read()
         log.info(f"rebooted box for user={self._user!r} box={matching_box['name']!r}")
-        print(self._boxes_to_ini([matching_box]), end="")
+        print(self._format_boxes([matching_box]), end="")
         return True
 
     @_command
@@ -472,7 +490,7 @@ class Client:
                 f"sshing into matching_box={matching_box['name']!r} "
                 + f"ssh_command={ssh_command!r}"
             )
-            print(self._boxes_to_ini([matching_box]), end="")
+            print(self._format_boxes([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
         os.execvp("ssh", ssh_command)
@@ -488,7 +506,7 @@ class Client:
             f"scping with matching_box={matching_box['name']!r} "
             + f"scp_command={scp_command!r}"
         )
-        print(self._boxes_to_ini([matching_box]), end="")
+        print(self._format_boxes([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
         os.execvp("scp", scp_command)
@@ -503,7 +521,7 @@ class Client:
         if "image_aliases" not in raw_response:
             log.error("failed to fetch image aliases")
             return False
-        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
+        print(self._format_image_aliases(raw_response["image_aliases"]), end="")
         return True
 
     @_command
@@ -526,7 +544,7 @@ class Client:
             log.info(
                 f"created alias for user={self._user!r} alias={key} " + f"ami={value}"
             )
-        print(self._image_aliases_to_ini(raw_response["image_aliases"]), end="")
+        print(self._format_image_aliases(raw_response["image_aliases"]), end="")
         return True
 
     @_command
@@ -703,8 +721,10 @@ class Client:
             unknown_args = ["-o", "UserKnownHostsFile=/dev/null"] + unknown_args
         return unknown_args
 
-    @staticmethod
-    def _boxes_to_ini(boxes):
+    def _format_boxes(self, boxes):
+        return getattr(self, f"_format_boxes_{self.data_format.value}")(boxes)
+
+    def _format_boxes_ini(self, boxes):
         boxes_ini = configparser.ConfigParser()
         for box in boxes:
             boxes_ini.add_section(box["name"])
@@ -719,8 +739,15 @@ class Client:
         buf.seek(0)
         return buf.read()
 
-    @staticmethod
-    def _image_aliases_to_ini(image_aliases):
+    def _format_boxes_json(self, boxes):
+        return json.dumps({"boxes": {box["name"]: box for box in boxes}}, indent=2)
+
+    def _format_image_aliases(self, image_aliases):
+        return getattr(self, f"_format_image_aliases_{self.data_format.value}")(
+            image_aliases
+        )
+
+    def _format_image_aliases_ini(self, image_aliases):
         image_aliases_ini = configparser.ConfigParser()
         image_aliases_ini.add_section("image_aliases")
         for alias, ami in sorted(image_aliases.items()):
@@ -729,6 +756,9 @@ class Client:
         image_aliases_ini.write(buf)
         buf.seek(0)
         return buf.read()
+
+    def _format_image_aliases_json(self, image_aliases):
+        return json.dumps({"image_aliases": dict(image_aliases)}, indent=2)
 
     @classmethod
     def _guess_ssh_user(cls, image_alias, default=default_ssh_user):
