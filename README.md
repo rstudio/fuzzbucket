@@ -152,3 +152,12 @@ make deploy STAGE=prod REGION=us-west-2
 
 These commands are expected to be re-run as needed, such as after modifying the
 custom YAML described in the prerequisites section above.
+
+
+## changelog
+
+Please see the [CHANGELOG](./CHANGELOG.md).
+
+## license
+
+Please see the [LICENSE](./LICENSE.md).
