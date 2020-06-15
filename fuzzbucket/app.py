@@ -180,7 +180,7 @@ def list_boxes():
 def create_box():
     if not is_fully_authd():
         return auth_403_github()
-    log.debug(f"handling create_box for user={request.remote_user!r}")
+    log.debug(f"handling create_box for user={session['user']}")
     if not request.is_json:
         return jsonify(error="request is not json"), 400
     ami = request.json.get("ami")
@@ -192,37 +192,39 @@ def create_box():
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
-    existing_keys = get_ec2_client().describe_key_pairs(
-        Filters=[dict(Name="key-name", Values=[request.remote_user])]
-    )
-    if len(existing_keys["KeyPairs"]) == 0:
+    username = None
+    matching_keys = {
+        k["KeyName"]
+        for k in get_ec2_client().describe_key_pairs().get("KeyPairs", [])
+        if k["KeyName"].lower() == str(session["user"]).lower()
+    }
+    if len(matching_keys) == 0:
         key_material = _fetch_first_github_key(session["user"])
+        username = session["user"]
         if key_material == "":
             return (
-                jsonify(
-                    error=f"could not fetch public key for user={request.remote_user}"
-                ),
+                jsonify(error=f"could not fetch public key for user={username}"),
                 400,
             )
 
         get_ec2_client().import_key_pair(
-            KeyName=request.remote_user, PublicKeyMaterial=key_material.encode("utf-8")
+            KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
-        log.debug(f"imported public key for user={request.remote_user}")
+        log.debug(f"imported public key for user={username}")
+    else:
+        username = matching_keys.pop()
 
     name = request.json.get("name")
     if str(name or "").strip() == "":
-        name = f"fuzzbucket-{request.remote_user}-{image_alias}"
+        name = f"fuzzbucket-{username}-{image_alias}"
 
     ttl = request.json.get("ttl")
     if str(ttl or "").strip() == "":
         ttl = str(3600 * 4)
 
-    for instance in list_user_boxes(
-        get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
-    ):
+    for instance in list_user_boxes(get_ec2_client(), username, os.getenv("CF_VPC")):
         if instance.name == name:
-            return jsonify(boxes=[instance], you=request.remote_user), 409
+            return jsonify(boxes=[instance], you=username), 409
 
     network_interface = dict(
         DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
@@ -249,7 +251,7 @@ def create_box():
         InstanceType=request.json.get(
             "instance_type", os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
         ),
-        KeyName=request.remote_user,
+        KeyName=username,
         MinCount=1,
         MaxCount=1,
         NetworkInterfaces=[network_interface],
@@ -261,7 +263,7 @@ def create_box():
                     dict(Key=Tags.created_at.value, Value=str(time.time())),
                     dict(Key=Tags.image_alias.value, Value=image_alias),
                     dict(Key=Tags.ttl.value, Value=ttl),
-                    dict(Key=Tags.user.value, Value=request.remote_user),
+                    dict(Key=Tags.user.value, Value=username),
                 ],
             )
         ],
@@ -269,7 +271,7 @@ def create_box():
     return (
         jsonify(
             boxes=[Box.from_ec2_dict(inst) for inst in response.get("Instances", [])],
-            you=request.remote_user,
+            you=username,
         ),
         201,
     )
