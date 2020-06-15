@@ -6,7 +6,7 @@ STAGE ?= dev
 SHELL := /bin/bash
 
 FUZZBUCKET_VERSION := $(shell pipenv run python setup.py --version)
-FUZZBUCKET_RELEASE_ARTIFACT := dist/fuzzbucket-client-$(FUZZBUCKET_VERSION)-py3-none-any.whl
+FUZZBUCKET_RELEASE_ARTIFACT := dist/fuzzbucket_client-$(FUZZBUCKET_VERSION)-py3-none-any.whl
 FUZZBUCKET_S3_PREFIX :=	s3://rstudio-connect-downloads/connect/fuzzbucket
 
 .PHONY: help
