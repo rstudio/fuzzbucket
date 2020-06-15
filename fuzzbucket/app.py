@@ -193,11 +193,12 @@ def create_box():
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
     username = None
-    for k in get_ec2_client().describe_key_pairs().get("KeyPairs", []):
-        if k["KeyName"].lower() == str(session["user"]).lower():
-            username = k["KeyName"]
-            break
-    if username is None:
+    matching_keys = {
+        k["KeyName"]
+        for k in get_ec2_client().describe_key_pairs().get("KeyPairs", [])
+        if k["KeyName"].lower() == str(session["user"]).lower()
+    }
+    if len(matching_keys) == 0:
         key_material = _fetch_first_github_key(session["user"])
         username = session["user"]
         if key_material == "":
@@ -210,6 +211,8 @@ def create_box():
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
         log.debug(f"imported public key for user={username}")
+    else:
+        username = matching_keys.pop()
 
     name = request.json.get("name")
     if str(name or "").strip() == "":
