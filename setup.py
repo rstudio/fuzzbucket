@@ -2,7 +2,6 @@ from __future__ import print_function
 
 import distutils.cmd
 import distutils.log
-import os
 import re
 import sys
 import typing
