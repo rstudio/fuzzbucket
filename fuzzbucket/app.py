@@ -81,7 +81,7 @@ def set_user():
         log.debug("github login matches session user")
         return
     log.warning(f"mismatched github_login={github_login!r} user={session['user']!r}")
-    del github.token
+    github.token = None
     del session["user"]
 
 
@@ -129,7 +129,7 @@ def auth_complete():
 
     user_orgs = {o["login"] for o in raw_user_orgs}
     if len(allowed_orgs.intersection(user_orgs)) == 0:
-        del github.token
+        github.token = None
         del session["user"]
         return (
             render_template(
