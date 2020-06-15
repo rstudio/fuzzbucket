@@ -192,10 +192,12 @@ def create_box():
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
-    existing_keys = get_ec2_client().describe_key_pairs(
-        Filters=[dict(Name="key-name", Values=[request.remote_user])]
-    )
-    if len(existing_keys["KeyPairs"]) == 0:
+    existing_keys = {
+        k["KeyName"]
+        for k in get_ec2_client().describe_key_pairs().get("KeyPairs", [])
+        if k["KeyName"].lower() == str(request.remote_user).lower()
+    }
+    if len(existing_keys) == 0:
         key_material = _fetch_first_github_key(session["user"])
         if key_material == "":
             return (

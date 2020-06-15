@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - server: unset `github.token` with `None` instead of trying to `del`
+- server: compare key pair name case-insensitively to avoid collisions
 
 ### Security
 
