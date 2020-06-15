@@ -31,6 +31,35 @@ jobs:
     - run: pipenv check
     - run: make lint
     - run: make test
+    - run: make release-artifact
+    - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
+    - run: make is-releasable
+      id: check_releasable
+    - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.create_release_artifact.outputs.tarball }}
+        asset_name: ${{ steps.create_release_artifact.outputs.tarball_basename }}
+        asset_content_type: application/x-gtar
+    - uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET }}
+        aws-region: us-east-1
+    - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
+      run: make sync-to-s3
     - uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}

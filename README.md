@@ -32,8 +32,8 @@ When working with a deployed `fuzzbucket` API, the `fuzzbucket-client` may be
 used to do all the things:
 
 ```bash
-# install fuzzbucket-client via setup.py with python3.6+
-python setup.py install
+# install fuzzbucket-client via pip with python3.6+
+pip install https://cdn.rstudio.com/connect/fuzzbucket/0.4.0/fuzzbucket-client-0.4.0.tar.gz
 ```
 
 ```bash
