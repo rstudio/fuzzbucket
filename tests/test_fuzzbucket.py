@@ -11,7 +11,9 @@ import boto3
 import botocore.exceptions
 import pytest
 
+from flask import Response
 from moto import mock_ec2, mock_dynamodb2
+from werkzeug.exceptions import InternalServerError
 
 import fuzzbucket
 import fuzzbucket.app
@@ -235,19 +237,27 @@ def test_list_vpc_boxes(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("exc", "err_match"),
+    ("exc", "check_html", "err_match"),
     [
         pytest.param(
             WrappedError(ValueError("not enough pylons")),
+            True,
             "^NOPE=.*not enough pylons",
             id="wrapped",
         ),
         pytest.param(
-            ValueError("whups"), "^Unhandled exception.+whups", id="unhandled",
+            InternalServerError(
+                "spline reticulation overload",
+                response=Response(content_type="application/json"),
+            ),
+            False,
+            ".*spline reticulation overload",
+            id="wrapped_with_response",
         ),
+        pytest.param(ValueError("whups"), True, "^NOPE.*whups", id="unhandled"),
     ],
 )
-def test_handle_500(monkeypatch, exc, err_match):
+def test_handle_500(monkeypatch, exc, check_html, err_match):
     state = {}
 
     def fake_render_template(template_name, **kwargs):
@@ -255,10 +265,18 @@ def test_handle_500(monkeypatch, exc, err_match):
         return "RENDERED"
 
     monkeypatch.setattr(fuzzbucket.app, "render_template", fake_render_template)
-    assert fuzzbucket.app.handle_500(exc) == ("RENDERED", 500)
-    assert "kwargs" in state
-    assert "error" in state["kwargs"]
-    assert re.search(err_match, state["kwargs"]["error"]) is not None
+
+    if check_html:
+        assert fuzzbucket.app.handle_500(exc) == ("RENDERED", 500)
+        assert "kwargs" in state
+        assert "error" in state["kwargs"]
+        assert re.search(err_match, state["kwargs"]["error"]) is not None
+    else:
+        body, status = fuzzbucket.app.handle_500(exc)
+        assert status == 500
+        body_json = json.loads(body)
+        assert "error" in body_json
+        assert re.search(err_match, body_json["error"]) is not None
 
 
 @pytest.mark.parametrize(
@@ -464,7 +482,7 @@ def test__login(monkeypatch):
             "frobs globs",
             {"message": "now you have gone and also done it"},
             False,
-            TemplateResponse("error.html", 500),
+            TemplateResponse("error.html", 503),
             id="github_err",
         ),
         pytest.param(

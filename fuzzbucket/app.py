@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -40,19 +41,17 @@ app.json_encoder = AsJSONEncoder
 def handle_500(exc):
     log.debug(f"handling internal server error={exc!r}")
     if getattr(exc, "original_exception", None) is not None:
-        return (
-            render_template(
-                "error.html",
-                branding=os.getenv("FUZZBUCKET_BRANDING"),
-                error=f"NOPE={exc.original_exception}",
-            ),
-            500,
-        )
+        exc = exc.original_exception
+
+    if hasattr(exc, "get_response"):
+        response = exc.get_response()
+        if response is not None and response.is_json:
+            return json.dumps(dict(error=str(exc))), 500
     return (
         render_template(
             "error.html",
             branding=os.getenv("FUZZBUCKET_BRANDING"),
-            error=f"Unhandled exception={exc}",
+            error=f"NOPE={exc}",
         ),
         500,
     )
@@ -124,7 +123,7 @@ def auth_complete():
                 branding=os.getenv("FUZZBUCKET_BRANDING"),
                 error=f"GitHub API error: {raw_user_orgs['message']}",
             ),
-            500,
+            503,
         )
 
     user_orgs = {o["login"] for o in raw_user_orgs}
