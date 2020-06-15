@@ -7,6 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
+    - run: git fetch --prune --unshallow
     - uses: actions/setup-python@master
       with:
         python-version: 3.8.x
@@ -34,6 +35,8 @@ jobs:
     - run: make release-artifact
       id: create_release_artifact
     - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
+    - run: fuzzbucket-client --version
+    - run: fuzzbucket-client --help
     - run: make is-releasable
       id: check_releasable
     - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
@@ -53,7 +56,7 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.create_release_artifact.outputs.tarball }}
         asset_name: ${{ steps.create_release_artifact.outputs.tarball_basename }}
-        asset_content_type: application/x-gtar
+        asset_content_type: application/x-wheel+zip
     - uses: aws-actions/configure-aws-credentials@v1
       with:
         aws-access-key-id: ${{ secrets.AWS_ID }}
