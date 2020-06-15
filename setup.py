@@ -31,8 +31,6 @@ class IsReleasableCommand(distutils.cmd.Command):
             f"Version {value} is {'' if releasable else 'NOT '}releasable",
             level=distutils.log.INFO,
         )
-        if os.getenv("GITHUB_ACTIONS") != "true":
-            return
         print(f"::set-output name=releasable::{'true' if releasable else 'false'}")
 
 
