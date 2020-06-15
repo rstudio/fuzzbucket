@@ -35,8 +35,8 @@ jobs:
     - run: make release-artifact
       id: create_release_artifact
     - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
-    - run: fuzzbucket-client --version
-    - run: fuzzbucket-client --help
+    - run: pipenv run fuzzbucket-client --version
+    - run: pipenv run fuzzbucket-client --help
     - run: make is-releasable
       id: check_releasable
     - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
