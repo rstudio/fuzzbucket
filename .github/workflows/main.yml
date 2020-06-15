@@ -32,6 +32,7 @@ jobs:
     - run: make lint
     - run: make test
     - run: make release-artifact
+      id: create_release_artifact
     - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
     - run: make is-releasable
       id: check_releasable
