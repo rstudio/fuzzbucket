@@ -10,13 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 ### Deprecated
 ### Removed
+### Fixed
+### Security
+
+## [0.4.1] - 2020-06-15
 
 ### Fixed
 - server: unset `github.token` with `None` instead of trying to `del`
 - server: compare key pair name case-insensitively to avoid collisions
 - server: handle 500 errors with appropriate content type
-
-### Security
 
 ## [0.4.0] - 2020-06-09
 
@@ -82,7 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.4.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.4.1...HEAD
+[0.4.1]: https://github.com/rstudio/fuzzbucket/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/rstudio/fuzzbucket/compare/0.3.3...0.4.0
 [0.3.3]: https://github.com/rstudio/fuzzbucket/compare/0.3.2...0.3.3
 [0.3.2]: https://github.com/rstudio/fuzzbucket/compare/0.3.1...0.3.2
