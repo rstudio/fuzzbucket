@@ -3,6 +3,12 @@ FUNCTION ?= api
 REGION ?= us-east-1
 STAGE ?= dev
 
+SHELL := /bin/bash
+
+FUZZBUCKET_VERSION := $(shell pipenv run python setup.py --version)
+FUZZBUCKET_RELEASE_ARTIFACT := dist/fuzzbucket_client-$(FUZZBUCKET_VERSION)-py3-none-any.whl
+FUZZBUCKET_S3_PREFIX := s3://rstudio-connect-downloads/connect/fuzzbucket
+
 .PHONY: help
 help:
 	@echo "Choose your own adventure:"
@@ -52,3 +58,22 @@ logs:
 .PHONY: serve-htmlcov
 serve-htmlcov:
 	pushd ./htmlcov && python -m http.server
+
+.PHONY: release-artifact
+release-artifact: $(FUZZBUCKET_RELEASE_ARTIFACT)
+	@echo "::set-output name=tarball::$(FUZZBUCKET_RELEASE_ARTIFACT)"
+	@echo "::set-output name=tarball_basename::$(notdir $(FUZZBUCKET_RELEASE_ARTIFACT))"
+
+
+$(FUZZBUCKET_RELEASE_ARTIFACT): fuzzbucket_client.py setup.py
+	pipenv run python setup.py bdist_wheel
+
+.PHONY: is-releasable
+is-releasable:
+	pipenv run python setup.py is_releasable
+
+.PHONY: sync-to-s3
+sync-to-s3:
+	aws s3 cp --acl bucket-owner-full-control \
+		$(FUZZBUCKET_RELEASE_ARTIFACT) \
+		$(FUZZBUCKET_S3_PREFIX)/$(FUZZBUCKET_VERSION)/$(notdir $(FUZZBUCKET_RELEASE_ARTIFACT))
