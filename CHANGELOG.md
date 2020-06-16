@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.4.2] - 2020-06-15
+
+### Fixed
+- add missing step id for creating release so that release uploads work
+
 ## [0.4.1] - 2020-06-15
 
 ### Fixed
@@ -84,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.4.1...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.4.2...HEAD
+[0.4.2]: https://github.com/rstudio/fuzzbucket/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/rstudio/fuzzbucket/compare/0.4.0...0.4.1
 [0.4.0]: https://github.com/rstudio/fuzzbucket/compare/0.3.3...0.4.0
 [0.3.3]: https://github.com/rstudio/fuzzbucket/compare/0.3.2...0.3.3
