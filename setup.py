@@ -39,19 +39,7 @@ def main():
         print(sys.version)
         return 86
 
-    setup(
-        author="RStudio Connect Engineers",
-        author_email="rsc-dev+fuzzbucket@rstudio.com",
-        cmdclass={"is_releasable": IsReleasableCommand},
-        entry_points={
-            "console_scripts": ["fuzzbucket-client = fuzzbucket_client.__main__:main"]
-        },
-        license="MIT",
-        name="fuzzbucket-client",
-        python_requires=">3.5,<4",
-        url="https://github.com/rstudio/fuzzbucket",
-        zip_safe=True,
-    )
+    setup(cmdclass=dict(is_releasable=IsReleasableCommand))
     return 0
 
 
