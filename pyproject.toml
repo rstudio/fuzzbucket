@@ -1,2 +1,8 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+
 [tool.black]
 exclude = '/(\.venv|node_modules)/'
+
+[tool.setuptools_scm]
+write_to = "fuzzbucket_client/__version__.py"

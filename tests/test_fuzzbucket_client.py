@@ -6,13 +6,11 @@ import logging
 import os
 import random
 import re
-import subprocess
 import urllib.request
 
-import pkg_resources
 import pytest
 
-import fuzzbucket_client
+import fuzzbucket_client.__main__
 
 
 @pytest.fixture(autouse=True)
@@ -27,45 +25,11 @@ def config_setup(tmpdir, monkeypatch):
 
 
 def test_default_client():
-    assert fuzzbucket_client.default_client() is not None
-
-
-@pytest.mark.parametrize(
-    ("err", "git_err", "pkg_err", "expected"),
-    [
-        pytest.param(False, False, False, "stub+version.number.ok", id="from_git"),
-        pytest.param(False, True, False, "stub+version.number.ok", id="from_pkg"),
-        pytest.param(False, True, True, fuzzbucket_client.__version__, id="from_var1"),
-        pytest.param(True, True, True, fuzzbucket_client.__version__, id="from_var2"),
-    ],
-)
-def test_full_version(monkeypatch, err, git_err, pkg_err, expected):
-    def fake_check_output(*_, **__):
-        if err:
-            raise ValueError("boom")
-        if git_err:
-            raise subprocess.CalledProcessError(86, ["ugh"])
-        return "stub-version-number-ok\n".encode("utf-8")
-
-    class FakeDist:
-        def __init__(self, dist):
-            self.dist = dist
-            self.version = "stub+version.number.ok"
-
-    def fake_get_distribution(dist):
-        if pkg_err:
-            raise ValueError("ack")
-        return FakeDist(dist)
-
-    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
-    monkeypatch.setattr(pkg_resources, "get_distribution", fake_get_distribution)
-    monkeypatch.setattr(fuzzbucket_client, "log_level", lambda: logging.DEBUG)
-    fuzzbucket_client.full_version.cache_clear()
-    assert fuzzbucket_client.full_version() == expected
+    assert fuzzbucket_client.__main__.default_client() is not None
 
 
 def test_client_setup():
-    client = fuzzbucket_client.Client()
+    client = fuzzbucket_client.__main__.Client()
     client._setup()
     assert client is not None
 
@@ -176,7 +140,7 @@ def test_command_decorator(
     class FakeClient:
         def _setup(self):
             if "setup_auth" in errors:
-                raise fuzzbucket_client.CredentialsError(
+                raise fuzzbucket_client.__main__.CredentialsError(
                     "http://nope", "/some/hecking/place"
                 )
             if "setup" in errors:
@@ -199,9 +163,9 @@ def test_command_decorator(
         return {"error": "http error"}
 
     caplog.set_level(log_level)
-    monkeypatch.setattr(fuzzbucket_client, "log_level", lambda: log_level)
+    monkeypatch.setattr(fuzzbucket_client.__main__, "log_level", lambda: log_level)
     monkeypatch.setattr(json, "load", fake_load)
-    decorated = fuzzbucket_client._command(fake_method)
+    decorated = fuzzbucket_client.__main__._command(fake_method)
     assert decorated(FakeClient(), "known", "unknown") == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
@@ -211,14 +175,14 @@ def test_command_decorator(
 
 
 def test_client_version(capsys):
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "--version"])
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "--version"])
     assert ret == 0
     captured = capsys.readouterr()
     assert re.match("fuzzbucket-client .+", captured.out) is not None
 
 
 def test_client_no_func(capsys):
-    ret = fuzzbucket_client.main(["fuzzbucket-client"])
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"])
     assert ret == 2
     captured = capsys.readouterr()
     for match in (
@@ -231,10 +195,10 @@ def test_client_no_func(capsys):
 
 
 def test_client_failing_func(monkeypatch, capsys):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
     monkeypatch.setattr(client, "list", lambda _, __: False)
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "list"])
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "list"])
     assert ret == 86
 
 
@@ -246,8 +210,8 @@ def test_client_failing_func(monkeypatch, capsys):
     ],
 )
 def test_client_list(monkeypatch, args):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
@@ -257,7 +221,7 @@ def test_client_list(monkeypatch, args):
             )
         ),
     )
-    ret = fuzzbucket_client.main(["fuzzbucket-client"] + list(args))
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"] + list(args))
     assert ret == 0
 
 
@@ -312,14 +276,14 @@ def test_client_login(
             raise KeyboardInterrupt("control this")
         return ret
 
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
-    monkeypatch.setattr(fuzzbucket_client.webbrowser, "open", lambda u: None)
-    monkeypatch.setattr(fuzzbucket_client.getpass, "getpass", fake_getpass)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+    monkeypatch.setattr(fuzzbucket_client.__main__.webbrowser, "open", lambda u: None)
+    monkeypatch.setattr(fuzzbucket_client.__main__.getpass, "getpass", fake_getpass)
     monkeypatch.setattr(client, "_write_credentials", fake_write_credentials)
     client._env["FUZZBUCKET_URL"] = url
 
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "login", user])
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "login", user])
     assert ret == expected
     captured = capsys.readouterr()
     if url is not None:
@@ -402,14 +366,16 @@ def test_client_login(
 def test_client_create(
     monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
 ):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
         gen_fake_urlopen(io.StringIO(json.dumps(api_response)), http_exc=http_exc),
     )
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "create"] + list(cmd_args))
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "create"] + list(cmd_args)
+    )
     assert ret == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
@@ -453,8 +419,8 @@ def test_client_create(
 def test_client_delete(
     monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
 ):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client,
@@ -465,7 +431,9 @@ def test_client_delete(
             empty_methods=("DELETE",),
         ),
     )
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "delete"] + list(cmd_args))
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "delete"] + list(cmd_args)
+    )
     assert ret == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text, re.MULTILINE)
@@ -512,8 +480,8 @@ def test_client_delete(
 def test_client_reboot(
     monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
 ):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client,
@@ -524,15 +492,17 @@ def test_client_reboot(
             empty_methods=("POST",),
         ),
     )
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "reboot"] + list(cmd_args))
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "reboot"] + list(cmd_args)
+    )
     assert ret == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text, re.MULTILINE)
 
 
 def test_client_ssh(monkeypatch):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     def fake_execvp(file, args):
         assert file == "ssh"
@@ -555,13 +525,15 @@ def test_client_ssh(monkeypatch):
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
-    ret = fuzzbucket_client.main(["fuzzbucket-client", "ssh", "koolthing", "ls", "-la"])
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "ssh", "koolthing", "ls", "-la"]
+    )
     assert ret == 0
 
 
 def test_client_scp(monkeypatch):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     def fake_execvp(file, args):
         assert file == "scp"
@@ -582,7 +554,7 @@ def test_client_scp(monkeypatch):
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
-    ret = fuzzbucket_client.main(
+    ret = fuzzbucket_client.__main__.main(
         [
             "fuzzbucket-client",
             "scp",
@@ -600,21 +572,21 @@ def test_client_scp(monkeypatch):
     [
         pytest.param(
             {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
-            fuzzbucket_client._DataFormats.INI,
+            fuzzbucket_client.__main__._DataFormats.INI,
             "(chonk = ami-fafababacaca|wee = ami-0a0a0a0a0a)",
             True,
             id="ok",
         ),
         pytest.param(
             {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
-            fuzzbucket_client._DataFormats.JSON,
+            fuzzbucket_client.__main__._DataFormats.JSON,
             '("chonk": "ami-fafababacaca"|"wee": "ami-0a0a0a0a0a")',
             True,
             id="ok",
         ),
         pytest.param(
             {"error": "oh no"},
-            fuzzbucket_client._DataFormats.INI,
+            fuzzbucket_client.__main__._DataFormats.INI,
             None,
             False,
             id="err",
@@ -624,8 +596,8 @@ def test_client_scp(monkeypatch):
 def test_client_list_aliases(
     monkeypatch, capsys, api_response, data_format, stdout_match, expected
 ):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
@@ -643,21 +615,21 @@ def test_client_list_aliases(
     [
         pytest.param(
             {"image_aliases": {"blep": "ami-babacacafafa"}},
-            fuzzbucket_client._DataFormats.INI,
+            fuzzbucket_client.__main__._DataFormats.INI,
             "blep = ami-babacacafafa",
             True,
             id="ok",
         ),
         pytest.param(
             {"image_aliases": {"blep": "ami-babacacafafa"}},
-            fuzzbucket_client._DataFormats.JSON,
+            fuzzbucket_client.__main__._DataFormats.JSON,
             '"blep": "ami-babacacafafa"',
             True,
             id="ok",
         ),
         pytest.param(
             {"error": "oh no"},
-            fuzzbucket_client._DataFormats.INI,
+            fuzzbucket_client.__main__._DataFormats.INI,
             None,
             False,
             id="err",
@@ -667,8 +639,8 @@ def test_client_list_aliases(
 def test_client_create_alias(
     monkeypatch, capsys, api_response, data_format, stdout_match, expected
 ):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
         client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
@@ -687,8 +659,8 @@ def test_client_create_alias(
 
 
 def test_client_delete_alias(monkeypatch, caplog):
-    client = fuzzbucket_client.Client()
-    monkeypatch.setattr(fuzzbucket_client, "default_client", lambda: client)
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.StringIO("")))
 
@@ -742,7 +714,7 @@ def test_client__write_credentials(
             elif mode == "w":
                 yield state["out"]
 
-    client = fuzzbucket_client.Client()
+    client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(client, "_credentials_file", FakeFile())
 
     client._write_credentials(user, secret)

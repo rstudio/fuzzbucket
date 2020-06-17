@@ -27,3 +27,4 @@ node_modules/
 parts/
 sdist/
 var/
+fuzzbucket_client/__version__.py

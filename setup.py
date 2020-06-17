@@ -7,6 +7,7 @@ import sys
 import typing
 
 from setuptools import setup
+from setuptools_scm import get_version
 
 
 class IsReleasableCommand(distutils.cmd.Command):
@@ -22,9 +23,7 @@ class IsReleasableCommand(distutils.cmd.Command):
         ...
 
     def run(self):
-        from fuzzbucket_client import full_version
-
-        value = full_version()
+        value = get_version()
         releasable = re.match("^[0-9]+\\.[0-9]+\\.[0-9]+$", value) is not None
         self.announce(
             f"Version {value} is {'' if releasable else 'NOT '}releasable",
@@ -40,21 +39,17 @@ def main():
         print(sys.version)
         return 86
 
-    from fuzzbucket_client import full_version
-
     setup(
         author="RStudio Connect Engineers",
         author_email="rsc-dev+fuzzbucket@rstudio.com",
         cmdclass={"is_releasable": IsReleasableCommand},
         entry_points={
-            "console_scripts": ["fuzzbucket-client = fuzzbucket_client:main"]
+            "console_scripts": ["fuzzbucket-client = fuzzbucket_client.__main__:main"]
         },
         license="MIT",
         name="fuzzbucket-client",
-        py_modules=["fuzzbucket_client"],
         python_requires=">3.5,<4",
         url="https://github.com/rstudio/fuzzbucket",
-        version=full_version(),
         zip_safe=True,
     )
     return 0

@@ -65,7 +65,7 @@ release-artifact: $(FUZZBUCKET_RELEASE_ARTIFACT)
 	@echo "::set-output name=tarball_basename::$(notdir $(FUZZBUCKET_RELEASE_ARTIFACT))"
 
 
-$(FUZZBUCKET_RELEASE_ARTIFACT): fuzzbucket_client.py setup.py
+$(FUZZBUCKET_RELEASE_ARTIFACT): $(wildcard fuzzbucket_client/*.py) setup.py
 	pipenv run python setup.py bdist_wheel
 
 .PHONY: is-releasable
