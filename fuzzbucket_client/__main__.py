@@ -14,7 +14,6 @@ import contextlib
 import datetime
 import enum
 import fnmatch
-import functools
 import getpass
 import io
 import json
@@ -22,7 +21,6 @@ import logging
 import os
 import pathlib
 import re
-import subprocess
 import sys
 import textwrap
 import typing
@@ -30,14 +28,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-
-try:
-    import pkg_resources
-except ImportError:  # pragma: no cover
-    pkg_resources = None  # type: ignore
-
-
-__version__ = "0.4.0"
+from fuzzbucket_client.__version__ import version as __version__
 
 
 def default_client() -> "Client":
@@ -58,39 +49,6 @@ def log_level() -> int:
     return getattr(
         logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "INFO").strip().upper(),
     )
-
-
-@functools.lru_cache(maxsize=2)
-def full_version() -> str:
-    try:
-        source_dir = pathlib.Path(__file__).parent
-        return (
-            subprocess.check_output(
-                [
-                    "git",
-                    f"--work-tree={source_dir}",
-                    f"--git-dir={source_dir.joinpath('.git')}",
-                    "describe",
-                    "--always",
-                    "--dirty",
-                    "--tags",
-                ],
-                stderr=subprocess.DEVNULL,
-            )
-            .strip()
-            .decode("utf-8")
-            .replace("-", "+", 1)
-            .replace("-", ".")
-        )
-    except subprocess.CalledProcessError:
-        try:
-            return pkg_resources.get_distribution("fuzzbucket-client").version
-        except Exception:
-            return __version__
-    except Exception:
-        if log_level() == logging.DEBUG:
-            log.exception("failed to get the extended version info")
-        return __version__
 
 
 log = logging.getLogger("fuzzbucket")
@@ -245,7 +203,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
-        print(f"fuzzbucket-client {full_version()}")
+        print(f"fuzzbucket-client {__version__}")
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON

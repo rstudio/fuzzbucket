@@ -1,0 +1,18 @@
+exclude *.ini
+exclude *.json
+exclude *.yml
+exclude .example.env
+exclude .flake8
+exclude .github/workflows/*
+exclude .gitignore
+exclude Makefile
+exclude Pipfile*
+exclude conftest.py
+exclude tests/test_fuzzbucket.py
+recursive-exclude fuzzbucket *
+
+include *.md
+include *.toml
+include setup.py
+include tests/test_fuzzbucket_client.py
+recursive-include fuzzbucket_client *.py

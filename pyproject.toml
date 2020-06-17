@@ -1,2 +1,13 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+build-backend = "setuptools.build_meta"
+
 [tool.black]
 exclude = '/(\.venv|node_modules)/'
+
+[tool.coverage.run]
+omit = ["tests/*"]
+branch = true
+
+[tool.setuptools_scm]
+write_to = "fuzzbucket_client/__version__.py"
