@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.4.3] - 2020-06-17
+
+### Fixed
+- use `setuptools_scm` instead of homegrown version thing
+
 ## [0.4.2] - 2020-06-15
 
 ### Fixed
