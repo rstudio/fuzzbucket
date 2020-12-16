@@ -4,7 +4,7 @@ flaskSecretKey: not even trying to be secure here ok
 awsRegion: us-east-1
 defaultImageAlias: ubuntu18
 defaultInstanceType: t3.small
-defaultTtl: 14400
+defaultTtl: '14400'
 dynamodb:
   start:
     migrate: true

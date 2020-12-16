@@ -684,6 +684,53 @@ def test_client_delete_alias(monkeypatch, caplog):
 
 
 @pytest.mark.parametrize(
+    ("data_format", "matches"),
+    [
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.INI,
+            ["any = fields", "allowed = True"],
+            id="happy_ini",
+        ),
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.JSON,
+            ['"any": "fields"', '"allowed": true'],
+            id="happy_json",
+        ),
+    ],
+)
+def test_client_get_key(monkeypatch, capsys, data_format, matches):
+    client = fuzzbucket_client.__main__.Client()
+    client.data_format = data_format
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO('{"key":{"any":"fields","allowed":true}}')),
+    )
+
+    assert client.get_key(argparse.Namespace(alias="hurr"), "unknown")
+
+    captured = capsys.readouterr()
+    for match in matches:
+        assert match in captured.out
+
+
+def test_client_delete_key(monkeypatch, caplog):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO('{"key":{"braking":"litho","retrograde":true}}')),
+    )
+
+    assert client.delete_key(argparse.Namespace(alias="hurr"), "unknown")
+    assert "deleted key" in caplog.text
+
+
+@pytest.mark.parametrize(
     ("user", "secret", "file_exists", "file_content", "write_matches"),
     [
         pytest.param(

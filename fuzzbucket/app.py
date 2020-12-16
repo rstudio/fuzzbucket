@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import typing
 
 from botocore.exceptions import ClientError
 
@@ -194,27 +195,22 @@ def create_box():
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
-    username = None
-    matching_keys = {
-        k["KeyName"]
-        for k in get_ec2_client().describe_key_pairs().get("KeyPairs", [])
-        if k["KeyName"].lower() == str(session["user"]).lower()
-    }
-    if len(matching_keys) == 0:
-        key_material = _fetch_first_github_key(session["user"])
+    matching_key = _find_matching_ec2_key_pair(session["user"])
+    username = (matching_key or {}).get("KeyName")
+
+    if matching_key is None:
+        key_material = _fetch_first_github_rsa_key(session["user"])
         username = session["user"]
         if key_material == "":
             return (
-                jsonify(error=f"could not fetch public key for user={username}"),
+                jsonify(error=f"could not fetch rsa public key for user={username}"),
                 400,
             )
 
         get_ec2_client().import_key_pair(
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
-        log.debug(f"imported public key for user={username}")
-    else:
-        username = matching_keys.pop()
+        log.debug(f"imported rsa public key for user={username}")
 
     name = request.json.get("name")
     if str(name or "").strip() == "":
@@ -375,6 +371,61 @@ def delete_image_alias(alias):
     return "", 204
 
 
+@app.route("/key", methods=["GET"])
+def get_key():
+    if not is_fully_authd():
+        return auth_403_github()
+
+    matching_key = _find_matching_ec2_key_pair(session["user"])
+
+    if matching_key is None:
+        return jsonify(error="no key exists for you", you=request.remote_user), 404
+    return (
+        jsonify(
+            key=dict(
+                name=matching_key["KeyName"],
+                key_pair_id=matching_key["KeyPairId"],
+                ec2_fingerprint=matching_key["KeyFingerprint"],
+            ),
+            you=request.remote_user,
+        ),
+        200,
+    )
+
+
+@app.route("/key", methods=["DELETE"])
+def delete_key():
+    if not is_fully_authd():
+        return auth_403_github()
+
+    matching_key = _find_matching_ec2_key_pair(session["user"])
+    if matching_key is None:
+        return jsonify(error="no key to delete for you", you=request.remote_user), 404
+
+    get_ec2_client().delete_key_pair(KeyName=matching_key["KeyName"])
+    return (
+        jsonify(
+            key=dict(
+                name=matching_key["KeyName"],
+                key_pair_id=matching_key["KeyPairId"],
+                ec2_fingerprint=matching_key["KeyFingerprint"],
+            ),
+            you=request.remote_user,
+        ),
+        200,
+    )
+
+
+def _find_matching_ec2_key_pair(user: str) -> typing.Optional[dict]:
+    low_user = str(user).lower()
+
+    for key_pair in get_ec2_client().describe_key_pairs().get("KeyPairs", []):
+        if key_pair["KeyName"].lower() == low_user:
+            return key_pair
+
+    return None
+
+
 def _resolve_ami_alias(image_alias: str) -> NoneString:
     try:
         resp = (
@@ -388,12 +439,16 @@ def _resolve_ami_alias(image_alias: str) -> NoneString:
         return None
 
 
-def _fetch_first_github_key(user) -> str:
+def _fetch_first_github_rsa_key(user: str) -> str:
     try:
-        keys = github.get("/user/keys").json()
-        if len(keys) == 0:
-            return ""
-        return keys[0]["key"].strip()
+        for key in github.get("/user/keys").json():
+            stripped_key = key.get("key", "").strip()
+            if stripped_key.startswith("ssh-rsa"):
+                return stripped_key
+        log.warning(f"no ssh-rsa key could be found in github for user={user}")
+        return ""
     except Exception as exc:
-        log.warning(f"error while fetching first github key for user={user} err={exc}")
+        log.warning(
+            f"error while fetching first github ssh-rsa key for user={user} err={exc}"
+        )
         return ""

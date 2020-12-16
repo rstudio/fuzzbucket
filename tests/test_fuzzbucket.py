@@ -596,7 +596,7 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
+        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
         with app.test_client() as c:
             response = c.post(
                 "/box",
@@ -637,7 +637,7 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
+        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
@@ -710,7 +710,7 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
+        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
@@ -878,6 +878,116 @@ def test_delete_image_alias_not_yours(monkeypatch):
     assert response.json["error"] == "no touching"
 
 
+@pytest.mark.parametrize(
+    ("authd", "session_user", "expected"),
+    [
+        pytest.param(
+            True,
+            "lordtestingham",
+            200,
+            id="happy",
+        ),
+        pytest.param(
+            True,
+            "rumples",
+            404,
+            id="missing",
+        ),
+        pytest.param(False, "foible", 403, id="forbidden"),
+    ],
+)
+@mock_ec2
+@mock_dynamodb2
+def test_get_key(authd_headers, monkeypatch, authd, session_user, expected):
+    ec2_client = boto3.client("ec2")
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+
+    fake_session = {"user": session_user}
+    monkeypatch.setattr(fuzzbucket.app, "session", fake_session)
+
+    def fake_describe_key_pairs():
+        return {
+            "KeyPairs": [
+                {
+                    "KeyName": "lordTestingham",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
+    response = None
+    with app.test_client() as c:
+        response = c.get("/key", headers=authd_headers)
+    assert response is not None
+    assert response.status_code == expected
+    if authd and expected < 400:
+        assert response.json is not None
+        assert "key" in response.json
+        assert response.json["key"] is not None
+
+
+@pytest.mark.parametrize(
+    ("authd", "session_user", "expected"),
+    [
+        pytest.param(
+            True,
+            "lordtestingham",
+            200,
+            id="happy",
+        ),
+        pytest.param(
+            True,
+            "rumples",
+            404,
+            id="happy",
+        ),
+        pytest.param(False, "foible", 403, id="forbidden"),
+    ],
+)
+@mock_ec2
+@mock_dynamodb2
+def test_delete_key(authd_headers, monkeypatch, authd, session_user, expected):
+    ec2_client = boto3.client("ec2")
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+
+    fake_session = {"user": session_user}
+    monkeypatch.setattr(fuzzbucket.app, "session", fake_session)
+
+    def fake_describe_key_pairs():
+        return {
+            "KeyPairs": [
+                {
+                    "KeyName": "lordTestingham",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
+    response = None
+    with app.test_client() as c:
+        response = c.delete("/key", headers=authd_headers)
+    assert response is not None
+    assert response.status_code == expected
+    if authd and expected < 400:
+        assert response.json is not None
+        assert "key" in response.json
+        assert response.json["key"] is not None
+
+
 @mock_dynamodb2
 @pytest.mark.parametrize(
     ("image_alias", "raises", "expected"),
@@ -913,11 +1023,15 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
     [
         pytest.param(
             False,
-            [{"key": "first"}, {"key": "second"}, {"key": "third"}],
-            "first",
+            [
+                {"key": "ssh-ecdsagoop first"},
+                {"key": "ssh-rsa second"},
+                {"key": "ssh-rsa third"},
+            ],
+            "ssh-rsa second",
             id="3_keys",
         ),
-        pytest.param(False, [{"key": "first"}], "first", id="1_key"),
+        pytest.param(False, [{"key": "ssh-rsa first"}], "ssh-rsa first", id="1_key"),
         pytest.param(False, [], "", id="empty"),
         pytest.param(
             True,
@@ -929,7 +1043,7 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
         pytest.param(True, [], "", id="err_empty"),
     ],
 )
-def test_fetch_first_github_key(monkeypatch, raises, api_response, expected_key):
+def test_fetch_first_github_rsa_key(monkeypatch, raises, api_response, expected_key):
     class FakeGithub:
         def get(self, *_):
             if raises:
@@ -940,7 +1054,7 @@ def test_fetch_first_github_key(monkeypatch, raises, api_response, expected_key)
             return api_response
 
     monkeypatch.setattr(fuzzbucket.app, "github", FakeGithub())
-    assert fuzzbucket.app._fetch_first_github_key("user") == expected_key
+    assert fuzzbucket.app._fetch_first_github_rsa_key("user") == expected_key
 
 
 @mock_ec2
@@ -960,7 +1074,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
+        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
         with app.test_client() as c:
             response = c.post(
                 "/box",
