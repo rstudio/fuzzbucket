@@ -51,6 +51,7 @@ provider:
     Action:
     - ec2:CreateInstance
     - ec2:CreateKeyPair
+    - ec2:DeleteKeyPair
     - ec2:DescribeInstances
     - ec2:DescribeKeyPairs
     - ec2:ImportKeyPair

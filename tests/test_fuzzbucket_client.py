@@ -683,6 +683,37 @@ def test_client_delete_alias(monkeypatch, caplog):
     assert "deleted alias" in caplog.text
 
 
+def test_client_get_key(monkeypatch, caplog, capsys):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO('{"key":{"any":"fields","allowed":true}}')),
+    )
+
+    assert client.get_key(argparse.Namespace(alias="hurr"), "unknown")
+
+    captured = capsys.readouterr()
+    assert "any = fields" in captured.out
+    assert "allowed = True" in captured.out
+
+
+def test_client_delete_key(monkeypatch, caplog):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO('{"key":{"braking":"litho","retrograde":true}}')),
+    )
+
+    assert client.delete_key(argparse.Namespace(alias="hurr"), "unknown")
+    assert "deleted key" in caplog.text
+
+
 @pytest.mark.parametrize(
     ("user", "secret", "file_exists", "file_content", "write_matches"),
     [

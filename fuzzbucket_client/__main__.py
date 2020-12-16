@@ -205,6 +205,16 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_delete_alias.add_argument("alias")
     parser_delete_alias.set_defaults(func=client.delete_alias)
 
+    parser_get_key = subparsers.add_parser(
+        "get-key", help="get your current ssh key id and fingerprint in EC2"
+    )
+    parser_get_key.set_defaults(func=client.get_key)
+
+    parser_delete_key = subparsers.add_parser(
+        "delete-key", help="delete your current ssh key in EC2"
+    )
+    parser_delete_key.set_defaults(func=client.delete_key)
+
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
@@ -233,6 +243,10 @@ def _print_auth_hint():
         """
         )
     )
+
+
+def _pjoin(*parts: str) -> str:
+    return "/".join(parts)
 
 
 NOSETUP_COMMANDS = ("login",)
@@ -331,7 +345,7 @@ class Client:
         log.debug(f"starting login flow for user={known_args.user}")
         login_url = "?".join(
             [
-                os.path.join(self._url, "_login"),
+                _pjoin(self._url, "_login"),
                 urllib.parse.urlencode(dict(user=known_args.user)),
             ]
         )
@@ -391,7 +405,7 @@ class Client:
         if known_args.name != "":
             payload["name"] = known_args.name
         req = self._build_request(
-            os.path.join(self._url, "box"),
+            _pjoin(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -419,7 +433,7 @@ class Client:
             return False
         for matching_box in matching_boxes:
             req = self._build_request(
-                os.path.join(self._url, "box", matching_box["instance_id"]),
+                _pjoin(self._url, "box", matching_box["instance_id"]),
                 method="DELETE",
             )
             with self._urlopen(req) as response:
@@ -435,7 +449,7 @@ class Client:
             log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
-            os.path.join(self._url, "reboot", matching_box["instance_id"]),
+            _pjoin(self._url, "reboot", matching_box["instance_id"]),
             method="POST",
         )
         with self._urlopen(req) as response:
@@ -479,7 +493,7 @@ class Client:
 
     @_command
     def list_aliases(self, *_):
-        req = self._build_request(os.path.join(self._url, "image-alias"))
+        req = self._build_request(_pjoin(self._url, "image-alias"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -493,7 +507,7 @@ class Client:
     def create_alias(self, known_args, _):
         payload = {"alias": known_args.alias, "ami": known_args.ami}
         req = self._build_request(
-            os.path.join(self._url, "image-alias"),
+            _pjoin(self._url, "image-alias"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -515,11 +529,30 @@ class Client:
     @_command
     def delete_alias(self, known_args, _):
         req = self._build_request(
-            os.path.join(self._url, "image-alias", known_args.alias), method="DELETE"
+            _pjoin(self._url, "image-alias", known_args.alias), method="DELETE"
         )
         with self._urlopen(req) as response:
             _ = response.read()
         log.info(f"deleted alias for user={self._user!r} alias={known_args.alias}")
+        return True
+
+    @_command
+    def get_key(self, *_):
+        req = self._build_request(_pjoin(self._url, "key"), method="GET")
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+        print(self._format_key(raw_response["key"]), end="")
+        return True
+
+    @_command
+    def delete_key(self, *_):
+        req = self._build_request(_pjoin(self._url, "key"), method="DELETE")
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+        log.info(f"deleted key for user={self._user!r}")
+        print(self._format_key(raw_response["key"]), end="")
         return True
 
     def _find_box(self, box_search):
@@ -706,6 +739,22 @@ class Client:
 
     def _format_boxes_json(self, boxes):
         return json.dumps({"boxes": {box["name"]: box for box in boxes}}, indent=2)
+
+    def _format_key(self, key):
+        return getattr(self, f"_format_key_{self.data_format.value}")(key)
+
+    def _format_key_ini(self, key):
+        key_ini = configparser.ConfigParser()
+        key_ini.add_section("key")
+        for attr in key.keys():
+            key_ini.set("key", str(attr), str(key[attr]))
+        buf = io.StringIO()
+        key_ini.write(buf)
+        buf.seek(0)
+        return buf.read()
+
+    def _format_key_json(self, key):
+        return json.dumps({"key": key}, indent=2)
 
     def _format_image_aliases(self, image_aliases):
         return getattr(self, f"_format_image_aliases_{self.data_format.value}")(
