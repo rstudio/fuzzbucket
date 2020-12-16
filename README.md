@@ -64,12 +64,13 @@ by using a tool like [autoenv](https://github.com/inishchith/autoenv).
 Prerequisites for development are:
 
 -    `make`
--    `npm`
+-    `yarn`
 -    `pipenv`
 
-Hopefully `make` is already available :grimacing:. The `npm` tool should be
-present if there is a `node` installation present. The `pipenv` tool may be
-installed via `pip`.
+Hopefully `make` is already available :grimacing:. The `yarn` tool
+may be installed via `brew` on macOS and [other ways,
+too](https://yarnpkg.com/getting-started/install). The `pipenv`
+tool may be installed via `pip`.
 
 Once these prerequisites are available, the default workflow is nearly
 identical to what is captured in the [github

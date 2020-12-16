@@ -35,13 +35,17 @@ clean:
 .PHONY: deps
 deps:
 	pipenv install --dev
-	npm install
+	yarn install
 
 .PHONY: lint
 lint:
 	pipenv run black --check --diff .
 	pipenv run flake8 .
 	pipenv run pytest -m mypy --no-cov
+
+.PHONY: fmt
+fmt:
+	pipenv run black .
 
 .PHONY: test
 test:

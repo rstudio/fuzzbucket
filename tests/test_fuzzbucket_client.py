@@ -683,8 +683,24 @@ def test_client_delete_alias(monkeypatch, caplog):
     assert "deleted alias" in caplog.text
 
 
-def test_client_get_key(monkeypatch, caplog, capsys):
+@pytest.mark.parametrize(
+    ("data_format", "matches"),
+    [
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.INI,
+            ["any = fields", "allowed = True"],
+            id="happy_ini",
+        ),
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.JSON,
+            ['"any": "fields"', '"allowed": true'],
+            id="happy_json",
+        ),
+    ],
+)
+def test_client_get_key(monkeypatch, capsys, data_format, matches):
     client = fuzzbucket_client.__main__.Client()
+    client.data_format = data_format
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
@@ -696,8 +712,8 @@ def test_client_get_key(monkeypatch, caplog, capsys):
     assert client.get_key(argparse.Namespace(alias="hurr"), "unknown")
 
     captured = capsys.readouterr()
-    assert "any = fields" in captured.out
-    assert "allowed = True" in captured.out
+    for match in matches:
+        assert match in captured.out
 
 
 def test_client_delete_key(monkeypatch, caplog):

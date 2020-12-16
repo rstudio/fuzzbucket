@@ -8,14 +8,14 @@ provider:
   apiKeys: ${self:custom.apiKeys}
   region: ${self:custom.awsRegion, 'us-east-1'}
   environment:
-    FUZZBUCKET_ALLOWED_GITHUB_ORGS: ${self:custom.allowedGithubOrgs}
-    FUZZBUCKET_BRANDING: ${self:custom.branding}
+    FUZZBUCKET_ALLOWED_GITHUB_ORGS: ${self:custom.allowedGithubOrgs, ''}
+    FUZZBUCKET_BRANDING: ${self:custom.branding, ''}
     FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu18'}
     FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
     FUZZBUCKET_DEFAULT_TTL: ${self:custom.defaultTtl, '14400'}
-    FUZZBUCKET_FLASK_SECRET_KEY: ${self:custom.flaskSecretKey}
-    FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ${self:custom.oauth.clientID}
-    FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret}
+    FUZZBUCKET_FLASK_SECRET_KEY: ${self:custom.flaskSecretKey, ''}
+    FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ${self:custom.oauth.clientID, ''}
+    FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret, ''}
     FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
     FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
     FUZZBUCKET_ROOT_LOG_LEVEL: ${self:custom.rootLogLevel, 'info'}
@@ -115,7 +115,8 @@ resources:
           Value: fuzzbucket-${opt:stage, 'dev'}-public
     PublicRoute:
       Type: AWS::EC2::Route
-      DependsOn: GatewayToInternet
+      DependsOn:
+        - GatewayToInternet
       Properties:
         RouteTableId: !Ref PublicRouteTable
         DestinationCidrBlock: 0.0.0.0/0
@@ -250,4 +251,3 @@ functions:
       - VPC
     events:
     - schedule: ${self:custom.reapSchedule, 'rate(10 minutes)'}
-      enabled: true

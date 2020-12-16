@@ -879,19 +879,26 @@ def test_delete_image_alias_not_yours(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("authd", "expected"),
+    ("authd", "session_user", "expected"),
     [
         pytest.param(
             True,
+            "lordtestingham",
             200,
             id="happy",
         ),
-        pytest.param(False, 403, id="forbidden"),
+        pytest.param(
+            True,
+            "rumples",
+            404,
+            id="missing",
+        ),
+        pytest.param(False, "foible", 403, id="forbidden"),
     ],
 )
 @mock_ec2
 @mock_dynamodb2
-def test_get_key(authd_headers, monkeypatch, authd, expected):
+def test_get_key(authd_headers, monkeypatch, authd, session_user, expected):
     ec2_client = boto3.client("ec2")
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -899,7 +906,7 @@ def test_get_key(authd_headers, monkeypatch, authd, expected):
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
 
-    fake_session = {"user": "lordtestingham"}
+    fake_session = {"user": session_user}
     monkeypatch.setattr(fuzzbucket.app, "session", fake_session)
 
     def fake_describe_key_pairs():
@@ -920,26 +927,33 @@ def test_get_key(authd_headers, monkeypatch, authd, expected):
         response = c.get("/key", headers=authd_headers)
     assert response is not None
     assert response.status_code == expected
-    if authd:
+    if authd and expected < 400:
         assert response.json is not None
         assert "key" in response.json
         assert response.json["key"] is not None
 
 
 @pytest.mark.parametrize(
-    ("authd", "expected"),
+    ("authd", "session_user", "expected"),
     [
         pytest.param(
             True,
+            "lordtestingham",
             200,
             id="happy",
         ),
-        pytest.param(False, 403, id="forbidden"),
+        pytest.param(
+            True,
+            "rumples",
+            404,
+            id="happy",
+        ),
+        pytest.param(False, "foible", 403, id="forbidden"),
     ],
 )
 @mock_ec2
 @mock_dynamodb2
-def test_delete_key(authd_headers, monkeypatch, authd, expected):
+def test_delete_key(authd_headers, monkeypatch, authd, session_user, expected):
     ec2_client = boto3.client("ec2")
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -947,7 +961,7 @@ def test_delete_key(authd_headers, monkeypatch, authd, expected):
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
 
-    fake_session = {"user": "lordtestingham"}
+    fake_session = {"user": session_user}
     monkeypatch.setattr(fuzzbucket.app, "session", fake_session)
 
     def fake_describe_key_pairs():
@@ -968,7 +982,7 @@ def test_delete_key(authd_headers, monkeypatch, authd, expected):
         response = c.delete("/key", headers=authd_headers)
     assert response is not None
     assert response.status_code == expected
-    if authd:
+    if authd and expected < 400:
         assert response.json is not None
         assert "key" in response.json
         assert response.json["key"] is not None

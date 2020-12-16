@@ -195,8 +195,8 @@ def create_box():
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
-    username = None
     matching_key = _find_matching_ec2_key_pair(session["user"])
+    username = (matching_key or {}).get("KeyName")
 
     if matching_key is None:
         key_material = _fetch_first_github_rsa_key(session["user"])
@@ -211,8 +211,6 @@ def create_box():
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
         log.debug(f"imported rsa public key for user={username}")
-    else:
-        username = matching_key["KeyName"]
 
     name = request.json.get("name")
     if str(name or "").strip() == "":
