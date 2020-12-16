@@ -321,10 +321,24 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             id="happy_arg",
         ),
         pytest.param(
-            None, None, None, False, {}, "unchanged", None, id="happy_nothing",
+            None,
+            None,
+            None,
+            False,
+            {},
+            "unchanged",
+            None,
+            id="happy_nothing",
         ),
         pytest.param(
-            "elmer", None, None, True, {"login": "bugs"}, None, None, id="mismatched",
+            "elmer",
+            None,
+            None,
+            True,
+            {"login": "bugs"},
+            None,
+            None,
+            id="mismatched",
         ),
     ],
 )
@@ -528,7 +542,14 @@ def test_auth_complete(
 
 @pytest.mark.parametrize(
     ("authd", "expected"),
-    [pytest.param(True, 200, id="happy",), pytest.param(False, 403, id="forbidden")],
+    [
+        pytest.param(
+            True,
+            200,
+            id="happy",
+        ),
+        pytest.param(False, 403, id="forbidden"),
+    ],
 )
 @mock_ec2
 @mock_dynamodb2
@@ -552,7 +573,14 @@ def test_list_boxes(authd_headers, monkeypatch, authd, expected):
 
 @pytest.mark.parametrize(
     ("authd", "expected"),
-    [pytest.param(True, 201, id="happy",), pytest.param(False, 403, id="forbidden")],
+    [
+        pytest.param(
+            True,
+            201,
+            id="happy",
+        ),
+        pytest.param(False, 403, id="forbidden"),
+    ],
 )
 @mock_ec2
 @mock_dynamodb2
@@ -571,7 +599,9 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
         mp.setattr(fuzzbucket.app, "_fetch_first_github_key", lambda u: pubkey)
         with app.test_client() as c:
             response = c.post(
-                "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers,
+                "/box",
+                json={"ami": "ami-fafafafafaf"},
+                headers=authd_headers,
             )
     assert response is not None
     assert response.status_code == expected
@@ -583,7 +613,14 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
 @pytest.mark.parametrize(
     ("authd", "expected"),
-    [pytest.param(True, 204, id="happy",), pytest.param(False, 403, id="forbidden")],
+    [
+        pytest.param(
+            True,
+            204,
+            id="happy",
+        ),
+        pytest.param(False, 403, id="forbidden"),
+    ],
 )
 @mock_ec2
 @mock_dynamodb2
@@ -615,11 +652,14 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
             return all_instances
 
         monkeypatch.setattr(
-            ec2_client, "describe_instances", fake_describe_instances,
+            ec2_client,
+            "describe_instances",
+            fake_describe_instances,
         )
         monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
         response = c.delete(
-            f'/box/{response.json["boxes"][0]["instance_id"]}', headers=authd_headers,
+            f'/box/{response.json["boxes"][0]["instance_id"]}',
+            headers=authd_headers,
         )
         assert response.status_code == expected
 
@@ -646,7 +686,14 @@ def test_delete_box_not_yours(monkeypatch, authd_headers, fake_github):
 
 @pytest.mark.parametrize(
     ("authd", "expected"),
-    [pytest.param(True, 204, id="happy",), pytest.param(False, 403, id="forbidden")],
+    [
+        pytest.param(
+            True,
+            204,
+            id="happy",
+        ),
+        pytest.param(False, 403, id="forbidden"),
+    ],
 )
 @mock_ec2
 @mock_dynamodb2
@@ -679,7 +726,9 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
                 return all_instances
 
             mp.setattr(
-                ec2_client, "describe_instances", fake_describe_instances,
+                ec2_client,
+                "describe_instances",
+                fake_describe_instances,
             )
             mp.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
             response = c.post(
@@ -708,7 +757,14 @@ def test_reboot_box_not_yours(monkeypatch):
 
 @pytest.mark.parametrize(
     ("authd", "expected"),
-    [pytest.param(True, 200, id="happy",), pytest.param(False, 403, id="forbidden")],
+    [
+        pytest.param(
+            True,
+            200,
+            id="happy",
+        ),
+        pytest.param(False, 403, id="forbidden"),
+    ],
 )
 @mock_dynamodb2
 def test_list_image_aliases(authd_headers, monkeypatch, authd, expected):
@@ -726,7 +782,14 @@ def test_list_image_aliases(authd_headers, monkeypatch, authd, expected):
 
 @pytest.mark.parametrize(
     ("authd", "expected"),
-    [pytest.param(True, 201, id="happy",), pytest.param(False, 403, id="forbidden")],
+    [
+        pytest.param(
+            True,
+            201,
+            id="happy",
+        ),
+        pytest.param(False, 403, id="forbidden"),
+    ],
 )
 @mock_dynamodb2
 def test_create_image_alias(authd_headers, monkeypatch, authd, expected):
@@ -755,7 +818,11 @@ def test_create_image_alias_not_json(authd_headers, monkeypatch):
 
     response = None
     with app.test_client() as c:
-        response = c.post("/image-alias", data="HAY", headers=authd_headers,)
+        response = c.post(
+            "/image-alias",
+            data="HAY",
+            headers=authd_headers,
+        )
     assert response is not None
     assert response.status_code == 400
 

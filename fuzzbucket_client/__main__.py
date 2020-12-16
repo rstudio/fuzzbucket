@@ -47,7 +47,8 @@ def config_logging(level: int = logging.INFO, stream: typing.TextIO = sys.stderr
 
 def log_level() -> int:
     return getattr(
-        logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "INFO").strip().upper(),
+        logging,
+        os.environ.get("FUZZBUCKET_LOG_LEVEL", "INFO").strip().upper(),
     )
 
 
@@ -57,7 +58,8 @@ log = logging.getLogger("fuzzbucket")
 def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--version", action="store_true", help="print the version and exit"
@@ -123,7 +125,10 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
 
     parser_ssh = subparsers.add_parser("ssh", help="ssh into a box")
     parser_ssh.add_argument(
-        "-q", "--quiet", action="store_true", help="suppress box info header",
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="suppress box info header",
     )
     parser_ssh.usage = "usage: %(prog)s [-hq] box [ssh-arguments]"
     parser_ssh.description = textwrap.dedent(
@@ -304,7 +309,8 @@ class Client:
     }
 
     def __init__(
-        self, env: typing.Optional[typing.Dict[str, str]] = None,
+        self,
+        env: typing.Optional[typing.Dict[str, str]] = None,
     ):
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
@@ -377,7 +383,8 @@ class Client:
 
         if payload["instance_type"] is None:
             payload["instance_type"] = self.default_instance_types.get(
-                payload.get("image_alias"), self.default_instance_type,
+                payload.get("image_alias"),
+                self.default_instance_type,
             )
         if known_args.connect:
             payload["connect"] = "1"

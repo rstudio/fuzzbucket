@@ -3,11 +3,11 @@
   "description": "",
   "version": "0.1.0",
   "dependencies": {
-    "serverless": "^1.72.0",
+    "serverless": "^1.83.2",
     "serverless-dynamodb-local": "^0.2.39",
-    "serverless-offline": "^6.3.1",
+    "serverless-offline": "^6.8.0",
     "serverless-python-requirements": "^5.1.0",
     "serverless-resources-env": "^0.3.1",
-    "serverless-wsgi": "^1.7.5"
+    "serverless-wsgi": "^1.7.6"
   }
 }
