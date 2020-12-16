@@ -30,7 +30,9 @@ app.config["GITHUB_OAUTH_CLIENT_SECRET"] = os.getenv(
 gh_storage = FlaskDanceStorage(table_name=os.getenv("FUZZBUCKET_USERS_TABLE_NAME"))
 app.config["gh_storage"] = gh_storage
 gh_blueprint = make_github_blueprint(
-    scope="read:org,read:public_key", redirect_to="auth_complete", storage=gh_storage,
+    scope="read:org,read:public_key",
+    redirect_to="auth_complete",
+    storage=gh_storage,
 )
 app.config["gh_blueprint"] = gh_blueprint
 app.register_blueprint(gh_blueprint, url_prefix="/login")
@@ -97,7 +99,8 @@ def auth_403_github():
     login_url = url_for("github.login", _external=True)
     return (
         jsonify(
-            error=f"you must authorize first via {login_url!r}", login_url=login_url,
+            error=f"you must authorize first via {login_url!r}",
+            login_url=login_url,
         ),
         403,
     )
@@ -226,7 +229,9 @@ def create_box():
             return jsonify(boxes=[instance], you=username), 409
 
     network_interface = dict(
-        DeviceIndex=0, AssociatePublicIpAddress=True, DeleteOnTermination=True,
+        DeviceIndex=0,
+        AssociatePublicIpAddress=True,
+        DeleteOnTermination=True,
     )
 
     subnet_id = os.getenv("CF_PublicSubnet", None)
@@ -248,7 +253,8 @@ def create_box():
     response = get_ec2_client().run_instances(
         ImageId=ami,
         InstanceType=request.json.get(
-            "instance_type", os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
+            "instance_type",
+            os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
         ),
         KeyName=username,
         MinCount=1,

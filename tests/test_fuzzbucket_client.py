@@ -310,7 +310,10 @@ def test_client_login(
                 ]
             },
             None,
-            ("ubuntu49", "--connect",),
+            (
+                "ubuntu49",
+                "--connect",
+            ),
             ("created box for user=.+",),
             0,
             id="happy_alias",
@@ -343,7 +346,11 @@ def test_client_login(
                 "you already did this",
                 [("Content-Type", "application/json")],
             ),
-            ("ubuntu49", "--instance-type=t8.pico", "--connect",),
+            (
+                "ubuntu49",
+                "--instance-type=t8.pico",
+                "--connect",
+            ),
             ("matching box already exists",),
             0,
             id="repeat_alias",
@@ -356,7 +363,11 @@ def test_client_login(
                 "just cannot",
                 [("Content-Type", "application/json")],
             ),
-            ("ubuntu49", "--instance-type=t8.pico", "--connect",),
+            (
+                "ubuntu49",
+                "--instance-type=t8.pico",
+                "--connect",
+            ),
             ("command [\"']create[\"'] failed",),
             86,
             id="api_err",
@@ -600,7 +611,9 @@ def test_client_list_aliases(
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
-        client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
     )
     client.data_format = data_format
 
@@ -643,7 +656,9 @@ def test_client_create_alias(
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
     monkeypatch.setattr(
-        client, "_urlopen", gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
     )
     client.data_format = data_format
 

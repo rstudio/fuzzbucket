@@ -47,7 +47,9 @@ def get_ec2_client():
 def get_dynamodb():
     if os.getenv("IS_OFFLINE") is not None:
         return boto3.resource(
-            "dynamodb", region_name="localhost", endpoint_url="http://localhost:8000",
+            "dynamodb",
+            region_name="localhost",
+            endpoint_url="http://localhost:8000",
         )
     return boto3.resource("dynamodb")
 
