@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.5.0] - 2020-12-16
+
+### Added
+- EC2 key pair management
+
+### Fixed
+- server: only attempt to import RSA key material into EC2
+
+### Security
+- all dependencies updated
+
 ## [0.4.3] - 2020-06-17
 
 ### Fixed
@@ -94,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.4.3...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.5.0...HEAD
+[0.5.0]: https://github.com/rstudio/fuzzbucket/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/rstudio/fuzzbucket/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/rstudio/fuzzbucket/compare/0.4.1...0.4.2
 [0.4.1]: https://github.com/rstudio/fuzzbucket/compare/0.4.0...0.4.1
