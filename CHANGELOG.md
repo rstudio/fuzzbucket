@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.5.1] - 2020-12-18
+
+### Added
+- client: released via PyPI
+
+### Fixed
+- client: long description content type is markdown
+
 ## [0.5.0] - 2020-12-16
 
 ### Added
@@ -105,7 +113,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.5.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.5.1...HEAD
+[0.5.1]: https://github.com/rstudio/fuzzbucket/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/rstudio/fuzzbucket/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/rstudio/fuzzbucket/compare/0.4.2...0.4.3
 [0.4.2]: https://github.com/rstudio/fuzzbucket/compare/0.4.1...0.4.2
