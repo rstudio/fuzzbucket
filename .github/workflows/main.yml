@@ -65,6 +65,11 @@ jobs:
         aws-region: us-east-1
     - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
       run: make sync-to-s3
+    - if: ${{ fromJson(steps.check_releasable.outputs.releasable) }}
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_TOKEN }}
     - uses: codecov/codecov-action@v1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
