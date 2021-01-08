@@ -33,7 +33,7 @@ used to do all the things:
 
 ```bash
 # install fuzzbucket-client via pip with python3.6+
-pip install https://cdn.rstudio.com/connect/fuzzbucket/0.4.3/fuzzbucket_client-0.4.3-py3-none-any.whl
+pip install fuzzbucket-client
 ```
 
 ```bash
