@@ -8,7 +8,8 @@ Configuration is accepted via the following environment variables:
     FUZZBUCKET_LOG_LEVEL - log level name (default="INFO")
 
     Optional:
-    FUZZBUCKET_CREDENTIALS - credentials string value (see ~/.cache/fuzzbucket/credentials)
+    FUZZBUCKET_CREDENTIALS - credentials string value
+        see ~/.cache/fuzzbucket/credentials
 
 """
 import argparse
