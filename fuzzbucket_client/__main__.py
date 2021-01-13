@@ -84,9 +84,15 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     )
     subparsers = parser.add_subparsers(title="commands")
 
-    parser_login = subparsers.add_parser("login", help="login with GitHub")
-    parser_login.add_argument("user", help="GitHub user")
+    parser_login = subparsers.add_parser("login", help="login via GitHub")
+    parser_login.add_argument("user", help="GitHub username")
     parser_login.set_defaults(func=client.login)
+    parser_login.epilog = textwrap.dedent(
+        """
+        NOTE: Use the exact letter casing expected by GitHub to
+        avoid weirdness.
+        """
+    )
 
     parser_logout = subparsers.add_parser(
         "logout", help="logout (from fuzzbucket *only*)"
@@ -255,6 +261,15 @@ def _print_auth_hint():
 
             fuzzbucket-client login {github-username}
 
+        If you believe you are already logged in, there is a chance
+        that you logged in with different letter casing than what
+        GitHub expects. Please double check the letter casing of
+        your username and then retry login after removing your
+        existing login data:
+
+            fuzzbucket-client logout
+
+            fuzzbucket-client login {github-username}
         """
         )
     )

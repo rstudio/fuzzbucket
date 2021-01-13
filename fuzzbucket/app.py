@@ -79,8 +79,11 @@ def set_user():
         log.debug("not currently github authorized; assuming login flow")
         return
     github_login = github.get("/user").json()["login"]
-    if github_login == session["user"]:
-        log.debug("github login matches session user")
+    if str(github_login).lower() == str(session["user"]).lower():
+        log.debug(
+            f"github login={github_login!r} case-insensitive matches session"
+            f" user={session['user']!r}"
+        )
         return
     log.warning(f"mismatched github_login={github_login!r} user={session['user']!r}")
     github.token = None
@@ -90,7 +93,8 @@ def set_user():
 def is_fully_authd():
     return (
         github.authorized
-        and session["user"] == github.get("/user").json()["login"]
+        and str(session["user"]).lower()
+        == str(github.get("/user").json()["login"]).lower()
         and request.headers.get("Fuzzbucket-Secret")
         == app.config["gh_storage"].secret()
     )
