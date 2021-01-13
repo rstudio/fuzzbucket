@@ -7,6 +7,10 @@ Configuration is accepted via the following environment variables:
     FUZZBUCKET_URL - string URL of the fuzzbucket instance including path prefix
     FUZZBUCKET_LOG_LEVEL - log level name (default="INFO")
 
+    Optional:
+    FUZZBUCKET_CREDENTIALS - credentials string value
+        see ~/.cache/fuzzbucket/credentials
+
 """
 import argparse
 import configparser
@@ -623,6 +627,9 @@ class Client:
         self._patched_credentials_file = value
 
     def _read_credentials(self):
+        if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
+            return self._env.get("FUZZBUCKET_CREDENTIALS")
+
         self._credentials_file.touch()
         with self._credentials_file.open() as infile:
             creds = configparser.ConfigParser()
@@ -632,6 +639,9 @@ class Client:
             return creds.get(self._credentials_section, "credentials")
 
     def _write_credentials(self, user, secret):
+        if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
+            return
+
         creds = configparser.ConfigParser()
         if self._credentials_file.exists():
             with self._credentials_file.open() as infile:
