@@ -633,7 +633,19 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
 
     def fake_describe_images(ImageIds=(), *_, **__):
         return {
-            "ami-fafafafafaf": {"Images": [{"RootDeviceName": "/dev/xyz"}]},
+            "ami-fafafafafaf": {
+                "Images": [
+                    {
+                        "RootDeviceName": "/dev/xyz",
+                        "BlockDeviceMappings": [
+                            {
+                                "DeviceName": "/dev/xyz",
+                                "Ebs": {"VolumeSize": 9},
+                            }
+                        ],
+                    }
+                ]
+            },
         }.get(ImageIds[0], {"Images": []})
 
     monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
@@ -680,7 +692,16 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
 
     def fake_describe_images(*_, **__):
-        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+        return {
+            "Images": [
+                {
+                    "RootDeviceName": "/dev/xyz",
+                    "BlockDeviceMappings": [
+                        {"DeviceName": "/dev/xyz", "Ebs": {"VolumeSize": 9}}
+                    ],
+                }
+            ]
+        }
 
     monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
@@ -758,7 +779,16 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
 
     def fake_describe_images(*_, **__):
-        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+        return {
+            "Images": [
+                {
+                    "RootDeviceName": "/dev/xyz",
+                    "BlockDeviceMappings": [
+                        {"DeviceName": "/dev/xyz", "Ebs": {"VolumeSize": 9}}
+                    ],
+                }
+            ]
+        }
 
     monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
@@ -1128,7 +1158,16 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
 
     def fake_describe_images(*_, **__):
-        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+        return {
+            "Images": [
+                {
+                    "RootDeviceName": "/dev/xyz",
+                    "BlockDeviceMappings": [
+                        {"DeviceName": "/dev/xyz", "Ebs": {"VolumeSize": 9}}
+                    ],
+                }
+            ]
+        }
 
     monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 

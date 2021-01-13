@@ -268,7 +268,25 @@ def create_box():
             400,
         )
 
-    run_instances_args = dict(
+    root_block_device_mapping = dict(
+        DeviceName=ami_desc["Images"][0]["RootDeviceName"],
+        Ebs=dict(
+            DeleteOnTermination=True,
+            VolumeSize=[
+                bdm["Ebs"]["VolumeSize"]
+                for bdm in ami_desc["Images"][0]["BlockDeviceMappings"]
+                if bdm["DeviceName"] == ami_desc["Images"][0]["RootDeviceName"]
+            ][0],
+        ),
+    )
+
+    root_volume_size = request.json.get("root_volume_size")
+
+    if root_volume_size is not None:
+        root_block_device_mapping["Ebs"]["VolumeSize"] = root_volume_size
+
+    response = get_ec2_client().run_instances(
+        BlockDeviceMappings=[root_block_device_mapping],
         ImageId=ami,
         InstanceType=request.json.get(
             "instance_type",
@@ -292,17 +310,6 @@ def create_box():
         ],
     )
 
-    root_volume_size = request.json.get("root_volume_size")
-
-    if root_volume_size is not None:
-        run_instances_args["BlockDeviceMappings"] = [
-            dict(
-                DeviceName=ami_desc["Images"][0]["RootDeviceName"],
-                Ebs=dict(VolumeSize=root_volume_size),
-            )
-        ]
-
-    response = get_ec2_client().run_instances(**run_instances_args)
     return (
         jsonify(
             boxes=[Box.from_ec2_dict(inst) for inst in response.get("Instances", [])],
