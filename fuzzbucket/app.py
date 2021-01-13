@@ -261,7 +261,14 @@ def create_box():
     if len(security_groups) > 0:
         network_interface["Groups"] = security_groups
 
-    response = get_ec2_client().run_instances(
+    ami_desc = get_ec2_client().describe_images(ImageIds=[ami])
+    if len(ami_desc.get("Images", [])) == 0:
+        return (
+            jsonify(error=f"ami={ami!r} not found or not available to this account"),
+            400,
+        )
+
+    run_instances_args = dict(
         ImageId=ami,
         InstanceType=request.json.get(
             "instance_type",
@@ -284,6 +291,18 @@ def create_box():
             )
         ],
     )
+
+    root_volume_size = request.json.get("root_volume_size")
+
+    if root_volume_size is not None:
+        run_instances_args["BlockDeviceMappings"] = [
+            dict(
+                DeviceName=ami_desc["Images"][0]["RootDeviceName"],
+                Ebs=dict(VolumeSize=root_volume_size),
+            )
+        ]
+
+    response = get_ec2_client().run_instances(**run_instances_args)
     return (
         jsonify(
             boxes=[Box.from_ec2_dict(inst) for inst in response.get("Instances", [])],

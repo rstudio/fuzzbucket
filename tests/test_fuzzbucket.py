@@ -600,20 +600,29 @@ def test_list_boxes(authd_headers, monkeypatch, authd, expected):
 
 
 @pytest.mark.parametrize(
-    ("authd", "expected"),
+    ("authd", "payload", "expected"),
     [
         pytest.param(
             True,
+            dict(ami="ami-fafafafafaf"),
             201,
             id="happy",
         ),
-        pytest.param(False, 403, id="forbidden"),
+        pytest.param(False, dict(ami="ami-fafafafafaf"), 403, id="forbidden"),
+        pytest.param(True, dict(ami="ami-ohno"), 400, id="bogus_ami"),
+        pytest.param(
+            True,
+            dict(ami="ami-fafafafafaf", root_volume_size=11),
+            201,
+            id="with_root_volume_size",
+        ),
     ],
 )
 @mock_ec2
 @mock_dynamodb2
-def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
-    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
+def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected):
+    ec2_client = boto3.client("ec2")
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
@@ -622,18 +631,25 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
 
+    def fake_describe_images(ImageIds=(), *_, **__):
+        return {
+            "ami-fafafafafaf": {"Images": [{"RootDeviceName": "/dev/xyz"}]},
+        }.get(ImageIds[0], {"Images": []})
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
+
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
         with app.test_client() as c:
             response = c.post(
                 "/box",
-                json={"ami": "ami-fafafafafaf"},
+                json=payload,
                 headers=authd_headers,
             )
     assert response is not None
     assert response.status_code == expected
-    if authd:
+    if authd and expected < 300:
         assert response.json is not None
         assert "boxes" in response.json
         assert response.json["boxes"] != []
@@ -662,6 +678,11 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
@@ -735,6 +756,11 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
@@ -1088,7 +1114,8 @@ def test_fetch_first_github_rsa_key(monkeypatch, raises, api_response, expected_
 @mock_ec2
 @mock_dynamodb2
 def test_reap_boxes(authd_headers, monkeypatch, pubkey):
-    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
+    ec2_client = boto3.client("ec2")
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
     monkeypatch.setattr(
         fuzzbucket.reaper, "get_ec2_client", lambda: boto3.client("ec2")
     )
@@ -1099,6 +1126,11 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
