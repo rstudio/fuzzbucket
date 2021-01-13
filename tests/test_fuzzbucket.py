@@ -475,22 +475,32 @@ def test__login(monkeypatch):
     assert session["user"] == "pytest"
 
 
+@pytest.mark.parametrize(
+    ("authd", "session_user", "expected_status"),
+    [
+        pytest.param(True, "pytest", 204, id="happy"),
+        pytest.param(False, "pytest", 400, id="not_logged_in"),
+        pytest.param(True, "eggs", 404, id="unknown_user"),
+    ],
+)
 @mock_dynamodb2
-def test__logout(monkeypatch):
+def test__logout(monkeypatch, authd, session_user, expected_status):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
 
-    session = {"user": "pytest"}
+    session = {"user": session_user}
     monkeypatch.setattr(fuzzbucket.app, "session", session)
-    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
 
     response = None
     with app.test_client() as c:
         response = c.post("/_logout")
 
     assert response is not None
-    assert response.status_code == 204
-    assert "user" not in session
+    assert response.status_code == expected_status
+
+    if expected_status == 204:
+        assert "user" not in session
 
 
 @pytest.mark.parametrize(
