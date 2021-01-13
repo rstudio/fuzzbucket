@@ -296,6 +296,18 @@ def test_client_login(
     assert "Login successful" in captured.out
 
 
+def test_client_logout(monkeypatch):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO("")),
+    )
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "logout"])
+    assert ret == 0
+
+
 @pytest.mark.parametrize(
     ("api_response", "http_exc", "cmd_args", "log_matches", "expected"),
     [
