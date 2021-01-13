@@ -88,6 +88,11 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_login.add_argument("user", help="GitHub user")
     parser_login.set_defaults(func=client.login)
 
+    parser_logout = subparsers.add_parser(
+        "logout", help="logout (from fuzzbucket *only*)"
+    )
+    parser_logout.set_defaults(func=client.logout)
+
     parser_create = subparsers.add_parser(
         "create", aliases=["new"], help="create a box"
     )
@@ -378,6 +383,15 @@ class Client:
                 return False
         self._write_credentials(known_args.user, secret)
         print(f"Login successful user={known_args.user!r}")
+        return True
+
+    @_command
+    def logout(self, *_):
+        log.debug(f"starting logout for user={self._user!r}")
+        req = self._build_request(_pjoin(self._url, "_logout"), method="POST")
+        with self._urlopen(req) as response:
+            _ = response.read()
+        log.info(f"logged out user={self._user!r}")
         return True
 
     @_command

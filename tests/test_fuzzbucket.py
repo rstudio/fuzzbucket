@@ -475,6 +475,24 @@ def test__login(monkeypatch):
     assert session["user"] == "pytest"
 
 
+@mock_dynamodb2
+def test__logout(monkeypatch):
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+
+    session = {"user": "pytest"}
+    monkeypatch.setattr(fuzzbucket.app, "session", session)
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    response = None
+    with app.test_client() as c:
+        response = c.post("/_logout")
+
+    assert response is not None
+    assert response.status_code == 204
+    assert "user" not in session
+
+
 @pytest.mark.parametrize(
     ("allowed_orgs", "orgs_response", "raises", "expected"),
     [

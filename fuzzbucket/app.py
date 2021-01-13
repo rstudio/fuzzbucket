@@ -163,6 +163,21 @@ def auth_complete():
         )
 
 
+@app.route("/_logout", methods=["POST"])
+def logout():
+    if not is_fully_authd():
+        return jsonify(error="not logged in"), 400
+    log.debug(f"handling _logout for user={request.remote_user!r}")
+    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_USERS_TABLE_NAME"))
+    existing_user = table.get_item(Key=dict(user=request.remote_user))
+    if existing_user.get("Item") in (None, {}):
+        return jsonify(error=f"no user {existing_user!r}"), 404
+    resp = table.delete_item(Key=dict(user=request.remote_user))
+    log.debug(f"raw dynamodb response={resp!r}")
+    del session["user"]
+    return "", 204
+
+
 @app.route("/", methods=["GET"])
 def list_boxes():
     if not is_fully_authd():
