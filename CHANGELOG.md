@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.6.0] - 2020-01-13
+
+### Added
+- logout command to clear user data on the fuzzbucket server side
+- allow specifying root volume size
+- client: read credentials from `FUZZBUCKET_CREDENTIALS`
+  environment variable when available
+
+### Changed
+- client: clarity around GitHub username case sensitivity
+
+### Fixed
+- server: root EBS volumes will always be deleted on termination
+- client: documented installation method via PyPI
+
+### Security
+- dependency updates
+
 ## [0.5.1] - 2020-12-18
 
 ### Added
@@ -113,7 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.5.1...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/rstudio/fuzzbucket/compare/0.5.1...0.6.0
 [0.5.1]: https://github.com/rstudio/fuzzbucket/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/rstudio/fuzzbucket/compare/0.4.3...0.5.0
 [0.4.3]: https://github.com/rstudio/fuzzbucket/compare/0.4.2...0.4.3
