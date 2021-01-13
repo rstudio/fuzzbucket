@@ -333,6 +333,46 @@ def test_client_logout(monkeypatch):
         pytest.param(
             {
                 "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": None,
+                        "special": "like all the others",
+                    }
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--root-volume-size",
+                "11",
+            ),
+            ("created box for user=.+",),
+            0,
+            id="happy_with_root_volume_size",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": None,
+                        "special": "like all the others",
+                    }
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--root-volume-size",
+                "puppies",
+            ),
+            ("root_volume_size=[\"']puppies[\"'] is not numeric",),
+            86,
+            id="bad_root_volume_size",
+        ),
+        pytest.param(
+            {
+                "boxes": [
                     {"name": "snowflek", "public_ip": None, "worth": "immeasurable"}
                 ]
             },

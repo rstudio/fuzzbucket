@@ -420,6 +420,12 @@ class Client:
             payload["image_alias"] = known_args.image
 
         if known_args.root_volume_size is not None:
+            if not str(known_args.root_volume_size).isdigit():
+                log.error(
+                    f"root_volume_size={known_args.root_volume_size!r} is not numeric"
+                )
+                return False
+
             payload["root_volume_size"] = int(known_args.root_volume_size)
 
         if payload["instance_type"] is None:
