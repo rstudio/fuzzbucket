@@ -613,7 +613,8 @@ def test_list_boxes(authd_headers, monkeypatch, authd, expected):
 @mock_ec2
 @mock_dynamodb2
 def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
-    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
+    ec2_client = boto3.client("ec2")
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
@@ -621,6 +622,11 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, expected):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
@@ -662,6 +668,11 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
@@ -735,6 +746,11 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
@@ -1088,7 +1104,8 @@ def test_fetch_first_github_rsa_key(monkeypatch, raises, api_response, expected_
 @mock_ec2
 @mock_dynamodb2
 def test_reap_boxes(authd_headers, monkeypatch, pubkey):
-    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: boto3.client("ec2"))
+    ec2_client = boto3.client("ec2")
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
     monkeypatch.setattr(
         fuzzbucket.reaper, "get_ec2_client", lambda: boto3.client("ec2")
     )
@@ -1099,6 +1116,11 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {"Images": [{"RootDeviceName": "/dev/xyz"}]}
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
 
     response = None
     with monkeypatch.context() as mp:
