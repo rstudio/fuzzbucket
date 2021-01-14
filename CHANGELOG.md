@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.6.1] - 2020-01-13
+
+### Fixed
+- pypi artifact ordering problems
+
 ## [0.6.0] - 2020-01-13
 
 ### Added
@@ -131,7 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.6.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.6.1...HEAD
+[0.6.1]: https://github.com/rstudio/fuzzbucket/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/rstudio/fuzzbucket/compare/0.5.1...0.6.0
 [0.5.1]: https://github.com/rstudio/fuzzbucket/compare/0.5.0...0.5.1
 [0.5.0]: https://github.com/rstudio/fuzzbucket/compare/0.4.3...0.5.0
