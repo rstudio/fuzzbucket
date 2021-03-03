@@ -13,12 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-## [0.6.1] - 2020-01-13
+## [0.6.2] - 2021-03-03
+
+### Fixed
+- additional debug logging around auth process
+
+### Security
+- Updated dependencies to resolve security alerts for `pyyaml`,
+  `jinja2`, and `cryptography`.
+
+## [0.6.1] - 2021-01-13
 
 ### Fixed
 - pypi artifact ordering problems
 
-## [0.6.0] - 2020-01-13
+## [0.6.0] - 2021-01-13
 
 ### Added
 - logout command to clear user data on the fuzzbucket server side
@@ -136,7 +145,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.6.1...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.6.2...HEAD
+[0.6.2]: https://github.com/rstudio/fuzzbucket/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/rstudio/fuzzbucket/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/rstudio/fuzzbucket/compare/0.5.1...0.6.0
 [0.5.1]: https://github.com/rstudio/fuzzbucket/compare/0.5.0...0.5.1
