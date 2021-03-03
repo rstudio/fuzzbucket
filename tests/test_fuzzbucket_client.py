@@ -22,6 +22,7 @@ def config_setup(tmpdir, monkeypatch):
     ).write_text(f'[server "{url}"]\ncredentials = whimsy:doodles\n', "utf-8")
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setenv("FUZZBUCKET_URL", url)
+    os.environ.pop("FUZZBUCKET_CREDENTIALS", None)
 
 
 def test_default_client():
@@ -783,9 +784,17 @@ def test_client_delete_key(monkeypatch, caplog):
 
 
 @pytest.mark.parametrize(
-    ("user", "secret", "file_exists", "file_content", "write_matches"),
+    (
+        "env_credentials",
+        "user",
+        "secret",
+        "file_exists",
+        "file_content",
+        "write_matches",
+    ),
     [
         pytest.param(
+            None,
             "daffy",
             "woohoo",
             True,
@@ -794,6 +803,7 @@ def test_client_delete_key(monkeypatch, caplog):
             id="existing",
         ),
         pytest.param(
+            None,
             "sam",
             "varmint",
             True,
@@ -802,6 +812,7 @@ def test_client_delete_key(monkeypatch, caplog):
             id="existing_empty",
         ),
         pytest.param(
+            None,
             "foghorn",
             "wellahseenow",
             False,
@@ -809,10 +820,19 @@ def test_client_delete_key(monkeypatch, caplog):
             ("^credentials = foghorn:wellahseenow",),
             id="new_config",
         ),
+        pytest.param(
+            "taz:cBJle+yte59ss/jNu+BL",
+            None,
+            None,
+            False,
+            "",
+            (),
+            id="env_bypass",
+        ),
     ],
 )
 def test_client__write_credentials(
-    monkeypatch, user, secret, file_exists, file_content, write_matches
+    monkeypatch, env_credentials, user, secret, file_exists, file_content, write_matches
 ):
     state = {"out": io.StringIO()}
 
@@ -830,11 +850,32 @@ def test_client__write_credentials(
 
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(client, "_credentials_file", FakeFile())
+    if env_credentials is not None:
+        client._env["FUZZBUCKET_CREDENTIALS"] = env_credentials
 
     client._write_credentials(user, secret)
     assert client._cached_credentials is None
+
+    if env_credentials is not None:
+        return
+
     state["out"].seek(0)
     written = state["out"].read()
     assert "# WARNING:" in written
     for write_match in write_matches:
         assert re.search(write_match, written, re.MULTILINE) is not None
+
+
+@pytest.mark.parametrize(
+    ("env_credentials", "expected"),
+    [
+        pytest.param(None, "whimsy:doodles", id="from_file"),
+        pytest.param("daffy:succotash", "daffy:succotash", id="from_env"),
+    ],
+)
+def test_client__read_credentials(env_credentials, expected):
+    client = fuzzbucket_client.__main__.Client()
+    if env_credentials is not None:
+        client._env["FUZZBUCKET_CREDENTIALS"] = env_credentials
+    assert client._cached_credentials is None
+    assert client._read_credentials() == expected

@@ -15,6 +15,7 @@ pytest = "*"
 pytest-cover = "*"
 pytest-mypy = "*"
 setuptools_scm = "*"
+sshpubkeys = "*"
 toml = "*"
 
 [packages]

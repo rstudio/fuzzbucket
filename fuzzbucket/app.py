@@ -91,13 +91,31 @@ def set_user():
 
 
 def is_fully_authd():
-    return (
-        github.authorized
-        and str(session["user"]).lower()
-        == str(github.get("/user").json()["login"]).lower()
-        and request.headers.get("Fuzzbucket-Secret")
-        == app.config["gh_storage"].secret()
-    )
+    if not github.authorized:
+        log.debug(f"github context not authorized for user={session['user']!r}")
+        return False
+
+    session_user_lower = str(session["user"]).lower()
+    github_login_lower = str(github.get("/user").json()["login"]).lower()
+
+    if session_user_lower != github_login_lower:
+        log.debug(
+            f"session user={session_user_lower!r} does not match github"
+            f" login={github_login_lower}"
+        )
+        return False
+
+    header_secret = request.headers.get("Fuzzbucket-Secret")
+    storage_secret = app.config["gh_storage"].secret()
+
+    if header_secret != storage_secret:
+        log.debug(
+            f"header secret={header_secret} does not match stored"
+            f" secret={storage_secret}"
+        )
+        return False
+
+    return True
 
 
 def auth_403_github():
