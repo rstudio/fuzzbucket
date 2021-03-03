@@ -672,6 +672,7 @@ class Client:
 
     def _read_credentials(self):
         if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
+            log.debug("reading credentials directly from FUZZBUCKET_CREDENTIALS")
             return self._env.get("FUZZBUCKET_CREDENTIALS")
 
         self._credentials_file.touch()
@@ -684,6 +685,9 @@ class Client:
 
     def _write_credentials(self, user, secret):
         if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
+            log.debug(
+                "skipping writing credentials due to presence of FUZZBUCKET_CREDENTIALS"
+            )
             return
 
         creds = configparser.ConfigParser()
