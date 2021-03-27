@@ -147,6 +147,10 @@ def test_command_decorator(
             if "setup" in errors:
                 raise ValueError("setup error")
 
+        def _finalize(self):
+            if "finalize" in errors:
+                raise ValueError("finalize error")
+
     def fake_method(self, known_args, unknown_args):
         if "method" in errors:
             raise ValueError("method error")

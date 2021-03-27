@@ -10,6 +10,8 @@ Configuration is accepted via the following environment variables:
     Optional:
     FUZZBUCKET_CREDENTIALS - credentials string value
         see ~/.cache/fuzzbucket/credentials
+    FUZZBUCKET_PREFERENCES - preferences JSON string value
+        see ~/.cache/fuzzbucket/preferences
 
 """
 import argparse
@@ -227,12 +229,32 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_delete_alias.set_defaults(func=client.delete_alias)
 
     parser_get_key = subparsers.add_parser(
-        "get-key", help="get your current ssh key id and fingerprint in EC2"
+        "get-key", help="get an ssh public key id and fingerprint as stored in EC2"
+    )
+    parser_get_key.add_argument(
+        "--alias", "-a", type=str, help="the alias of the key to get"
     )
     parser_get_key.set_defaults(func=client.get_key)
 
+    parser_add_key = subparsers.add_parser(
+        "add-key", help="add an ssh public key to EC2"
+    )
+    parser_add_key.add_argument(
+        "--alias", "-a", type=str, help="the alias of the key to add"
+    )
+    parser_add_key.add_argument(
+        "--filename",
+        "-f",
+        default=pathlib.Path("~/.ssh/id_rsa.pub").expanduser(),
+        help="file path of the ssh public key",
+    )
+    parser_add_key.set_defaults(func=client.add_key)
+
     parser_delete_key = subparsers.add_parser(
-        "delete-key", help="delete your current ssh key in EC2"
+        "delete-key", help="delete an ssh public key stored in EC2"
+    )
+    parser_delete_key.add_argument(
+        "--alias", "-a", type=str, help="the alias of the key to delete"
     )
     parser_delete_key.set_defaults(func=client.delete_key)
 
@@ -295,7 +317,9 @@ def _command(method):
         try:
             if method.__name__ not in NOSETUP_COMMANDS:
                 self._setup()
-            return method(self, known_args, unknown_args)
+            result = method(self, known_args, unknown_args)
+            self._finalize()
+            return result
         except urllib.request.HTTPError as exc:
             try:
                 response = json.load(exc)
@@ -334,6 +358,10 @@ class _DataFormats(enum.Enum):
     JSON = "json"
 
 
+class _Preferences(enum.Enum):
+    DEFAULT_KEY_ALIAS = "default_key_alias"
+
+
 class Client:
     default_instance_type = "t3.small"
     default_image_alias = "ubuntu18"
@@ -343,6 +371,7 @@ class Client:
         "sles12": "t2.small",
         None: default_instance_type,
     }
+    default_key_alias = "default"
     default_ssh_user = "ec2-user"
     default_ssh_users = {
         "centos": "centos",
@@ -360,6 +389,8 @@ class Client:
         self._cached_url_opener = None
         self._cached_credentials = None
         self._patched_credentials_file = None
+        self._cached_preferences = None
+        self._patched_preferences_file = None
         self.data_format = _DataFormats.INI
 
     def _setup(self):
@@ -367,6 +398,9 @@ class Client:
             raise ValueError("missing FUZZBUCKET_URL")
         if self._credentials in (None, ""):
             raise CredentialsError(self._url, self._credentials_file)
+
+    def _finalize(self):
+        self._write_preferences(self._preferences)
 
     @_command
     def login(self, known_args, _):
@@ -585,17 +619,79 @@ class Client:
         return True
 
     @_command
-    def get_key(self, *_):
-        req = self._build_request(_pjoin(self._url, "key"), method="GET")
+    def get_key(self, known_args, _):
+        key_alias = self._preferences.get(
+            _Preferences.DEFAULT_KEY_ALIAS.value, self.default_key_alias
+        )
+
+        if known_args.alias is not None:
+            key_alias = known_args.alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
+        req_url = _pjoin(self._url, "key")
+        if key_alias != self.default_key_alias:
+            req_url = _pjoin(self._url, "key", key_alias)
+
+        req = self._build_request(req_url, method="GET")
+
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
+
         print(self._format_key(raw_response["key"]), end="")
+
         return True
 
     @_command
-    def delete_key(self, *_):
-        req = self._build_request(_pjoin(self._url, "key"), method="DELETE")
+    def add_key(self, known_args, _):
+        key_alias = known_args.alias
+
+        if key_alias is None:
+            key_alias = known_args.filename.name.replace("_rsa.pub", "").lower()
+
+        if key_alias == "id":
+            key_alias = self.default_key_alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
+        payload = {"key_material": known_args.filename.read_text().strip()}
+
+        req_url = _pjoin(self._url, "key")
+        if key_alias != self.default_key_alias:
+            req_url = _pjoin(self._url, "key", key_alias)
+
+        req = self._build_request(
+            req_url,
+            method="PUT",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+
+        print(self._format_key(raw_response["key"]), end="")
+
+        return True
+
+    @_command
+    def delete_key(self, known_args, _):
+        key_alias = self._preferences.get(
+            _Preferences.DEFAULT_KEY_ALIAS.value, self.default_key_alias
+        )
+
+        if known_args.alias is not None:
+            key_alias = known_args.alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
+        req_url = _pjoin(self._url, "key")
+        if key_alias != self.default_key_alias:
+            req_url = _pjoin(self._url, "key", key_alias)
+
+        req = self._build_request(req_url, method="DELETE")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -647,6 +743,55 @@ class Client:
     @property
     def _url(self):
         return self._env.get("FUZZBUCKET_URL")
+
+    @property
+    def _preferences(self):
+        if self._cached_preferences is None:
+            self._cached_preferences = self._read_preferences()
+        return self._cached_preferences
+
+    def _read_preferences(self):
+        if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
+            log.debug("reading preferences directly from FUZZBUCKET_PREFERENCES")
+            return json.loads(self._env.get("FUZZBUCKET_PREFERENCES"))
+
+        self._preferences_file.touch()
+        with self._preferences_file.open() as infile:
+            try:
+                return json.load(infile)
+            except json.decoder.JSONDecodeError as exc:
+                log.debug(
+                    f"failed to load preferences from {str(self._preferences_file)!r};"
+                    + " creating new preferences"
+                )
+                return {}
+
+    def _write_preferences(self, preferences):
+        if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
+            log.debug(
+                "skipping writing preferences due to presence of FUZZBUCKET_PREFERENCES"
+            )
+            return
+
+        preferences["//"] = "WARNING: this file is generated"
+        preferences["__updated_at__"] = str(datetime.datetime.utcnow())
+
+        with self._preferences_file.open("w") as outfile:
+            json.dump(preferences, outfile, sort_keys=True, indent=2)
+
+        self._cached_preferences = None
+
+    @property
+    def _preferences_file(self):
+        if self._patched_preferences_file is not None:
+            return self._patched_preferences_file
+        file = pathlib.Path("~/.cache/fuzzbucket/preferences").expanduser()
+        file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+        return file
+
+    @_preferences_file.setter
+    def _preferences_file(self, value):
+        self._patched_preferences_file = value
 
     @property
     def _credentials_section(self):
