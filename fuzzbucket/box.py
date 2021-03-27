@@ -12,6 +12,7 @@ class Box:
     image_id: NoneString = None
     instance_id: NoneString = None
     instance_type: NoneString = None
+    key_alias: NoneString = None
     name: NoneString = None
     public_dns_name: NoneString = None
     public_ip: NoneString = None
@@ -59,4 +60,8 @@ class Box:
             }.get(tag["Key"], [None, str])
             if attr is not None:
                 setattr(box, attr, cast(tag["Value"]))  # type: ignore
+        key_alias = box.user
+        if instance["KeyName"] != box.user:
+            key_alias = instance["KeyName"].replace(f"${box.user}-", "")
+        box.key_alias = key_alias
         return box

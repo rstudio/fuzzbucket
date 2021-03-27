@@ -242,6 +242,11 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     )
     parser_get_key.set_defaults(func=client.get_key)
 
+    parser_list_keys = subparsers.add_parser(
+        "list-keys", help="list ssh public keys stored in EC2"
+    )
+    parser_list_keys.set_defaults(func=client.list_keys)
+
     parser_add_key = subparsers.add_parser(
         "add-key", help="add an ssh public key to EC2"
     )
@@ -656,7 +661,18 @@ class Client:
         with self._urlopen(req) as response:
             raw_response = json.load(response)
 
-        print(self._format_key(raw_response["key"]), end="")
+        print(self._format_keys([raw_response["key"]]), end="")
+
+        return True
+
+    @_command
+    def list_keys(self, *_):
+        req = self._build_request("/keys", method="GET")
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+
+        print(self._format_keys(raw_response["keys"]), end="")
 
         return True
 
@@ -689,7 +705,7 @@ class Client:
         with self._urlopen(req) as response:
             raw_response = json.load(response)
 
-        print(self._format_key(raw_response["key"]), end="")
+        print(self._format_keys([raw_response["key"]]), end="")
 
         return True
 
@@ -713,7 +729,7 @@ class Client:
         with self._urlopen(req) as response:
             raw_response = json.load(response)
         log.info(f"deleted key for user={self._user!r}")
-        print(self._format_key(raw_response["key"]), end="")
+        print(self._format_keys([raw_response["key"]]), end="")
         return True
 
     def _find_box(self, box_search):
@@ -960,20 +976,24 @@ class Client:
     def _format_boxes_json(self, boxes):
         return json.dumps({"boxes": {box["name"]: box for box in boxes}}, indent=2)
 
-    def _format_key(self, key):
-        return getattr(self, f"_format_key_{self.data_format.value}")(key)
+    def _format_keys(self, keys):
+        return getattr(self, f"_format_keys_{self.data_format.value}")(keys)
 
-    def _format_key_ini(self, key):
-        key_ini = configparser.ConfigParser()
-        key_ini.add_section("key")
-        for attr in key.keys():
-            key_ini.set("key", str(attr), str(key[attr]))
+    def _format_keys_ini(self, keys):
+        keys_ini = configparser.ConfigParser()
+        for i, key in enumerate(keys):
+            key_alias = key.get("alias", f"unaliased-key-{i}")
+            keys_ini.add_section(key_alias)
+            for attr, value in key.items():
+                if value is None:
+                    continue
+                keys_ini.set(key_alias, str(attr), str(value))
         buf = io.StringIO()
-        key_ini.write(buf)
+        keys_ini.write(buf)
         buf.seek(0)
         return buf.read()
 
-    def _format_key_json(self, key):
+    def _format_keys_json(self, key):
         return json.dumps({"key": key}, indent=2)
 
     def _format_image_aliases(self, image_aliases):

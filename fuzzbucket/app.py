@@ -469,9 +469,39 @@ def get_key(alias):
         jsonify(
             key=dict(
                 name=matching_key["KeyName"],
+                alias=full_key_alias,
                 key_pair_id=matching_key["KeyPairId"],
                 ec2_fingerprint=matching_key["KeyFingerprint"],
             ),
+            you=request.remote_user,
+        ),
+        200,
+    )
+
+
+@app.route("/keys", methods=["GET"])
+def list_keys():
+    if not is_fully_authd():
+        return auth_403_github()
+
+    matching_keys = _find_matching_ec2_key_pairs(session["user"])
+
+    def key_alias(key_name):
+        if key_name == session["user"]:
+            return "default"
+        return key_name.replace(f"{session['user']}-", "")
+
+    return (
+        jsonify(
+            keys=[
+                dict(
+                    name=matching_key["KeyName"],
+                    alias=key_alias(matching_key["KeyName"]),
+                    key_pair_id=matching_key["KeyPairId"],
+                    ec2_fingerprint=matching_key["KeyFingerprint"],
+                )
+                for matching_key in matching_keys
+            ],
             you=request.remote_user,
         ),
         200,
