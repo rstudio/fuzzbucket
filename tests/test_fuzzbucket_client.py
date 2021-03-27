@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import pathlib
 import random
 import re
 import urllib.request
@@ -11,6 +12,21 @@ import urllib.request
 import pytest
 
 import fuzzbucket_client.__main__
+
+
+class FakePath:
+    def __init__(self, filepath: str):
+        self._orig_filepath = filepath
+        self.text_content = ""
+
+    @property
+    def name(self):
+        return os.path.basename(self._orig_filepath)
+
+    def read_text(self):
+        if self.text_content is None:
+            raise IOError("oh no")
+        return self.text_content
 
 
 @pytest.fixture(autouse=True)
@@ -771,6 +787,91 @@ def test_client_get_key(monkeypatch, capsys, data_format, matches):
     captured = capsys.readouterr()
     for match in matches:
         assert match in captured.out
+
+
+@pytest.mark.parametrize(
+    ("data_format", "matches"),
+    [
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.INI,
+            ["braking = litho", "retrograde = True"],
+            id="happy_ini",
+        ),
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.JSON,
+            ['"braking": "litho"', '"retrograde": true'],
+            id="happy_json",
+        ),
+    ],
+)
+def test_client_list_keys(monkeypatch, capsys, data_format, matches):
+    client = fuzzbucket_client.__main__.Client()
+    client.data_format = data_format
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(
+            io.StringIO('{"keys":[{"braking":"litho","retrograde":true}]}')
+        ),
+    )
+
+    assert client.list_keys(argparse.Namespace(), "unknown")
+
+    captured = capsys.readouterr()
+    for match in matches:
+        assert match in captured.out
+
+
+@pytest.mark.parametrize(
+    ("alias", "filename", "key_material", "success"),
+    [
+        pytest.param(
+            "hurr",
+            FakePath("/dev/null"),
+            "ssh-rsa tada",
+            True,
+            id="happy_alias",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/fancy_rsa.pub"),
+            "ssh-rsa confetti",
+            True,
+            id="happy_filename",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/id_rsa.pub"),
+            "ssh-rsa cow2",
+            True,
+            id="happy_filename_default_alias",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/fancy_rsa.pub"),
+            None,
+            False,
+            id="failed_file_read",
+        ),
+    ],
+)
+def test_client_add_key(monkeypatch, caplog, alias, filename, key_material, success):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO('{"key":{"braking":"litho","retrograde":true}}')),
+    )
+
+    filename.text_content = key_material
+
+    assert success == client.add_key(
+        argparse.Namespace(alias=alias, filename=filename), "unknown"
+    )
 
 
 def test_client_delete_key(monkeypatch, caplog):

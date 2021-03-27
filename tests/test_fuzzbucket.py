@@ -1024,6 +1024,69 @@ def test_get_key(authd_headers, monkeypatch, authd, session_user, key_alias, exp
 
 
 @pytest.mark.parametrize(
+    ("authd", "session_user", "n_keys", "expected"),
+    [
+        pytest.param(
+            True,
+            "lordtestingham",
+            2,
+            200,
+            id="happy",
+        ),
+        pytest.param(
+            True,
+            "rumples",
+            0,
+            200,
+            id="none",
+        ),
+        pytest.param(False, "foible", 0, 403, id="forbidden"),
+    ],
+)
+@mock_ec2
+@mock_dynamodb2
+def test_list_keys(authd_headers, monkeypatch, authd, session_user, n_keys, expected):
+    ec2_client = boto3.client("ec2")
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+
+    fake_session = {"user": session_user}
+    monkeypatch.setattr(fuzzbucket.app, "session", fake_session)
+
+    def fake_describe_key_pairs():
+        return {
+            "KeyPairs": [
+                {
+                    "KeyName": "lordTestingham",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                },
+                {
+                    "KeyName": "lordTestingham-fancy",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
+    response = None
+    with app.test_client() as c:
+        response = c.get("/keys", headers=authd_headers)
+    assert response is not None
+    assert response.status_code == expected
+    if authd and expected < 400:
+        assert response.json is not None
+        assert "keys" in response.json
+        assert response.json["keys"] is not None
+        assert len(response.json["keys"]) == n_keys
+
+
+@pytest.mark.parametrize(
     ("authd", "session_user", "key_alias", "request_kwargs", "expected"),
     [
         pytest.param(

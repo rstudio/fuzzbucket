@@ -487,7 +487,7 @@ def list_keys():
     matching_keys = _find_matching_ec2_key_pairs(session["user"])
 
     def key_alias(key_name):
-        if key_name == session["user"]:
+        if str(key_name).lower() == str(session["user"]).lower():
             return "default"
         return key_name.replace(f"{session['user']}-", "")
 

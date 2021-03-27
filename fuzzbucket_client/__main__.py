@@ -256,6 +256,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_add_key.add_argument(
         "--filename",
         "-f",
+        type=lambda f: pathlib.Path(f).expanduser(),
         default=pathlib.Path("~/.ssh/id_rsa.pub").expanduser(),
         help="file path of the ssh public key",
     )
@@ -681,7 +682,7 @@ class Client:
         key_alias = known_args.alias
 
         if key_alias is None:
-            key_alias = known_args.filename.name.replace("_rsa.pub", "").lower()
+            key_alias = known_args.filename.name.lower().replace("_rsa.pub", "")
 
         if key_alias == "id":
             key_alias = self.default_key_alias
