@@ -667,7 +667,7 @@ class Client:
 
     @_command
     def list_keys(self, *_):
-        req = self._build_request("/keys", method="GET")
+        req = self._build_request(_pjoin(self._url, "keys"), method="GET")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -993,8 +993,8 @@ class Client:
         buf.seek(0)
         return buf.read()
 
-    def _format_keys_json(self, key):
-        return json.dumps({"key": key}, indent=2)
+    def _format_keys_json(self, keys):
+        return json.dumps({"keys": keys}, indent=2)
 
     def _format_image_aliases(self, image_aliases):
         return getattr(self, f"_format_image_aliases_{self.data_format.value}")(

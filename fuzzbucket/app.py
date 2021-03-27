@@ -613,6 +613,18 @@ def _find_matching_ec2_key_pair(user: str) -> typing.Optional[dict]:
     return None
 
 
+def _find_matching_ec2_key_pairs(prefix: str) -> typing.List[dict]:
+    low_prefix = str(prefix).lower()
+    ret = []
+
+    for key_pair in get_ec2_client().describe_key_pairs().get("KeyPairs", []):
+        key_name = key_pair["KeyName"].lower()
+        if key_name == low_prefix or key_name.startswith(low_prefix + "-"):
+            ret.append(key_pair)
+
+    return ret
+
+
 def _resolve_ami_alias(image_alias: str) -> NoneString:
     try:
         resp = (
