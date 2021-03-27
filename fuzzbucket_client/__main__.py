@@ -129,6 +129,12 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         default=None,
         help="set the root volume size (in GB)",
     )
+    parser_create.add_argument(
+        "-k",
+        "--key-alias",
+        default=None,
+        help="specify which key alias to use",
+    )
     parser_create.set_defaults(func=client.create)
 
     parser_list = subparsers.add_parser("list", aliases=["ls"], help="list your boxes")
@@ -459,10 +465,21 @@ class Client:
 
     @_command
     def create(self, known_args, _):
+        key_alias = self._preferences.get(
+            _Preferences.DEFAULT_KEY_ALIAS.value, self.default_key_alias
+        )
+
+        if known_args.key_alias is not None:
+            key_alias = known_args.key_alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
         payload = {
             "instance_type": known_args.instance_type,
             "ttl": known_args.ttl,
+            "key_alias": key_alias,
         }
+
         if known_args.image.startswith("ami-"):
             payload["ami"] = known_args.image
         else:

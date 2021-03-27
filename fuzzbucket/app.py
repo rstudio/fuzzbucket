@@ -239,7 +239,8 @@ def create_box():
         full_key_alias = f"{session['user']}-{key_alias}"
 
     matching_key = _find_matching_ec2_key_pair(full_key_alias)
-    username = (matching_key or {}).get("KeyName")
+    username = session["user"]
+    resolved_key_name = (matching_key or {}).get("KeyName")
 
     if matching_key is None:
         if full_key_alias != session["user"]:
@@ -262,6 +263,7 @@ def create_box():
         get_ec2_client().import_key_pair(
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
+        resolved_key_name = username
         log.debug(f"imported rsa public key for user={username}")
 
     name = request.json.get("name")
@@ -329,7 +331,7 @@ def create_box():
             "instance_type",
             os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
         ),
-        KeyName=username,
+        KeyName=resolved_key_name,
         MinCount=1,
         MaxCount=1,
         NetworkInterfaces=[network_interface],
