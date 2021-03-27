@@ -4,7 +4,6 @@ import io
 import json
 import logging
 import os
-import pathlib
 import random
 import re
 import urllib.request
@@ -282,7 +281,13 @@ def test_client_list(monkeypatch, args):
             id="interrupted",
         ),
         pytest.param(
-            "speedy", ("I am more than a stereotype",), None, False, (), 86, id="no_url"
+            "speedy",
+            ("I am more than a stereotype",),
+            None,
+            False,
+            (),
+            86,
+            id="no_url",
         ),
     ],
 )
@@ -956,7 +961,13 @@ def test_client_delete_key(monkeypatch, caplog):
     ],
 )
 def test_client__write_credentials(
-    monkeypatch, env_credentials, user, secret, file_exists, file_content, write_matches
+    monkeypatch,
+    env_credentials,
+    user,
+    secret,
+    file_exists,
+    file_content,
+    write_matches,
 ):
     state = {"out": io.StringIO()}
 

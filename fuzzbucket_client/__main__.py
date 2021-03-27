@@ -238,7 +238,11 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "get-key", help="get an ssh public key id and fingerprint as stored in EC2"
     )
     parser_get_key.add_argument(
-        "--alias", "-a", type=str, default="default", help="the alias of the key to get"
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to get",
     )
     parser_get_key.set_defaults(func=client.get_key)
 
@@ -263,7 +267,11 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "add-key", help="add an ssh public key to EC2"
     )
     parser_add_key.add_argument(
-        "--alias", "-a", type=str, default="default", help="the alias of the key to add"
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to add",
     )
     parser_add_key.add_argument(
         "--filename",
@@ -685,7 +693,8 @@ class Client:
     def set_key(self, known_args, _):
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = known_args.alias
         log.info(
-            f"set key with alias={known_args.alias!r} as local default for user={self._user!r}"
+            f"set key with alias={known_args.alias!r} as local default "
+            + "for user={self._user!r}"
         )
         return True
 
@@ -815,7 +824,7 @@ class Client:
             self._preferences_file.touch()
             with self._preferences_file.open() as infile:
                 return json.load(infile)
-        except json.decoder.JSONDecodeError as exc:
+        except json.decoder.JSONDecodeError:
             log.debug("failed to load preferences; returning empty preferences")
             return {}
 

@@ -1097,12 +1097,14 @@ def test_list_keys(authd_headers, monkeypatch, authd, session_user, n_keys, expe
                 json={
                     "key_material": "".join(
                         [
-                            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCwZRcwdL1TLYMsKT6oYiKHjME0",
-                            "iyQKl1mOIZNA2pGqOJ8IH7UPX4AocNhw1G5xzAUG6FChZ32h8E+AMWjaJoOBnXSq",
-                            "lM3m1Up4KV0UsvPI5mVg/bm9jiCQ5OkwReEkmSC0hPAsQ5ztSZlRmG6Yo343D1wI",
-                            "SgKOcmGEOdJRN26KiuIwSZ7LkMX1Uc1gIKaiNbTp8Jtn2nmB0O2R5Jvcsv5yICRj",
-                            "vTYl11hiNEg+TOJRQBoeyC2tsYwkWoabShm4Oi4X/UjB5UNDhGqQ/JX8XMyp0rFB",
-                            "IqTyd69csRoDqFJ2xGHYn+WmBbCHfyyks7LWzaCJzdekMg2iEBE7eoodM86V oop",
+                            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCwZRcwdL1TLYM",
+                            "sKT6oYiKHjME0iyQKl1mOIZNA2pGqOJ8IH7UPX4AocNhw1G5xzA",
+                            "UG6FChZ32h8E+AMWjaJoOBnXSqlM3m1Up4KV0UsvPI5mVg/bm9j",
+                            "iCQ5OkwReEkmSC0hPAsQ5ztSZlRmG6Yo343D1wISgKOcmGEOdJR",
+                            "N26KiuIwSZ7LkMX1Uc1gIKaiNbTp8Jtn2nmB0O2R5Jvcsv5yICR",
+                            "jvTYl11hiNEg+TOJRQBoeyC2tsYwkWoabShm4Oi4X/UjB5UNDhG",
+                            "qQ/JX8XMyp0rFBIqTyd69csRoDqFJ2xGHYn+WmBbCHfyyks7LWz",
+                            "aCJzdekMg2iEBE7eoodM86V oop",
                         ]
                     )
                 }
@@ -1118,12 +1120,14 @@ def test_list_keys(authd_headers, monkeypatch, authd, session_user, n_keys, expe
                 json={
                     "key_material": "".join(
                         [
-                            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCwZRcwdL1TLYMsKT6oYiKHjME0",
-                            "iyQKl1mOIZNA2pGqOJ8IH7UPX4AocNhw1G5xzAUG6FChZ32h8E+AMWjaJoOBnXSq",
-                            "lM3m1Up4KV0UsvPI5mVg/bm9jiCQ5OkwReEkmSC0hPAsQ5ztSZlRmG6Yo343D1wI",
-                            "SgKOcmGEOdJRN26KiuIwSZ7LkMX1Uc1gIKaiNbTp8Jtn2nmB0O2R5Jvcsv5yICRj",
-                            "vTYl11hiNEg+TOJRQBoeyC2tsYwkWoabShm4Oi4X/UjB5UNDhGqQ/JX8XMyp0rFB",
-                            "IqTyd69csRoDqFJ2xGHYn+WmBbCHfyyks7LWzaCJzdekMg2iEBE7eoodM86V oop",
+                            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCwZRcwdL1TLYM",
+                            "sKT6oYiKHjME0iyQKl1mOIZNA2pGqOJ8IH7UPX4AocNhw1G5xzA",
+                            "UG6FChZ32h8E+AMWjaJoOBnXSqlM3m1Up4KV0UsvPI5mVg/bm9j",
+                            "iCQ5OkwReEkmSC0hPAsQ5ztSZlRmG6Yo343D1wISgKOcmGEOdJR",
+                            "N26KiuIwSZ7LkMX1Uc1gIKaiNbTp8Jtn2nmB0O2R5Jvcsv5yICR",
+                            "jvTYl11hiNEg+TOJRQBoeyC2tsYwkWoabShm4Oi4X/UjB5UNDhG",
+                            "qQ/JX8XMyp0rFBIqTyd69csRoDqFJ2xGHYn+WmBbCHfyyks7LWz",
+                            "aCJzdekMg2iEBE7eoodM86V oop",
                         ]
                     )
                 }
@@ -1169,7 +1173,13 @@ def test_list_keys(authd_headers, monkeypatch, authd, session_user, n_keys, expe
 @mock_ec2
 @mock_dynamodb2
 def test_put_key(
-    authd_headers, monkeypatch, authd, session_user, key_alias, request_kwargs, expected
+    authd_headers,
+    monkeypatch,
+    authd,
+    session_user,
+    key_alias,
+    request_kwargs,
+    expected,
 ):
     ec2_client = boto3.client("ec2")
     dynamodb = boto3.resource("dynamodb")
@@ -1190,7 +1200,8 @@ def test_put_key(
                     {
                         "KeyName": "charizard",
                         "KeyPairId": "key-fafafafafafafafaf",
-                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff"
+                        + ":aa:ff:aa:ff:aa",
                     }
                 ]
             },
@@ -1199,12 +1210,14 @@ def test_put_key(
                     {
                         "KeyName": "charizard",
                         "KeyPairId": "key-fafafafafafafafaf",
-                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff"
+                        + ":aa:ff:aa:ff:aa",
                     },
                     {
                         "KeyName": "philobuster-fancy",
                         "KeyPairId": "key-fafafafafafafafaf",
-                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff"
+                        + ":aa:ff:aa:ff:aa",
                     },
                 ]
             },
