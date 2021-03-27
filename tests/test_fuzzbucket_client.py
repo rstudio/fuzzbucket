@@ -33,9 +33,14 @@ class FakePath:
 def config_setup(tmpdir, monkeypatch):
     url = f"http://fuzzbucket.example.org/bleep/bloop/dev/{random.randint(42, 666)}"
     fake_home = tmpdir.join("home")
-    fake_home.mkdir().mkdir(".cache").mkdir("fuzzbucket").join(
-        "credentials"
-    ).write_text(f'[server "{url}"]\ncredentials = whimsy:doodles\n', "utf-8")
+    cache_fuzzbucket_dir = fake_home.mkdir().mkdir(".cache").mkdir("fuzzbucket")
+    cache_fuzzbucket_dir.join("credentials").write_text(
+        f'[server "{url}"]\ncredentials = whimsy:doodles\n', "utf-8"
+    )
+    cache_fuzzbucket_dir.join("preferences").write_text(
+        json.dumps({"default_key_alias": "lovely", "//": "WARNING: omgosh donut edit"}),
+        "utf-8",
+    )
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setenv("FUZZBUCKET_URL", url)
     os.environ.pop("FUZZBUCKET_CREDENTIALS", None)
@@ -789,6 +794,20 @@ def test_client_get_key(monkeypatch, capsys, data_format, matches):
         assert match in captured.out
 
 
+def test_client_set_key():
+    client = fuzzbucket_client.__main__.Client()
+    client._preferences[
+        fuzzbucket_client.__main__._Preferences.DEFAULT_KEY_ALIAS.value
+    ] = "no"
+    assert client.set_key(argparse.Namespace(alias="horses"), "unknown")
+    assert (
+        client._preferences[
+            fuzzbucket_client.__main__._Preferences.DEFAULT_KEY_ALIAS.value
+        ]
+        == "horses"
+    )
+
+
 @pytest.mark.parametrize(
     ("data_format", "matches"),
     [
@@ -984,3 +1003,47 @@ def test_client__read_credentials(env_credentials, expected):
         client._env["FUZZBUCKET_CREDENTIALS"] = env_credentials
     assert client._cached_credentials is None
     assert client._read_credentials() == expected
+
+
+@pytest.mark.parametrize(
+    ("env_preferences", "matches"),
+    [
+        pytest.param(
+            None,
+            ["default_key_alias", "//"],
+            id="from_file",
+        ),
+        pytest.param(
+            '{"lapis":"lazuli"}',
+            ["lapis"],
+            id="from_env",
+        ),
+        pytest.param('{"oh n', [], id="sad_json_from_env"),
+    ],
+)
+def test_client__read_preferences(env_preferences, matches):
+    client = fuzzbucket_client.__main__.Client()
+    if env_preferences is not None:
+        client._env["FUZZBUCKET_PREFERENCES"] = env_preferences
+    assert client._cached_preferences is None
+    prefs = client._read_preferences()
+    for match in matches:
+        assert match in prefs
+
+
+@pytest.mark.parametrize(
+    ("env_preferences", "matches"),
+    [
+        pytest.param(None, ["elephant"], id="to_file"),
+        pytest.param('{"cobblestone":"stairs"}', [], id="not_to_env"),
+    ],
+)
+def test_client__write_preferences(env_preferences, matches):
+    client = fuzzbucket_client.__main__.Client()
+    if env_preferences is not None:
+        client._env["FUZZBUCKET_PREFERENCES"] = env_preferences
+    assert client._cached_preferences is None
+    client._write_preferences({"elephant": "dance"})
+    prefs = client._read_preferences()
+    for match in matches:
+        assert match in prefs

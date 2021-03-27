@@ -238,9 +238,21 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "get-key", help="get an ssh public key id and fingerprint as stored in EC2"
     )
     parser_get_key.add_argument(
-        "--alias", "-a", type=str, help="the alias of the key to get"
+        "--alias", "-a", type=str, default="default", help="the alias of the key to get"
     )
     parser_get_key.set_defaults(func=client.get_key)
+
+    parser_set_key = subparsers.add_parser(
+        "set-key", help="set the local default key alias to use when creating boxes"
+    )
+    parser_set_key.add_argument(
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to set as the local default",
+    )
+    parser_set_key.set_defaults(func=client.set_key)
 
     parser_list_keys = subparsers.add_parser(
         "list-keys", help="list ssh public keys stored in EC2"
@@ -251,7 +263,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "add-key", help="add an ssh public key to EC2"
     )
     parser_add_key.add_argument(
-        "--alias", "-a", type=str, help="the alias of the key to add"
+        "--alias", "-a", type=str, default="default", help="the alias of the key to add"
     )
     parser_add_key.add_argument(
         "--filename",
@@ -266,7 +278,11 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "delete-key", help="delete an ssh public key stored in EC2"
     )
     parser_delete_key.add_argument(
-        "--alias", "-a", type=str, help="the alias of the key to delete"
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to delete",
     )
     parser_delete_key.set_defaults(func=client.delete_key)
 
@@ -402,7 +418,6 @@ class Client:
         self._cached_credentials = None
         self._patched_credentials_file = None
         self._cached_preferences = None
-        self._patched_preferences_file = None
         self.data_format = _DataFormats.INI
 
     def _setup(self):
@@ -667,6 +682,14 @@ class Client:
         return True
 
     @_command
+    def set_key(self, known_args, _):
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = known_args.alias
+        log.info(
+            f"set key with alias={known_args.alias!r} as local default for user={self._user!r}"
+        )
+        return True
+
+    @_command
     def list_keys(self, *_):
         req = self._build_request(_pjoin(self._url, "keys"), method="GET")
         raw_response = {}
@@ -729,7 +752,7 @@ class Client:
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
-        log.info(f"deleted key for user={self._user!r}")
+        log.info(f"deleted key with alias={key_alias!r} for user={self._user!r}")
         print(self._format_keys([raw_response["key"]]), end="")
         return True
 
@@ -785,20 +808,16 @@ class Client:
         return self._cached_preferences
 
     def _read_preferences(self):
-        if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
-            log.debug("reading preferences directly from FUZZBUCKET_PREFERENCES")
-            return json.loads(self._env.get("FUZZBUCKET_PREFERENCES"))
-
-        self._preferences_file.touch()
-        with self._preferences_file.open() as infile:
-            try:
+        try:
+            if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
+                log.debug("reading preferences directly from FUZZBUCKET_PREFERENCES")
+                return json.loads(self._env.get("FUZZBUCKET_PREFERENCES"))
+            self._preferences_file.touch()
+            with self._preferences_file.open() as infile:
                 return json.load(infile)
-            except json.decoder.JSONDecodeError as exc:
-                log.debug(
-                    f"failed to load preferences from {str(self._preferences_file)!r};"
-                    + " creating new preferences"
-                )
-                return {}
+        except json.decoder.JSONDecodeError as exc:
+            log.debug("failed to load preferences; returning empty preferences")
+            return {}
 
     def _write_preferences(self, preferences):
         if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
@@ -817,15 +836,9 @@ class Client:
 
     @property
     def _preferences_file(self):
-        if self._patched_preferences_file is not None:
-            return self._patched_preferences_file
         file = pathlib.Path("~/.cache/fuzzbucket/preferences").expanduser()
         file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
         return file
-
-    @_preferences_file.setter
-    def _preferences_file(self, value):
-        self._patched_preferences_file = value
 
     @property
     def _credentials_section(self):
