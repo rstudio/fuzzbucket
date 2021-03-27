@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- get, list, add, and delete of public keys
+    - allow adding public key material from file with alias
+    - allow automatic adding `~/.ssh/id_rsa.pub`
+    - caching of preferred key alias
+
 ### Changed
 ### Deprecated
 ### Removed
