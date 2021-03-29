@@ -7,16 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- get, list, add, and delete of public keys
-    - allow adding public key material from file with alias
-    - allow automatic adding `~/.ssh/id_rsa.pub`
-    - caching of preferred key alias
-
 ### Changed
 ### Deprecated
 ### Removed
 ### Fixed
 ### Security
+
+## [0.7.0] - 2021-03-29
+
+### Added
+- get, list, add, and delete of public keys
+    - allow adding public key material from file with alias
+    - allow automatic adding `~/.ssh/id_rsa.pub`
+    - caching of preferred key alias
+
+### Security
+- bumped all Python and Node dependencies
 
 ## [0.6.2] - 2021-03-03
 
@@ -150,7 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.6.2...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/rstudio/fuzzbucket/compare/0.6.2...0.7.0
 [0.6.2]: https://github.com/rstudio/fuzzbucket/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/rstudio/fuzzbucket/compare/0.6.0...0.6.1
 [0.6.0]: https://github.com/rstudio/fuzzbucket/compare/0.5.1...0.6.0
