@@ -10,6 +10,8 @@ Configuration is accepted via the following environment variables:
     Optional:
     FUZZBUCKET_CREDENTIALS - credentials string value
         see ~/.cache/fuzzbucket/credentials
+    FUZZBUCKET_PREFERENCES - preferences JSON string value
+        see ~/.cache/fuzzbucket/preferences
 
 """
 import argparse
@@ -127,6 +129,12 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         default=None,
         help="set the root volume size (in GB)",
     )
+    parser_create.add_argument(
+        "-k",
+        "--key-alias",
+        default=None,
+        help="specify which key alias to use",
+    )
     parser_create.set_defaults(func=client.create)
 
     parser_list = subparsers.add_parser("list", aliases=["ls"], help="list your boxes")
@@ -227,12 +235,62 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_delete_alias.set_defaults(func=client.delete_alias)
 
     parser_get_key = subparsers.add_parser(
-        "get-key", help="get your current ssh key id and fingerprint in EC2"
+        "get-key", help="get an ssh public key id and fingerprint as stored in EC2"
+    )
+    parser_get_key.add_argument(
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to get",
     )
     parser_get_key.set_defaults(func=client.get_key)
 
+    parser_set_key = subparsers.add_parser(
+        "set-key", help="set the local default key alias to use when creating boxes"
+    )
+    parser_set_key.add_argument(
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to set as the local default",
+    )
+    parser_set_key.set_defaults(func=client.set_key)
+
+    parser_list_keys = subparsers.add_parser(
+        "list-keys", help="list ssh public keys stored in EC2"
+    )
+    parser_list_keys.set_defaults(func=client.list_keys)
+
+    parser_add_key = subparsers.add_parser(
+        "add-key", help="add an ssh public key to EC2"
+    )
+    parser_add_key.add_argument(
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to add",
+    )
+    parser_add_key.add_argument(
+        "--filename",
+        "-f",
+        type=lambda f: pathlib.Path(f).expanduser(),
+        default=pathlib.Path("~/.ssh/id_rsa.pub").expanduser(),
+        help="file path of the ssh public key",
+    )
+    parser_add_key.set_defaults(func=client.add_key)
+
     parser_delete_key = subparsers.add_parser(
-        "delete-key", help="delete your current ssh key in EC2"
+        "delete-key", help="delete an ssh public key stored in EC2"
+    )
+    parser_delete_key.add_argument(
+        "--alias",
+        "-a",
+        type=str,
+        default="default",
+        help="the alias of the key to delete",
     )
     parser_delete_key.set_defaults(func=client.delete_key)
 
@@ -295,7 +353,9 @@ def _command(method):
         try:
             if method.__name__ not in NOSETUP_COMMANDS:
                 self._setup()
-            return method(self, known_args, unknown_args)
+            result = method(self, known_args, unknown_args)
+            self._finalize()
+            return result
         except urllib.request.HTTPError as exc:
             try:
                 response = json.load(exc)
@@ -334,6 +394,10 @@ class _DataFormats(enum.Enum):
     JSON = "json"
 
 
+class _Preferences(enum.Enum):
+    DEFAULT_KEY_ALIAS = "default_key_alias"
+
+
 class Client:
     default_instance_type = "t3.small"
     default_image_alias = "ubuntu18"
@@ -343,6 +407,7 @@ class Client:
         "sles12": "t2.small",
         None: default_instance_type,
     }
+    default_key_alias = "default"
     default_ssh_user = "ec2-user"
     default_ssh_users = {
         "centos": "centos",
@@ -360,6 +425,7 @@ class Client:
         self._cached_url_opener = None
         self._cached_credentials = None
         self._patched_credentials_file = None
+        self._cached_preferences = None
         self.data_format = _DataFormats.INI
 
     def _setup(self):
@@ -367,6 +433,9 @@ class Client:
             raise ValueError("missing FUZZBUCKET_URL")
         if self._credentials in (None, ""):
             raise CredentialsError(self._url, self._credentials_file)
+
+    def _finalize(self):
+        self._write_preferences(self._preferences)
 
     @_command
     def login(self, known_args, _):
@@ -425,10 +494,21 @@ class Client:
 
     @_command
     def create(self, known_args, _):
+        key_alias = self._preferences.get(
+            _Preferences.DEFAULT_KEY_ALIAS.value, self.default_key_alias
+        )
+
+        if known_args.key_alias is not None:
+            key_alias = known_args.key_alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
         payload = {
             "instance_type": known_args.instance_type,
             "ttl": known_args.ttl,
+            "key_alias": key_alias,
         }
+
         if known_args.image.startswith("ami-"):
             payload["ami"] = known_args.image
         else:
@@ -585,22 +665,104 @@ class Client:
         return True
 
     @_command
-    def get_key(self, *_):
-        req = self._build_request(_pjoin(self._url, "key"), method="GET")
+    def get_key(self, known_args, _):
+        key_alias = self._preferences.get(
+            _Preferences.DEFAULT_KEY_ALIAS.value, self.default_key_alias
+        )
+
+        if known_args.alias is not None:
+            key_alias = known_args.alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
+        req_url = _pjoin(self._url, "key")
+        if key_alias != self.default_key_alias:
+            req_url = _pjoin(self._url, "key", key_alias)
+
+        req = self._build_request(req_url, method="GET")
+
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
-        print(self._format_key(raw_response["key"]), end="")
+
+        print(self._format_keys([raw_response["key"]]), end="")
+
         return True
 
     @_command
-    def delete_key(self, *_):
-        req = self._build_request(_pjoin(self._url, "key"), method="DELETE")
+    def set_key(self, known_args, _):
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = known_args.alias
+        log.info(
+            f"set key with alias={known_args.alias!r} as local default "
+            + "for user={self._user!r}"
+        )
+        return True
+
+    @_command
+    def list_keys(self, *_):
+        req = self._build_request(_pjoin(self._url, "keys"), method="GET")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
-        log.info(f"deleted key for user={self._user!r}")
-        print(self._format_key(raw_response["key"]), end="")
+
+        print(self._format_keys(raw_response["keys"]), end="")
+
+        return True
+
+    @_command
+    def add_key(self, known_args, _):
+        key_alias = known_args.alias
+
+        if key_alias is None:
+            key_alias = known_args.filename.name.lower().replace("_rsa.pub", "")
+
+        if key_alias == "id":
+            key_alias = self.default_key_alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
+        payload = {"key_material": known_args.filename.read_text().strip()}
+
+        req_url = _pjoin(self._url, "key")
+        if key_alias != self.default_key_alias:
+            req_url = _pjoin(self._url, "key", key_alias)
+
+        req = self._build_request(
+            req_url,
+            method="PUT",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+
+        print(self._format_keys([raw_response["key"]]), end="")
+
+        return True
+
+    @_command
+    def delete_key(self, known_args, _):
+        key_alias = self._preferences.get(
+            _Preferences.DEFAULT_KEY_ALIAS.value, self.default_key_alias
+        )
+
+        if known_args.alias is not None:
+            key_alias = known_args.alias
+
+        self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
+
+        req_url = _pjoin(self._url, "key")
+        if key_alias != self.default_key_alias:
+            req_url = _pjoin(self._url, "key", key_alias)
+
+        req = self._build_request(req_url, method="DELETE")
+        raw_response = {}
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+        log.info(f"deleted key with alias={key_alias!r} for user={self._user!r}")
+        print(self._format_keys([raw_response["key"]]), end="")
         return True
 
     def _find_box(self, box_search):
@@ -647,6 +809,45 @@ class Client:
     @property
     def _url(self):
         return self._env.get("FUZZBUCKET_URL")
+
+    @property
+    def _preferences(self):
+        if self._cached_preferences is None:
+            self._cached_preferences = self._read_preferences()
+        return self._cached_preferences
+
+    def _read_preferences(self):
+        try:
+            if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
+                log.debug("reading preferences directly from FUZZBUCKET_PREFERENCES")
+                return json.loads(self._env.get("FUZZBUCKET_PREFERENCES"))
+            self._preferences_file.touch()
+            with self._preferences_file.open() as infile:
+                return json.load(infile)
+        except json.decoder.JSONDecodeError:
+            log.debug("failed to load preferences; returning empty preferences")
+            return {}
+
+    def _write_preferences(self, preferences):
+        if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
+            log.debug(
+                "skipping writing preferences due to presence of FUZZBUCKET_PREFERENCES"
+            )
+            return
+
+        preferences["//"] = "WARNING: this file is generated"
+        preferences["__updated_at__"] = str(datetime.datetime.utcnow())
+
+        with self._preferences_file.open("w") as outfile:
+            json.dump(preferences, outfile, sort_keys=True, indent=2)
+
+        self._cached_preferences = None
+
+    @property
+    def _preferences_file(self):
+        file = pathlib.Path("~/.cache/fuzzbucket/preferences").expanduser()
+        file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+        return file
 
     @property
     def _credentials_section(self):
@@ -798,21 +999,25 @@ class Client:
     def _format_boxes_json(self, boxes):
         return json.dumps({"boxes": {box["name"]: box for box in boxes}}, indent=2)
 
-    def _format_key(self, key):
-        return getattr(self, f"_format_key_{self.data_format.value}")(key)
+    def _format_keys(self, keys):
+        return getattr(self, f"_format_keys_{self.data_format.value}")(keys)
 
-    def _format_key_ini(self, key):
-        key_ini = configparser.ConfigParser()
-        key_ini.add_section("key")
-        for attr in key.keys():
-            key_ini.set("key", str(attr), str(key[attr]))
+    def _format_keys_ini(self, keys):
+        keys_ini = configparser.ConfigParser()
+        for i, key in enumerate(keys):
+            key_alias = key.get("alias", f"unaliased-key-{i}")
+            keys_ini.add_section(key_alias)
+            for attr, value in key.items():
+                if value is None:
+                    continue
+                keys_ini.set(key_alias, str(attr), str(value))
         buf = io.StringIO()
-        key_ini.write(buf)
+        keys_ini.write(buf)
         buf.seek(0)
         return buf.read()
 
-    def _format_key_json(self, key):
-        return json.dumps({"key": key}, indent=2)
+    def _format_keys_json(self, keys):
+        return json.dumps({"keys": keys}, indent=2)
 
     def _format_image_aliases(self, image_aliases):
         return getattr(self, f"_format_image_aliases_{self.data_format.value}")(

@@ -13,13 +13,33 @@ import pytest
 import fuzzbucket_client.__main__
 
 
+class FakePath:
+    def __init__(self, filepath: str):
+        self._orig_filepath = filepath
+        self.text_content = ""
+
+    @property
+    def name(self):
+        return os.path.basename(self._orig_filepath)
+
+    def read_text(self):
+        if self.text_content is None:
+            raise IOError("oh no")
+        return self.text_content
+
+
 @pytest.fixture(autouse=True)
 def config_setup(tmpdir, monkeypatch):
     url = f"http://fuzzbucket.example.org/bleep/bloop/dev/{random.randint(42, 666)}"
     fake_home = tmpdir.join("home")
-    fake_home.mkdir().mkdir(".cache").mkdir("fuzzbucket").join(
-        "credentials"
-    ).write_text(f'[server "{url}"]\ncredentials = whimsy:doodles\n', "utf-8")
+    cache_fuzzbucket_dir = fake_home.mkdir().mkdir(".cache").mkdir("fuzzbucket")
+    cache_fuzzbucket_dir.join("credentials").write_text(
+        f'[server "{url}"]\ncredentials = whimsy:doodles\n', "utf-8"
+    )
+    cache_fuzzbucket_dir.join("preferences").write_text(
+        json.dumps({"default_key_alias": "lovely", "//": "WARNING: omgosh donut edit"}),
+        "utf-8",
+    )
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setenv("FUZZBUCKET_URL", url)
     os.environ.pop("FUZZBUCKET_CREDENTIALS", None)
@@ -147,6 +167,10 @@ def test_command_decorator(
             if "setup" in errors:
                 raise ValueError("setup error")
 
+        def _finalize(self):
+            if "finalize" in errors:
+                raise ValueError("finalize error")
+
     def fake_method(self, known_args, unknown_args):
         if "method" in errors:
             raise ValueError("method error")
@@ -257,7 +281,13 @@ def test_client_list(monkeypatch, args):
             id="interrupted",
         ),
         pytest.param(
-            "speedy", ("I am more than a stereotype",), None, False, (), 86, id="no_url"
+            "speedy",
+            ("I am more than a stereotype",),
+            None,
+            False,
+            (),
+            86,
+            id="no_url",
         ),
     ],
 )
@@ -769,6 +799,105 @@ def test_client_get_key(monkeypatch, capsys, data_format, matches):
         assert match in captured.out
 
 
+def test_client_set_key():
+    client = fuzzbucket_client.__main__.Client()
+    client._preferences[
+        fuzzbucket_client.__main__._Preferences.DEFAULT_KEY_ALIAS.value
+    ] = "no"
+    assert client.set_key(argparse.Namespace(alias="horses"), "unknown")
+    assert (
+        client._preferences[
+            fuzzbucket_client.__main__._Preferences.DEFAULT_KEY_ALIAS.value
+        ]
+        == "horses"
+    )
+
+
+@pytest.mark.parametrize(
+    ("data_format", "matches"),
+    [
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.INI,
+            ["braking = litho", "retrograde = True"],
+            id="happy_ini",
+        ),
+        pytest.param(
+            fuzzbucket_client.__main__._DataFormats.JSON,
+            ['"braking": "litho"', '"retrograde": true'],
+            id="happy_json",
+        ),
+    ],
+)
+def test_client_list_keys(monkeypatch, capsys, data_format, matches):
+    client = fuzzbucket_client.__main__.Client()
+    client.data_format = data_format
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(
+            io.StringIO('{"keys":[{"braking":"litho","retrograde":true}]}')
+        ),
+    )
+
+    assert client.list_keys(argparse.Namespace(), "unknown")
+
+    captured = capsys.readouterr()
+    for match in matches:
+        assert match in captured.out
+
+
+@pytest.mark.parametrize(
+    ("alias", "filename", "key_material", "success"),
+    [
+        pytest.param(
+            "hurr",
+            FakePath("/dev/null"),
+            "ssh-rsa tada",
+            True,
+            id="happy_alias",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/fancy_rsa.pub"),
+            "ssh-rsa confetti",
+            True,
+            id="happy_filename",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/id_rsa.pub"),
+            "ssh-rsa cow2",
+            True,
+            id="happy_filename_default_alias",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/fancy_rsa.pub"),
+            None,
+            False,
+            id="failed_file_read",
+        ),
+    ],
+)
+def test_client_add_key(monkeypatch, caplog, alias, filename, key_material, success):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO('{"key":{"braking":"litho","retrograde":true}}')),
+    )
+
+    filename.text_content = key_material
+
+    assert success == client.add_key(
+        argparse.Namespace(alias=alias, filename=filename), "unknown"
+    )
+
+
 def test_client_delete_key(monkeypatch, caplog):
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
@@ -832,7 +961,13 @@ def test_client_delete_key(monkeypatch, caplog):
     ],
 )
 def test_client__write_credentials(
-    monkeypatch, env_credentials, user, secret, file_exists, file_content, write_matches
+    monkeypatch,
+    env_credentials,
+    user,
+    secret,
+    file_exists,
+    file_content,
+    write_matches,
 ):
     state = {"out": io.StringIO()}
 
@@ -879,3 +1014,47 @@ def test_client__read_credentials(env_credentials, expected):
         client._env["FUZZBUCKET_CREDENTIALS"] = env_credentials
     assert client._cached_credentials is None
     assert client._read_credentials() == expected
+
+
+@pytest.mark.parametrize(
+    ("env_preferences", "matches"),
+    [
+        pytest.param(
+            None,
+            ["default_key_alias", "//"],
+            id="from_file",
+        ),
+        pytest.param(
+            '{"lapis":"lazuli"}',
+            ["lapis"],
+            id="from_env",
+        ),
+        pytest.param('{"oh n', [], id="sad_json_from_env"),
+    ],
+)
+def test_client__read_preferences(env_preferences, matches):
+    client = fuzzbucket_client.__main__.Client()
+    if env_preferences is not None:
+        client._env["FUZZBUCKET_PREFERENCES"] = env_preferences
+    assert client._cached_preferences is None
+    prefs = client._read_preferences()
+    for match in matches:
+        assert match in prefs
+
+
+@pytest.mark.parametrize(
+    ("env_preferences", "matches"),
+    [
+        pytest.param(None, ["elephant"], id="to_file"),
+        pytest.param('{"cobblestone":"stairs"}', [], id="not_to_env"),
+    ],
+)
+def test_client__write_preferences(env_preferences, matches):
+    client = fuzzbucket_client.__main__.Client()
+    if env_preferences is not None:
+        client._env["FUZZBUCKET_PREFERENCES"] = env_preferences
+    assert client._cached_preferences is None
+    client._write_preferences({"elephant": "dance"})
+    prefs = client._read_preferences()
+    for match in matches:
+        assert match in prefs

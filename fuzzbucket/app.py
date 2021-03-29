@@ -232,10 +232,26 @@ def create_box():
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
-    matching_key = _find_matching_ec2_key_pair(session["user"])
-    username = (matching_key or {}).get("KeyName")
+    key_alias = request.json.get("key_alias", "default")
+
+    full_key_alias = session["user"]
+    if str(key_alias).lower() != "default":
+        full_key_alias = f"{session['user']}-{key_alias}"
+
+    matching_key = _find_matching_ec2_key_pair(full_key_alias)
+    username = session["user"]
+    resolved_key_name = (matching_key or {}).get("KeyName")
 
     if matching_key is None:
+        if full_key_alias != session["user"]:
+            return (
+                jsonify(
+                    error=f"key with alias {key_alias} does not exist",
+                    you=request.remote_user,
+                ),
+                400,
+            )
+
         key_material = _fetch_first_github_rsa_key(session["user"])
         username = session["user"]
         if key_material == "":
@@ -247,6 +263,7 @@ def create_box():
         get_ec2_client().import_key_pair(
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
+        resolved_key_name = username
         log.debug(f"imported rsa public key for user={username}")
 
     name = request.json.get("name")
@@ -314,7 +331,7 @@ def create_box():
             "instance_type",
             os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
         ),
-        KeyName=username,
+        KeyName=resolved_key_name,
         MinCount=1,
         MaxCount=1,
         NetworkInterfaces=[network_interface],
@@ -434,12 +451,17 @@ def delete_image_alias(alias):
     return "", 204
 
 
-@app.route("/key", methods=["GET"])
-def get_key():
+@app.route("/key", defaults={"alias": "default"}, methods=["GET"])
+@app.route("/key/<string:alias>", methods=["GET"])
+def get_key(alias):
     if not is_fully_authd():
         return auth_403_github()
 
-    matching_key = _find_matching_ec2_key_pair(session["user"])
+    full_key_alias = session["user"]
+    if str(alias).lower() != "default":
+        full_key_alias = f"{session['user']}-{alias}"
+
+    matching_key = _find_matching_ec2_key_pair(full_key_alias)
 
     if matching_key is None:
         return jsonify(error="no key exists for you", you=request.remote_user), 404
@@ -447,6 +469,7 @@ def get_key():
         jsonify(
             key=dict(
                 name=matching_key["KeyName"],
+                alias=full_key_alias,
                 key_pair_id=matching_key["KeyPairId"],
                 ec2_fingerprint=matching_key["KeyFingerprint"],
             ),
@@ -456,12 +479,113 @@ def get_key():
     )
 
 
-@app.route("/key", methods=["DELETE"])
-def delete_key():
+@app.route("/keys", methods=["GET"])
+def list_keys():
     if not is_fully_authd():
         return auth_403_github()
 
-    matching_key = _find_matching_ec2_key_pair(session["user"])
+    matching_keys = _find_matching_ec2_key_pairs(session["user"])
+
+    def key_alias(key_name):
+        if str(key_name).lower() == str(session["user"]).lower():
+            return "default"
+        return key_name.replace(f"{session['user']}-", "")
+
+    return (
+        jsonify(
+            keys=[
+                dict(
+                    name=matching_key["KeyName"],
+                    alias=key_alias(matching_key["KeyName"]),
+                    key_pair_id=matching_key["KeyPairId"],
+                    ec2_fingerprint=matching_key["KeyFingerprint"],
+                )
+                for matching_key in matching_keys
+            ],
+            you=request.remote_user,
+        ),
+        200,
+    )
+
+
+@app.route("/key", defaults={"alias": "default"}, methods=["PUT"])
+@app.route("/key/<string:alias>", methods=["PUT"])
+def put_key(alias):
+    if not is_fully_authd():
+        return auth_403_github()
+
+    if not request.is_json:
+        return jsonify(error="request must be json", you=request.remote_user), 400
+
+    full_key_alias = session["user"]
+    if str(alias).lower() != "default":
+        full_key_alias = f"{session['user']}-{alias}"
+
+    log.debug(f"checking for existence of key with alias={full_key_alias}")
+
+    matching_key = _find_matching_ec2_key_pair(full_key_alias)
+    if matching_key is not None:
+        return (
+            jsonify(
+                error="key already exists and cannot be updated",
+                you=request.remote_user,
+            ),
+            409,
+        )
+
+    key_material = str(request.json.get("key_material", "")).strip()
+    if len(key_material) == 0:
+        return (
+            jsonify(error="request is missing key_material", you=request.remote_user),
+            400,
+        )
+
+    if not key_material.startswith("ssh-rsa"):
+        return (
+            jsonify(
+                error="key material must be of type ssh-rsa", you=request.remote_user
+            ),
+            400,
+        )
+
+    get_ec2_client().import_key_pair(
+        KeyName=full_key_alias, PublicKeyMaterial=key_material.encode("utf-8")
+    )
+    log.debug(f"imported rsa public key with alias={full_key_alias}")
+
+    matching_key = _find_matching_ec2_key_pair(full_key_alias)
+    if matching_key is None:
+        return (
+            jsonify(
+                error="failed to re-fetch key after import", you=request.remote_user
+            ),
+            500,
+        )
+
+    return (
+        jsonify(
+            key=dict(
+                name=matching_key["KeyName"],
+                key_pair_id=matching_key["KeyPairId"],
+                ec2_fingerprint=matching_key["KeyFingerprint"],
+            ),
+            you=request.remote_user,
+        ),
+        201,
+    )
+
+
+@app.route("/key", defaults={"alias": "default"}, methods=["DELETE"])
+@app.route("/key/<string:alias>", methods=["DELETE"])
+def delete_key(alias):
+    if not is_fully_authd():
+        return auth_403_github()
+
+    full_key_alias = session["user"]
+    if str(alias).lower() != "default":
+        full_key_alias = f"{session['user']}-{alias}"
+
+    matching_key = _find_matching_ec2_key_pair(full_key_alias)
     if matching_key is None:
         return jsonify(error="no key to delete for you", you=request.remote_user), 404
 
@@ -487,6 +611,18 @@ def _find_matching_ec2_key_pair(user: str) -> typing.Optional[dict]:
             return key_pair
 
     return None
+
+
+def _find_matching_ec2_key_pairs(prefix: str) -> typing.List[dict]:
+    low_prefix = str(prefix).lower()
+    ret = []
+
+    for key_pair in get_ec2_client().describe_key_pairs().get("KeyPairs", []):
+        key_name = key_pair["KeyName"].lower()
+        if key_name == low_prefix or key_name.startswith(low_prefix + "-"):
+            ret.append(key_pair)
+
+    return ret
 
 
 def _resolve_ami_alias(image_alias: str) -> NoneString:
