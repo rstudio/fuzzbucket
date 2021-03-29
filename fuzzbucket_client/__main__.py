@@ -648,9 +648,7 @@ class Client:
             log.error("failed to create image alias")
             return False
         for key, value in raw_response["image_aliases"].items():
-            log.info(
-                f"created alias for user={self._user!r} alias={key} " + f"ami={value}"
-            )
+            log.info(f"created alias for user={self._user!r} alias={key} ami={value}")
         print(self._format_image_aliases(raw_response["image_aliases"]), end="")
         return True
 
@@ -694,7 +692,7 @@ class Client:
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = known_args.alias
         log.info(
             f"set key with alias={known_args.alias!r} as local default "
-            + "for user={self._user!r}"
+            + f"for user={self._user!r}"
         )
         return True
 
