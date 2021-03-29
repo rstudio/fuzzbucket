@@ -1,4 +1,5 @@
 allowedGithubOrgs: ""
+apiKeys: []
 branding: Not Overridden Branding Value For Fuzzbucket
 flaskSecretKey: not even trying to be secure here ok
 awsRegion: us-east-1

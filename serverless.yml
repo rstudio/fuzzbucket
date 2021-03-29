@@ -1,4 +1,7 @@
 service: fuzzbucket
+configValidationMode: warn
+variablesResolutionMode: 20210219
+useDotenv: true
 custom: ${file(${env:FUZZBUCKET_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
 provider:
   name: aws
@@ -7,6 +10,7 @@ provider:
   timeout: ${self:custom.timeout, 6}
   apiKeys: ${self:custom.apiKeys}
   region: ${self:custom.awsRegion, 'us-east-1'}
+  lambdaHashingVersion: "20201221"
   environment:
     FUZZBUCKET_ALLOWED_GITHUB_ORGS: ${self:custom.allowedGithubOrgs, ''}
     FUZZBUCKET_BRANDING: ${self:custom.branding, ''}
@@ -16,10 +20,10 @@ provider:
     FUZZBUCKET_FLASK_SECRET_KEY: ${self:custom.flaskSecretKey, ''}
     FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ${self:custom.oauth.clientID, ''}
     FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret, ''}
-    FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
+    FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName}
     FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
     FUZZBUCKET_ROOT_LOG_LEVEL: ${self:custom.rootLogLevel, 'info'}
-    FUZZBUCKET_USERS_TABLE_NAME: ${self:custom.usersTableName, 'fuzzbucket-${opt:stage, 'dev'}-users'}
+    FUZZBUCKET_USERS_TABLE_NAME: ${self:custom.usersTableName}
   iamRoleStatements:
   - Effect: Allow
     Action:
@@ -221,7 +225,7 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
-        TableName: ${self:custom.imageAliasesTableName, 'fuzzbucket-${opt:stage, 'dev'}-image-aliases'}
+        TableName: ${self:custom.imageAliasesTableName}
     UsersDynamoDBTable:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -232,7 +236,7 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
-        TableName: ${self:custom.usersTableName, 'fuzzbucket-${opt:stage, 'dev'}-users'}
+        TableName: ${self:custom.usersTableName}
 functions:
   api:
     handler: wsgi_handler.handler
