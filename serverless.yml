@@ -192,6 +192,11 @@ resources:
           FromPort: 8443
           IpProtocol: tcp
           ToPort: 8443
+        - CidrIp: 0.0.0.0/0
+          Description: allow vnc network traffic 
+          FromPort: 5900
+          IpProtocol: tcp
+          ToPort: 5900
         Tags:
         - Key: Name
           Value: fuzzbucket-${opt:stage, 'dev'}-default-sg
