@@ -135,6 +135,12 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         default=None,
         help="specify which key alias to use",
     )
+    parser_create.add_argument(
+        "-X",
+        "--instance-tags",
+        default=None,
+        help="key:value comma-delimited instance tags (optionally url-encoded)",
+    )
     parser_create.set_defaults(func=client.create)
 
     parser_list = subparsers.add_parser("list", aliases=["ls"], help="list your boxes")
@@ -532,6 +538,18 @@ class Client:
             payload["connect"] = "1"
         if known_args.name != "":
             payload["name"] = known_args.name
+        if known_args.instance_tags:
+            payload["instance_tags"] = {}
+            for pair in known_args.instance_tags.split(","):
+                if ":" not in pair:
+                    continue
+                parts = pair.strip().split(":", maxsplit=1)
+                if len(parts) != 2:
+                    log.warn(f"ignoring unexpected key-value pair {pair!r}")
+                    continue
+                key, value = [urllib.parse.unquote(str(s.strip())) for s in parts]
+                log.debug(f"adding instance tag to request key={key!r} value={value!r}")
+                payload["instance_tags"][key] = value
         req = self._build_request(
             _pjoin(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),

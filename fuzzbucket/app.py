@@ -341,7 +341,8 @@ def create_box():
             log.warning(f"ignoring unexpected key-value pair={pair!r}")
             continue
 
-        tag_spec = dict(Key=str(parts[0].strip()), Value=str(parts[1].strip()))
+        key, value = [str(s.strip()) for s in parts]
+        tag_spec = dict(Key=key, Value=value)
 
         log.debug(
             f"adding tags from FUZZBUCKET_DEFAULT_INSTANCE_TAGS spec={tag_spec!r}"
