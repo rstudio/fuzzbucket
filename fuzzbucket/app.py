@@ -324,6 +324,38 @@ def create_box():
     if root_volume_size is not None:
         root_block_device_mapping["Ebs"]["VolumeSize"] = root_volume_size
 
+    instance_tags = [
+        dict(Key="Name", Value=name),
+        dict(Key=Tags.created_at.value, Value=str(time.time())),
+        dict(Key=Tags.image_alias.value, Value=image_alias),
+        dict(Key=Tags.ttl.value, Value=ttl),
+        dict(Key=Tags.user.value, Value=username),
+    ]
+
+    for pair in os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TAGS", "").split(","):
+        if ":" not in pair:
+            continue
+
+        parts = pair.strip().split(":", maxsplit=1)
+        if len(parts) != 2:
+            log.warning(f"ignoring unexpected key-value pair={pair!r}")
+            continue
+
+        tag_spec = dict(Key=str(parts[0].strip()), Value=str(parts[1].strip()))
+
+        log.debug(
+            f"adding tags from FUZZBUCKET_DEFAULT_INSTANCE_TAGS spec={tag_spec!r}"
+        )
+
+        instance_tags.append(tag_spec)
+
+    for key, value in request.json.get("instance_tags", {}).items():
+        tag_spec = dict(Key=str(key), Value=str(value))
+
+        log.debug(f"adding tags from request json 'instance_tags' spec={tag_spec!r}")
+
+        instance_tags.append(tag_spec)
+
     response = get_ec2_client().run_instances(
         BlockDeviceMappings=[root_block_device_mapping],
         ImageId=ami,
@@ -338,13 +370,7 @@ def create_box():
         TagSpecifications=[
             dict(
                 ResourceType="instance",
-                Tags=[
-                    dict(Key="Name", Value=name),
-                    dict(Key=Tags.created_at.value, Value=str(time.time())),
-                    dict(Key=Tags.image_alias.value, Value=image_alias),
-                    dict(Key=Tags.ttl.value, Value=ttl),
-                    dict(Key=Tags.user.value, Value=username),
-                ],
+                Tags=instance_tags,
             )
         ],
     )

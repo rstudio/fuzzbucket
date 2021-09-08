@@ -616,6 +616,12 @@ def test_list_boxes(authd_headers, monkeypatch, authd, expected):
             201,
             id="with_root_volume_size",
         ),
+        pytest.param(
+            True,
+            dict(ami="ami-fafafafafaf", instance_tags={"fb:environment": "production"}),
+            201,
+            id="with_instance_tags",
+        ),
     ],
 )
 @mock_ec2
