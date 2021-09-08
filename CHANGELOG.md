@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.8.0] - 2021-09-08
+
+### Added
+- support for custom instance tagging
+    - server-side configuration applied to all instances
+    - client-side per-instance tagging support
+
+### Changed
+- opened tcp port 5900 in default security group to allow VNC traffic
+
+### Removed
+- codecov integration following security incident
+
+### Security
+- dependency upgrades
+
 ## [0.7.0] - 2021-03-29
 
 ### Added
