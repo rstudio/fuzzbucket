@@ -8,9 +8,10 @@ provider:
   runtime: python3.8
   memorySize: ${self:custom.memorySize, 128}
   timeout: ${self:custom.timeout, 6}
-  apiKeys: ${self:custom.apiKeys}
   region: ${self:custom.awsRegion, 'us-east-1'}
   lambdaHashingVersion: "20201221"
+  apiGateway:
+    apiKeys: ${self:custom.apiKeys}
   environment:
     FUZZBUCKET_ALLOWED_GITHUB_ORGS: ${self:custom.allowedGithubOrgs, ''}
     FUZZBUCKET_BRANDING: ${self:custom.branding, ''}
@@ -79,12 +80,11 @@ provider:
       - UsersDynamoDBTable
       - Arn
 package:
-  include:
+  patterns:
+  - "!./**/**"
   - fuzzbucket/*.py
   - fuzzbucket/templates/*.html
   - wsgi_handler.py
-  exclude:
-  - "./**/**"
 plugins:
 - serverless-dynamodb-local
 - serverless-python-requirements
