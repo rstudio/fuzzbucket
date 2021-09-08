@@ -416,6 +416,36 @@ def test_client_logout(monkeypatch):
         pytest.param(
             {
                 "boxes": [
+                    {"name": "snowflek", "public_ip": None, "worth": "immeasurable"}
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--instance-tags=friend:true,heart-eyes:cat",
+            ),
+            ("created box for user=.+",),
+            0,
+            id="happy_instance_tags",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {"name": "snowflek", "public_ip": None, "worth": "immeasurable"}
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--instance-tags=,heart%3Aeyes:cat,wat",
+            ),
+            ("created box for user=.+",),
+            0,
+            id="weird_instance_tags",
+        ),
+        pytest.param(
+            {
+                "boxes": [
                     {
                         "name": "ubuntu49",
                         "public_ip": "256.256.0.-1",

@@ -1,3 +1,4 @@
+import typing
 import dataclasses
 import datetime
 
@@ -14,6 +15,7 @@ class Box:
     instance_type: NoneString = None
     key_alias: NoneString = None
     name: NoneString = None
+    other_tags: typing.Dict[str, str] = dataclasses.field(default_factory=dict)
     public_dns_name: NoneString = None
     public_ip: NoneString = None
     ttl: int = 0
@@ -45,11 +47,13 @@ class Box:
             instance_id=instance["InstanceId"],
             instance_type=instance["InstanceType"],
             image_id=instance["ImageId"],
+            other_tags={},
             public_dns_name=(
                 instance["PublicDnsName"] if instance["PublicDnsName"] != "" else None
             ),
             public_ip=instance.get("PublicIpAddress", None),
         )
+
         for tag in instance.get("Tags", []):
             attr, cast = {
                 "Name": ["name", str],
@@ -60,6 +64,10 @@ class Box:
             }.get(tag["Key"], [None, str])
             if attr is not None:
                 setattr(box, attr, cast(tag["Value"]))  # type: ignore
+                continue
+
+            box.other_tags[str(tag["Key"])] = str(tag["Value"])
+
         key_alias = box.user
         if instance["KeyName"] != box.user:
             key_alias = instance["KeyName"].replace(f"${box.user}-", "")
