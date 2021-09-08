@@ -80,16 +80,23 @@ provider:
       - UsersDynamoDBTable
       - Arn
 package:
-  patterns:
-  - "!./**/**"
+  # NOTE: use of deprecated include and exclude arrays *instead of
+  # patterns* is needed for serverless-wsgi to (in|re)ject
+  # additional files.
+  include:
   - fuzzbucket/*.py
   - fuzzbucket/templates/*.html
-  - wsgi_handler.py
+  exclude:
+  - "./**/**"
+  # patterns:
+  # - "!./**/**"
+  # - fuzzbucket/*.py
+  # - fuzzbucket/templates/*.html
 plugins:
+- serverless-wsgi
 - serverless-dynamodb-local
 - serverless-python-requirements
 - serverless-resources-env
-- serverless-wsgi
 - serverless-offline
 resources:
   Resources:

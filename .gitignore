@@ -28,3 +28,6 @@ parts/
 sdist/
 var/
 fuzzbucket_client/__version__.py
+wsgi_handler.py
+serverless_wsgi.py
+.serverless-wsgi
