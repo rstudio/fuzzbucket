@@ -15,6 +15,7 @@ jobs:
     - uses: actions/setup-node@master
       with:
         node-version: 12.x
+    - uses: extractions/setup-just@v1
     - uses: actions/cache@v1
       with:
         path: ~/.cache/pip
@@ -28,16 +29,16 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-node-
     - run: pip install -U pipenv
-    - run: make deps
+    - run: just deps
     - run: pipenv check
-    - run: make lint
-    - run: make test
-    - run: make release-artifact
+    - run: just lint
+    - run: just test
+    - run: just release-artifact
       id: create_release_artifact
     - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
     - run: pipenv run fuzzbucket-client --version
     - run: pipenv run fuzzbucket-client --help
-    - run: make is-releasable
+    - run: just is-releasable
       id: check_releasable
     - if: startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       id: create_release
@@ -64,7 +65,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET }}
         aws-region: us-east-1
     - if: startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
-      run: make sync-to-s3
+      run: just sync-to-s3
     - if: startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       uses: pypa/gh-action-pypi-publish@master
       with:

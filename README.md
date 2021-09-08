@@ -63,27 +63,28 @@ by using a tool like [autoenv](https://github.com/inishchith/autoenv).
 
 Prerequisites for development are:
 
--    `make`
+-    `just`
 -    `yarn`
 -    `pipenv`
 
-Hopefully `make` is already available :grimacing:. The `yarn` tool
-may be installed via `brew` on macOS and [other ways,
-too](https://yarnpkg.com/getting-started/install). The `pipenv`
-tool may be installed via `pip`.
+The `just` tool may be installed via `brew` on macOS and [other
+ways, too](https://github.com/casey/just#installation). Similarly,
+the `yarn` tool may be installed via `brew` on macOS and [other
+ways, too](https://yarnpkg.com/getting-started/install). The
+`pipenv` tool may be installed via `pip`.
 
 Once these prerequisites are available, the default workflow is nearly
 identical to what is captured in the [github
 workflow](./.github/workflows/main.yml):
 
 ```bash
-make deps
+just deps
 
 # BEGIN editing, linting, testing loop {
 
 # edit edit edit
-make lint
-make test
+just lint
+just test
 
 # } END editing, linting, testing loop
 ```
@@ -138,17 +139,17 @@ export FUZZBUCKET_CUSTOM_prod='custom-path.yml'
 
 ### cycle
 
-The `make deploy` target will run the necessary `serverless` command to create
+The `just deploy` target will run the necessary `serverless` command to create
 the whole shebang.
 
 ```bash
 # deploy to STAGE=dev in REGION=us-east-1
-make deploy
+just deploy
 ```
 
 ```bash
 # deploy to STAGE=prod in REGION=us-west-2
-make deploy STAGE=prod REGION=us-west-2
+just deploy prod us-west-2
 ```
 
 These commands are expected to be re-run as needed, such as after modifying the
