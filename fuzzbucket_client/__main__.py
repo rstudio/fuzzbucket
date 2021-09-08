@@ -88,6 +88,12 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
 
     parser_login = subparsers.add_parser("login", help="login via GitHub")
     parser_login.add_argument("user", help="GitHub username")
+    parser_login.add_argument(
+        "-n",
+        "--name",
+        default=None,
+        help="human-friendly name to give to credentials entry",
+    )
     parser_login.set_defaults(func=client.login)
     parser_login.epilog = textwrap.dedent(
         """
@@ -477,7 +483,7 @@ class Client:
                 secret = raw_secret
             except KeyboardInterrupt:
                 return False
-        self._write_credentials(known_args.user, secret)
+        self._write_credentials(known_args.user, secret, name=known_args.name)
         print(f"Login successful user={known_args.user!r}")
         return True
 
@@ -543,11 +549,10 @@ class Client:
             for pair in known_args.instance_tags.split(","):
                 if ":" not in pair:
                     continue
-                parts = pair.strip().split(":", maxsplit=1)
-                if len(parts) != 2:
-                    log.warn(f"ignoring unexpected key-value pair {pair!r}")
-                    continue
-                key, value = [urllib.parse.unquote(str(s.strip())) for s in parts]
+                key, value = [
+                    urllib.parse.unquote(str(s.strip()))
+                    for s in pair.strip().split(":", maxsplit=1)
+                ]
                 log.debug(f"adding instance tag to request key={key!r} value={value!r}")
                 payload["instance_tags"][key] = value
         req = self._build_request(
@@ -900,7 +905,7 @@ class Client:
                 return ""
             return creds.get(self._credentials_section, "credentials")
 
-    def _write_credentials(self, user, secret):
+    def _write_credentials(self, user, secret, name=None):
         if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
             log.debug(
                 "skipping writing credentials due to presence of FUZZBUCKET_CREDENTIALS"
@@ -914,6 +919,8 @@ class Client:
         if self._credentials_section not in creds.sections():
             creds.add_section(self._credentials_section)
         creds.set(self._credentials_section, "credentials", f"{user}:{secret}")
+        if name is not None:
+            creds.set(self._credentials_section, "name", str(name))
         with self._credentials_file.open("w") as outfile:
             outfile.write(
                 "# WARNING: this file is generated "

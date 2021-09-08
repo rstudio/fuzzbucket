@@ -1,3 +1,5 @@
+set shell := ["bash", "-c"]
+
 fuzzbucket_version := `pipenv run python setup.py --version 2>/dev/null || echo 0.0.0`
 fuzzbucket_release_artifact := 'dist/fuzzbucket_client-' + fuzzbucket_version + '-py3-none-any.whl'
 fuzzbucket_s3_prefix := 's3://rstudio-connect-downloads/connect/fuzzbucket'
