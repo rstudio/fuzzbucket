@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.8.1] - 2021-09-08
+
+### Fixed
+- packaging configuration to include serverless-wsgi assets
+- url un-quoting server side instance tags set via environment variables
+
 ## [0.8.0] - 2021-09-08
 
 ### Added
