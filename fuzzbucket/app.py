@@ -2,6 +2,7 @@ import json
 import os
 import time
 import typing
+import urllib.parse
 
 from botocore.exceptions import ClientError
 
@@ -341,7 +342,7 @@ def create_box():
             log.warning(f"ignoring unexpected key-value pair={pair!r}")
             continue
 
-        key, value = [str(s.strip()) for s in parts]
+        key, value = [urllib.parse.unquote(str(s.strip())) for s in parts]
         tag_spec = dict(Key=key, Value=value)
 
         log.debug(
