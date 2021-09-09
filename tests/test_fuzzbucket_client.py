@@ -251,10 +251,10 @@ def test_client_list(monkeypatch, args):
 
 
 @pytest.mark.parametrize(
-    ("user", "secrets", "url", "raises", "written", "expected"),
+    ("cmd_args", "secrets", "url", "raises", "written", "expected"),
     [
         pytest.param(
-            "bugs",
+            ("bugs",),
             ("wonketywoopwoopwoopwoopwoopwoopwoopwoopwoo",),
             "http://sure.example.org",
             False,
@@ -263,7 +263,16 @@ def test_client_list(monkeypatch, args):
             id="happy",
         ),
         pytest.param(
-            "elmer",
+            ("daffy", "--name", "matzo"),
+            ("despicable................................",),
+            "http://sure.example.org",
+            False,
+            ("daffy", "despicable................................"),
+            0,
+            id="happy_named",
+        ),
+        pytest.param(
+            ("elmer",),
             (":typing:", "9ccb489abe5c900316fd57482b23c38bb99c727900"),
             "https://vewwyquiet.jobs",
             False,
@@ -272,7 +281,7 @@ def test_client_list(monkeypatch, args):
             id="eventually_happy",
         ),
         pytest.param(
-            "wylie",
+            ("wylie",),
             ("femmeroadrunner???",),
             "https://shop.acme.com",
             True,
@@ -281,7 +290,7 @@ def test_client_list(monkeypatch, args):
             id="interrupted",
         ),
         pytest.param(
-            "speedy",
+            ("speedy",),
             ("I am more than a stereotype",),
             None,
             False,
@@ -292,12 +301,12 @@ def test_client_list(monkeypatch, args):
     ],
 )
 def test_client_login(
-    monkeypatch, capsys, user, secrets, url, raises, written, expected
+    monkeypatch, capsys, cmd_args, secrets, url, raises, written, expected
 ):
     state = {"secret_count": 0}
 
-    def fake_write_credentials(user, secret):
-        state.update(user=user, secret=secret)
+    def fake_write_credentials(user, secret, name=None):
+        state.update(user=user, secret=secret, name=name)
 
     def fake_getpass(prompt):
         state.update(prompt=prompt)
@@ -314,7 +323,10 @@ def test_client_login(
     monkeypatch.setattr(client, "_write_credentials", fake_write_credentials)
     client._env["FUZZBUCKET_URL"] = url
 
-    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "login", user])
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "login"] + list(cmd_args)
+    )
+
     assert ret == expected
     captured = capsys.readouterr()
     if url is not None:
@@ -437,7 +449,7 @@ def test_client_logout(monkeypatch):
             None,
             (
                 "ubuntu49",
-                "--instance-tags=,heart%3Aeyes:cat,wat",
+                "--instance-tags=,heart%3Aeyes:cat,wat:",
             ),
             ("created box for user=.+",),
             0,
@@ -947,6 +959,7 @@ def test_client_delete_key(monkeypatch, caplog):
         "env_credentials",
         "user",
         "secret",
+        "name",
         "file_exists",
         "file_content",
         "write_matches",
@@ -956,6 +969,7 @@ def test_client_delete_key(monkeypatch, caplog):
             None,
             "daffy",
             "woohoo",
+            None,
             True,
             '[server "http://weau"]\ncredentials = daffy:bugsdrools\n',
             ("^credentials = daffy:woohoo", "^credentials = daffy:bugsdrools"),
@@ -965,6 +979,7 @@ def test_client_delete_key(monkeypatch, caplog):
             None,
             "sam",
             "varmint",
+            None,
             True,
             "",
             ("^credentials = sam:varmint",),
@@ -974,13 +989,25 @@ def test_client_delete_key(monkeypatch, caplog):
             None,
             "foghorn",
             "wellahseenow",
+            None,
             False,
             "",
             ("^credentials = foghorn:wellahseenow",),
             id="new_config",
         ),
         pytest.param(
+            None,
+            "foghorn",
+            "wellahseenow",
+            "barnyard",
+            False,
+            "",
+            ("^credentials = foghorn:wellahseenow", "^name = barnyard"),
+            id="new_config_named",
+        ),
+        pytest.param(
             "taz:cBJle+yte59ss/jNu+BL",
+            None,
             None,
             None,
             False,
@@ -995,6 +1022,7 @@ def test_client__write_credentials(
     env_credentials,
     user,
     secret,
+    name,
     file_exists,
     file_content,
     write_matches,
@@ -1018,7 +1046,7 @@ def test_client__write_credentials(
     if env_credentials is not None:
         client._env["FUZZBUCKET_CREDENTIALS"] = env_credentials
 
-    client._write_credentials(user, secret)
+    client._write_credentials(user, secret, name=name)
     assert client._cached_credentials is None
 
     if env_credentials is not None:
