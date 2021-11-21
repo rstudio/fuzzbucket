@@ -250,6 +250,13 @@ def test_client_version(capsys):
     assert re.match("fuzzbucket-client .+", captured.out) is not None
 
 
+def test_client_help_ttl(capsys):
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "--help-ttl"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert re.match("Commands that accept a --ttl argument.+", captured.out) is not None
+
+
 def test_client_no_func(capsys):
     ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"])
     assert ret == 2

@@ -38,6 +38,22 @@ from fuzzbucket_client.__version__ import version as __version__
 
 MIN_TTL = datetime.timedelta(minutes=10)
 MAX_TTL = datetime.timedelta(weeks=12)
+TTL_HELP = """\
+Commands that accept a --ttl argument may be given values that include the following:
+
+- seconds as integers or floats
+    - 123
+    - 456.78
+
+- datetime.timedelta strings
+    - '1 day, 2:34:56'
+    - '12:34:56'
+    - '123 days, 4:57:18'
+
+- datetime.timedelta-like strings as alternating <value> <unit>
+    - '1 week, 23 days, 45 minutes 6 seconds'
+    - '12 weeks, 3.9 days 4 hour 56 minutes'
+"""
 
 
 def default_client() -> "Client":
@@ -152,6 +168,11 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "--version", action="store_true", help="print the version and exit"
     )
     parser.add_argument(
+        "--help-ttl",
+        action="store_true",
+        help="print help about ttl arguments and exit",
+    )
+    parser.add_argument(
         "-j",
         "--output-json",
         action="store_true",
@@ -217,7 +238,8 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "--ttl",
         type=parse_timedelta,
         default=datetime.timedelta(hours=4),
-        help="set the TTL for the box, after which it will be reaped",
+        help="set the TTL for the box, after which it will be reaped "
+        + "(see --help-ttl for more)",
     )
     parser_create.add_argument("-t", "--instance-type", default=None)
     parser_create.add_argument(
@@ -260,7 +282,8 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         type=parse_timedelta,
         default=None,
         help="set the new TTL for the matching boxes relative to the current time, "
-        + "after which they will be reaped",
+        + "after which they will be reaped"
+        + "(see --help-ttl for more)",
     )
     parser_update.add_argument(
         "-X",
@@ -454,6 +477,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
         print(f"fuzzbucket-client {__version__}")
+        return 0
+    if known_args.help_ttl:
+        print(TTL_HELP)
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON
