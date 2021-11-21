@@ -70,7 +70,9 @@ def _timedelta_kwargs_from_pairs(pairs: typing.List[str]) -> typing.Dict[str, fl
     return dict(map(_reverse_map_float, list(zip(as_iter, as_iter))))
 
 
-def _timedelta_kwargs_from_sexagesimal(sexagesimal_string: str) -> datetime.timedelta:
+def _timedelta_kwargs_from_sexagesimal(
+    sexagesimal_string: str,
+) -> typing.Dict[str, float]:
     return dict(
         map(
             _reverse_map_float,
@@ -249,16 +251,16 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_update = subparsers.add_parser(
         "update",
         aliases=["up"],
-        help="update a box",
+        help="update matching boxes",
         formatter_class=CustomHelpFormatter,
     )
     parser_update.add_argument(
         "-T",
         "--ttl",
         type=parse_timedelta,
-        default=datetime.timedelta(hours=4),
-        help="set the new TTL for the box relative to the "
-        + "current time, after which it will be reaped",
+        default=None,
+        help="set the new TTL for the matching boxes relative to the current time, "
+        + "after which they will be reaped",
     )
     parser_update.add_argument(
         "-X",
@@ -266,7 +268,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         default=None,
         help="key:value comma-delimited instance tags (optionally url-encoded)",
     )
-    parser_update.add_argument("box")
+    parser_update.add_argument("box_match")
     parser_update.set_defaults(func=client.update)
 
     parser_delete = subparsers.add_parser(
@@ -700,7 +702,7 @@ class Client:
         if payload["ttl"] < MIN_TTL.total_seconds():
             log.error(f"ttl={payload['ttl']!r} is below the minimum of {MIN_TTL}")
             return False
-        if payload["ttl"] > MAX_TTL:
+        if payload["ttl"] > MAX_TTL.total_seconds():
             log.error(f"ttl={payload['ttl']!r} is above the maximum of {MAX_TTL}")
             return False
         req = self._build_request(
@@ -726,7 +728,44 @@ class Client:
 
     @_command
     def update(self, known_args, _):
-        print(f"known_args={known_args!r}")
+        matching_boxes = self._find_boxes(known_args.box_match)
+        if matching_boxes is None:
+            log.error(f"no boxes found matching {known_args.box_match!r}")
+            return False
+        payload = {}
+        if known_args.ttl:
+            payload["ttl"] = known_args.ttl.total_seconds()
+            if payload["ttl"] < MIN_TTL.total_seconds():
+                log.error(f"ttl={payload['ttl']!r} is below the minimum of {MIN_TTL}")
+                return False
+            if payload["ttl"] > MAX_TTL.total_seconds():
+                log.error(f"ttl={payload['ttl']!r} is above the maximum of {MAX_TTL}")
+                return False
+        if known_args.instance_tags:
+            payload["instance_tags"] = {}
+            for pair in known_args.instance_tags.split(","):
+                if ":" not in pair:
+                    continue
+                key, value = [
+                    urllib.parse.unquote(str(s.strip()))
+                    for s in pair.strip().split(":", maxsplit=1)
+                ]
+                log.debug(f"adding instance tag to request key={key!r} value={value!r}")
+                payload["instance_tags"][key] = value
+        if len(payload) == 0:
+            log.error(f"no updates specified for {known_args.box_match!r}")
+            return False
+        for matching_box in matching_boxes:
+            req = self._build_request(
+                _pjoin(self._url, "box", matching_box["instance_id"]),
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="PUT",
+            )
+            with self._urlopen(req) as response:
+                _ = response.read()
+            log.info(f"updated box for user={self._user!r} name={matching_box['name']}")
+            print(self._format_boxes([matching_box]), end="")
         return True
 
     @_command

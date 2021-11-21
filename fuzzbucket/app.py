@@ -386,6 +386,44 @@ def create_box():
     )
 
 
+@app.route("/box/<string:instance_id>", methods=["PUT"])
+def update_box(instance_id):
+    if not is_fully_authd():
+        return auth_403_github()
+    log.debug(
+        f"handling update_box for user={request.remote_user!r} "
+        + f"instance_id={instance_id!r}"
+    )
+    if instance_id not in [
+        b.instance_id
+        for b in list_user_boxes(
+            get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
+        )
+    ]:
+        return jsonify(error="no touching"), 403
+
+    instance_tags = []
+    for key, value in request.json.get("instance_tags", {}).items():
+        tag_spec = dict(Key=str(key), Value=str(value))
+
+        log.debug(f"adding tags from request json 'instance_tags' spec={tag_spec!r}")
+
+        instance_tags.append(tag_spec)
+
+    ttl = (request.json.get("ttl") or "").strip()
+    if ttl != "":
+        instance_tags.append(dict(Key=Tags.ttl.value, Value=ttl))
+
+    response = get_ec2_client().create_tags(Resources=[instance_id], Tags=instance_tags)
+    return (
+        jsonify(
+            raw_response=response.get("ResponseMetadata", {}),
+            you=request.remote_user,
+        ),
+        204,
+    )
+
+
 @app.route("/reboot/<string:instance_id>", methods=["POST"])
 def reboot_box(instance_id):
     if not is_fully_authd():
