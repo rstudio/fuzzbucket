@@ -36,6 +36,9 @@ import webbrowser
 
 from fuzzbucket_client.__version__ import version as __version__
 
+MIN_TTL = datetime.timedelta(minutes=10)
+MAX_TTL = datetime.timedelta(weeks=12)
+
 
 def default_client() -> "Client":
     return Client()
@@ -58,14 +61,90 @@ def log_level() -> int:
     )
 
 
+def _reverse_map_float(el: typing.Tuple[str, str]) -> typing.Tuple[str, float]:
+    return (el[1].rstrip("s")) + "s", float(el[0])
+
+
+def _timedelta_kwargs_from_pairs(pairs: typing.List[str]) -> typing.Dict[str, float]:
+    as_iter = iter(pairs)
+    return dict(map(_reverse_map_float, list(zip(as_iter, as_iter))))
+
+
+def _timedelta_kwargs_from_sexagesimal(sexagesimal_string: str) -> datetime.timedelta:
+    return dict(
+        map(
+            _reverse_map_float,
+            list(
+                zip(
+                    reversed(
+                        [p.strip() for p in sexagesimal_string.strip().split(":")]
+                    ),
+                    ["seconds", "minutes", "hours"],
+                )
+            ),
+        )
+    )
+
+
+def parse_timedelta(as_string: str) -> datetime.timedelta:
+    pairs = as_string.strip().lower().replace(",", "").split()
+    sexagesimal_part = None
+
+    if len(pairs) == 1:
+        if ":" in pairs[0]:
+            sexagesimal_part = pairs[0]
+        else:
+            return datetime.timedelta(seconds=float(pairs[0]))
+
+    elif len(pairs) % 2 != 0:
+        if ":" in pairs[-1]:
+            sexagesimal_part = pairs[-1]
+        else:
+            raise ValueError(
+                f"timedelta string {as_string!r} is not in an understandable format"
+            )
+
+    kwargs = _timedelta_kwargs_from_pairs(pairs)
+    if sexagesimal_part is not None:
+        kwargs.update(_timedelta_kwargs_from_sexagesimal(sexagesimal_part))
+
+    unknown_keys = set(kwargs.keys()).difference(
+        set(
+            [
+                "days",
+                "hours",
+                "minutes",
+                "seconds",
+                "weeks",
+            ]
+        )
+    )
+    if len(unknown_keys) > 0:
+        raise ValueError(f"unknown timedelta keys {unknown_keys!r}")
+
+    return datetime.timedelta(
+        days=kwargs.get("days", 0),
+        hours=kwargs.get("hours", 0),
+        minutes=kwargs.get("minutes", 0),
+        seconds=kwargs.get("seconds", 0),
+        weeks=kwargs.get("weeks", 0),
+    )
+
+
 log = logging.getLogger("fuzzbucket")
+
+
+class CustomHelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
+):
+    ...
 
 
 def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=CustomHelpFormatter,
     )
     parser.add_argument(
         "--version", action="store_true", help="print the version and exit"
@@ -84,9 +163,13 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         default=log_level() == logging.DEBUG,
         help="enable debug logging",
     )
-    subparsers = parser.add_subparsers(title="commands")
+    subparsers = parser.add_subparsers(
+        title="commands",
+    )
 
-    parser_login = subparsers.add_parser("login", help="login via GitHub")
+    parser_login = subparsers.add_parser(
+        "login", help="login via GitHub", formatter_class=CustomHelpFormatter
+    )
     parser_login.add_argument("user", help="GitHub username")
     parser_login.add_argument(
         "-n",
@@ -103,12 +186,17 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     )
 
     parser_logout = subparsers.add_parser(
-        "logout", help="logout (from fuzzbucket *only*)"
+        "logout",
+        help="logout (from fuzzbucket *only*)",
+        formatter_class=CustomHelpFormatter,
     )
     parser_logout.set_defaults(func=client.logout)
 
     parser_create = subparsers.add_parser(
-        "create", aliases=["new"], help="create a box"
+        "create",
+        aliases=["new"],
+        help="create a box",
+        formatter_class=CustomHelpFormatter,
     )
     parser_create.add_argument(
         "image", default=Client.default_image_alias, help="image alias or full AMI id"
@@ -125,8 +213,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_create.add_argument(
         "-T",
         "--ttl",
-        default=str(3600 * 4),
-        help="set the TTL for the box in seconds, after which it will be reaped",
+        type=parse_timedelta,
+        default=datetime.timedelta(hours=4),
+        help="set the TTL for the box, after which it will be reaped",
     )
     parser_create.add_argument("-t", "--instance-type", default=None)
     parser_create.add_argument(
@@ -149,22 +238,58 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     )
     parser_create.set_defaults(func=client.create)
 
-    parser_list = subparsers.add_parser("list", aliases=["ls"], help="list your boxes")
+    parser_list = subparsers.add_parser(
+        "list",
+        aliases=["ls"],
+        help="list your boxes",
+        formatter_class=CustomHelpFormatter,
+    )
     parser_list.set_defaults(func=client.list)
 
+    parser_update = subparsers.add_parser(
+        "update",
+        aliases=["up"],
+        help="update a box",
+        formatter_class=CustomHelpFormatter,
+    )
+    parser_update.add_argument(
+        "-T",
+        "--ttl",
+        type=parse_timedelta,
+        default=datetime.timedelta(hours=4),
+        help="set the new TTL for the box relative to the "
+        + "current time, after which it will be reaped",
+    )
+    parser_update.add_argument(
+        "-X",
+        "--instance-tags",
+        default=None,
+        help="key:value comma-delimited instance tags (optionally url-encoded)",
+    )
+    parser_update.add_argument("box")
+    parser_update.set_defaults(func=client.update)
+
     parser_delete = subparsers.add_parser(
-        "delete", aliases=["rm"], help="delete matching boxes"
+        "delete",
+        aliases=["rm"],
+        help="delete matching boxes",
+        formatter_class=CustomHelpFormatter,
     )
     parser_delete.add_argument("box_match")
     parser_delete.set_defaults(func=client.delete)
 
     parser_reboot = subparsers.add_parser(
-        "reboot", aliases=["restart"], help="reboot a box"
+        "reboot",
+        aliases=["restart"],
+        help="reboot a box",
+        formatter_class=CustomHelpFormatter,
     )
     parser_reboot.add_argument("box")
     parser_reboot.set_defaults(func=client.reboot)
 
-    parser_ssh = subparsers.add_parser("ssh", help="ssh into a box")
+    parser_ssh = subparsers.add_parser(
+        "ssh", help="ssh into a box", formatter_class=CustomHelpFormatter
+    )
     parser_ssh.add_argument(
         "-q",
         "--quiet",
@@ -191,7 +316,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_scp = subparsers.add_parser(
         "scp",
         help="scp things into or out of a box",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=CustomHelpFormatter,
     )
     parser_scp.usage = "usage: %(prog)s [-h] box [scp-arguments]"
     parser_scp.description = textwrap.dedent(
@@ -229,25 +354,34 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_scp.set_defaults(func=client.scp)
 
     parser_create_alias = subparsers.add_parser(
-        "create-alias", help="create an image alias"
+        "create-alias",
+        help="create an image alias",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_create_alias.add_argument("alias")
     parser_create_alias.add_argument("ami")
     parser_create_alias.set_defaults(func=client.create_alias)
 
     parser_list_aliases = subparsers.add_parser(
-        "list-aliases", aliases=["la"], help="list known image aliases"
+        "list-aliases",
+        aliases=["la"],
+        help="list known image aliases",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_list_aliases.set_defaults(func=client.list_aliases)
 
     parser_delete_alias = subparsers.add_parser(
-        "delete-alias", help="delete an image alias"
+        "delete-alias",
+        help="delete an image alias",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_delete_alias.add_argument("alias")
     parser_delete_alias.set_defaults(func=client.delete_alias)
 
     parser_get_key = subparsers.add_parser(
-        "get-key", help="get an ssh public key id and fingerprint as stored in EC2"
+        "get-key",
+        help="get an ssh public key id and fingerprint as stored in EC2",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_get_key.add_argument(
         "--alias",
@@ -259,7 +393,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_get_key.set_defaults(func=client.get_key)
 
     parser_set_key = subparsers.add_parser(
-        "set-key", help="set the local default key alias to use when creating boxes"
+        "set-key",
+        help="set the local default key alias to use when creating boxes",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_set_key.add_argument(
         "--alias",
@@ -271,12 +407,16 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_set_key.set_defaults(func=client.set_key)
 
     parser_list_keys = subparsers.add_parser(
-        "list-keys", help="list ssh public keys stored in EC2"
+        "list-keys",
+        help="list ssh public keys stored in EC2",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_list_keys.set_defaults(func=client.list_keys)
 
     parser_add_key = subparsers.add_parser(
-        "add-key", help="add an ssh public key to EC2"
+        "add-key",
+        help="add an ssh public key to EC2",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_add_key.add_argument(
         "--alias",
@@ -295,7 +435,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_add_key.set_defaults(func=client.add_key)
 
     parser_delete_key = subparsers.add_parser(
-        "delete-key", help="delete an ssh public key stored in EC2"
+        "delete-key",
+        help="delete an ssh public key stored in EC2",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser_delete_key.add_argument(
         "--alias",
@@ -517,7 +659,7 @@ class Client:
 
         payload = {
             "instance_type": known_args.instance_type,
-            "ttl": known_args.ttl,
+            "ttl": known_args.ttl.total_seconds(),
             "key_alias": key_alias,
         }
 
@@ -555,6 +697,12 @@ class Client:
                 ]
                 log.debug(f"adding instance tag to request key={key!r} value={value!r}")
                 payload["instance_tags"][key] = value
+        if payload["ttl"] < MIN_TTL.total_seconds():
+            log.error(f"ttl={payload['ttl']!r} is below the minimum of {MIN_TTL}")
+            return False
+        if payload["ttl"] > MAX_TTL:
+            log.error(f"ttl={payload['ttl']!r} is above the maximum of {MAX_TTL}")
+            return False
         req = self._build_request(
             _pjoin(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),
@@ -574,6 +722,11 @@ class Client:
                 raise exc
 
         print(self._format_boxes(raw_response["boxes"]), end="")
+        return True
+
+    @_command
+    def update(self, known_args, _):
+        print(f"known_args={known_args!r}")
         return True
 
     @_command
