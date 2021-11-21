@@ -674,6 +674,78 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
 
 
 @pytest.mark.parametrize(
+    ("authd", "update_body", "expected"),
+    [
+        pytest.param(
+            True,
+            {
+                "instance_tags": {"withered": "hand", "early": "seasons"},
+                "ttl": "10800.0",
+            },
+            204,
+            id="happy",
+        ),
+        pytest.param(False, {}, 403, id="forbidden"),
+    ],
+)
+@mock_ec2
+@mock_dynamodb2
+def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expected):
+    ec2_client = boto3.client("ec2")
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+    monkeypatch.setattr(
+        fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
+    )
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {
+            "Images": [
+                {
+                    "RootDeviceName": "/dev/xyz",
+                    "BlockDeviceMappings": [
+                        {"DeviceName": "/dev/xyz", "Ebs": {"VolumeSize": 9}}
+                    ],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
+
+    response = None
+    with monkeypatch.context() as mp:
+        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        with app.test_client() as c:
+            response = c.post(
+                "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
+            )
+    assert response is not None
+    assert "boxes" in response.json
+
+    with app.test_client() as c:
+        all_instances = ec2_client.describe_instances()
+
+        def fake_describe_instances(*_args, **_kwargs):
+            return all_instances
+
+        monkeypatch.setattr(
+            ec2_client,
+            "describe_instances",
+            fake_describe_instances,
+        )
+        monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+        response = c.put(
+            f'/box/{response.json["boxes"][0]["instance_id"]}',
+            json=update_body,
+            headers=authd_headers,
+        )
+        assert response.status_code == expected
+
+
+@pytest.mark.parametrize(
     ("authd", "expected"),
     [
         pytest.param(
