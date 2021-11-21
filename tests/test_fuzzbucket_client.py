@@ -541,6 +541,32 @@ def test_client_logout(monkeypatch):
             86,
             id="api_err",
         ),
+        pytest.param(
+            {},
+            (),
+            (
+                "ubuntu49",
+                "--instance-type=t8.pico",
+                "--ttl",
+                "42",
+            ),
+            ("ttl=.+ is below the minimum.+",),
+            86,
+            id="low_ttl",
+        ),
+        pytest.param(
+            {},
+            (),
+            (
+                "ubuntu49",
+                "--instance-type=t8.pico",
+                "--ttl",
+                "42 weeks",
+            ),
+            ("ttl=.+ is above the maximum.+",),
+            86,
+            id="high_ttl",
+        ),
     ],
 )
 def test_client_create(
@@ -557,6 +583,149 @@ def test_client_create(
         ["fuzzbucket-client", "create"] + list(cmd_args)
     )
     assert ret == expected
+    for log_match in log_matches:
+        assert re.search(log_match, caplog.text) is not None
+
+
+@pytest.mark.parametrize(
+    ("api_response", "http_exc", "cmd_args", "log_matches", "expected"),
+    [
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                        "instance_id": "i-fafafafafaf",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "5 days, 6 hours, 37 minutes, 11 seconds",
+                "--instance-tags",
+                "scutum:scorpius,castle:keys,wat",
+            ),
+            ("updated box for user=.+",),
+            0,
+            id="happy",
+        ),
+        pytest.param(
+            {},
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "what is this",
+            ),
+            (),
+            2,
+            id="bad_ttl",
+        ),
+        pytest.param(
+            {},
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "12 parsecs",
+            ),
+            (),
+            2,
+            id="worse_ttl",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                        "instance_id": "i-fafafafafaf",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "42",
+            ),
+            ("ttl=.+ is below the minimum.+",),
+            86,
+            id="low_ttl",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                        "instance_id": "i-fafafafafaf",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "42 weeks",
+            ),
+            ("ttl=.+ is above the maximum.+",),
+            86,
+            id="high_ttl",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                        "instance_id": "i-fafafafafaf",
+                    },
+                ]
+            },
+            None,
+            ("ubuntu49",),
+            ("no updates specified for .+",),
+            86,
+            id="no_updates",
+        ),
+        pytest.param(
+            {"boxes": []},
+            None,
+            ("ubuntu49",),
+            ("no boxes found matching .+",),
+            86,
+            id="no_match",
+        ),
+    ],
+)
+def test_client_update(
+    monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
+):
+    client = fuzzbucket_client.__main__.Client()
+
+    sys_exit_state = {"status": None}
+
+    def capture_sys_exit(status):
+        sys_exit_state["status"] = status
+
+    monkeypatch.setattr(argparse._sys, "exit", capture_sys_exit)
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO(json.dumps(api_response)), http_exc=http_exc),
+    )
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "update"] + list(cmd_args)
+    )
+    if sys_exit_state["status"] is not None:
+        assert sys_exit_state["status"] == expected
+    else:
+        assert ret == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
 
