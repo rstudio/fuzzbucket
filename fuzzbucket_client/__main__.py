@@ -41,18 +41,22 @@ MAX_TTL = datetime.timedelta(weeks=12)
 TTL_HELP = """\
 Commands that accept a --ttl argument may be given values that include the following:
 
-- seconds as integers or floats
-    - 123
-    - 456.78
+seconds as integers or floats
+    123
+    456.78
 
-- datetime.timedelta strings
-    - '1 day, 2:34:56'
-    - '12:34:56'
-    - '123 days, 4:57:18'
+datetime.timedelta strings
+    '1 day, 2:34:56'
+    '12:34:56'
+    '123 days, 4:57:18'
 
-- datetime.timedelta-like strings as alternating <value> <unit>
-    - '1 week, 23 days, 45 minutes 6 seconds'
-    - '12 weeks, 3.9 days 4 hour 56 minutes'
+datetime.timedelta-like strings as alternating <value> <unit>
+    '1 week, 23 days, 45 minutes 6 seconds'
+    '12 weeks, 3.9 days 4 hour 56 minutes'
+
+
+The --check-ttl flag may be used to check a ttl value prior to using it with a command
+that supports --ttl.
 """
 
 
@@ -171,6 +175,13 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "--help-ttl",
         action="store_true",
         help="print help about ttl arguments and exit",
+    )
+    parser.add_argument(
+        "--check-ttl",
+        type=parse_timedelta,
+        default=None,
+        help="check a ttl value and exit, presumably before using it with a command"
+        + "that supports ttl",
     )
     parser.add_argument(
         "-j",
@@ -483,6 +494,9 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON
+    if known_args.check_ttl:
+        client.show_valid_ttl(known_args.check_ttl)
+        return 0
     if not hasattr(known_args, "func"):
         log.debug(f"no subcommand func defined in namespace={known_args!r}")
         parser.print_help()
@@ -619,6 +633,10 @@ class Client:
     def _finalize(self):
         self._write_preferences(self._preferences)
 
+    def show_valid_ttl(self, ttl):
+        print(self._format_valid_ttl(ttl), end="")
+        return True
+
     @_command
     def login(self, known_args, _):
         if self._url is None:
@@ -687,7 +705,6 @@ class Client:
 
         payload = {
             "instance_type": known_args.instance_type,
-            "ttl": known_args.ttl.total_seconds(),
             "key_alias": key_alias,
         }
 
@@ -725,12 +742,13 @@ class Client:
                 ]
                 log.debug(f"adding instance tag to request key={key!r} value={value!r}")
                 payload["instance_tags"][key] = value
-        if payload["ttl"] < MIN_TTL.total_seconds():
-            log.error(f"ttl={payload['ttl']!r} is below the minimum of {MIN_TTL}")
+        if known_args.ttl.total_seconds() < MIN_TTL.total_seconds():
+            log.error(f"ttl={known_args.ttl!r} is below the minimum of {MIN_TTL}")
             return False
-        if payload["ttl"] > MAX_TTL.total_seconds():
-            log.error(f"ttl={payload['ttl']!r} is above the maximum of {MAX_TTL}")
+        if known_args.ttl.total_seconds() > MAX_TTL.total_seconds():
+            log.error(f"ttl={known_args.ttl!r} is above the maximum of {MAX_TTL}")
             return False
+        payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         req = self._build_request(
             _pjoin(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),
@@ -760,13 +778,13 @@ class Client:
             return False
         payload = {}
         if known_args.ttl:
-            payload["ttl"] = known_args.ttl.total_seconds()
-            if payload["ttl"] < MIN_TTL.total_seconds():
-                log.error(f"ttl={payload['ttl']!r} is below the minimum of {MIN_TTL}")
+            if known_args.ttl.total_seconds() < MIN_TTL.total_seconds():
+                log.error(f"ttl={known_args.ttl!r} is below the minimum of {MIN_TTL}")
                 return False
-            if payload["ttl"] > MAX_TTL.total_seconds():
-                log.error(f"ttl={payload['ttl']!r} is above the maximum of {MAX_TTL}")
+            if known_args.ttl.total_seconds() > MAX_TTL.total_seconds():
+                log.error(f"ttl={known_args.ttl!r} is above the maximum of {MAX_TTL}")
                 return False
+            payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         if known_args.instance_tags:
             payload["instance_tags"] = {}
             for pair in known_args.instance_tags.split(","):
@@ -1277,6 +1295,24 @@ class Client:
 
     def _format_image_aliases_json(self, image_aliases):
         return json.dumps({"image_aliases": dict(image_aliases)}, indent=2)
+
+    def _format_valid_ttl(self, ttl):
+        return getattr(self, f"_format_valid_ttl_{self.data_format.value}")(ttl)
+
+    def _format_valid_ttl_ini(self, ttl):
+        ttl_ini = configparser.ConfigParser()
+        ttl_ini.add_section("ttl")
+        ttl_ini.set("ttl", "str", str(ttl))
+        ttl_ini.set("ttl", "float", str(ttl.total_seconds()))
+        buf = io.StringIO()
+        ttl_ini.write(buf)
+        buf.seek(0)
+        return buf.read()
+
+    def _format_valid_ttl_json(self, ttl):
+        return json.dumps(
+            {"ttl": {"str": str(ttl), "float": str(ttl.total_seconds())}}, indent=2
+        )
 
     @classmethod
     def _guess_ssh_user(cls, image_alias, default=default_ssh_user):

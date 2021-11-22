@@ -329,7 +329,7 @@ def create_box():
         dict(Key="Name", Value=name),
         dict(Key=Tags.created_at.value, Value=str(time.time())),
         dict(Key=Tags.image_alias.value, Value=image_alias),
-        dict(Key=Tags.ttl.value, Value=ttl),
+        dict(Key=Tags.ttl.value, Value=str(int(ttl))),
         dict(Key=Tags.user.value, Value=username),
     ]
 

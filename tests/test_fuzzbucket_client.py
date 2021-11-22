@@ -257,6 +257,35 @@ def test_client_help_ttl(capsys):
     assert re.match("Commands that accept a --ttl argument.+", captured.out) is not None
 
 
+@pytest.mark.parametrize(
+    ("args", "expected_lines"),
+    [
+        pytest.param(
+            ["4 weeks, 3 days"],
+            ["[ttl]", "str = 31 days, 0:00:00", "float = 2678400.0"],
+            id="ini",
+        ),
+        pytest.param(
+            ["9 weeks, 5 days", "-j"],
+            [
+                "{",
+                '  "ttl": {',
+                '    "str": "68 days, 0:00:00",',
+                '    "float": "5875200.0"',
+                "  }",
+                "}",
+            ],
+            id="json",
+        ),
+    ],
+)
+def test_client_check_ttl(capsys, args, expected_lines):
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "--check-ttl"] + args)
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert expected_lines == captured.out.strip().splitlines()
+
+
 def test_client_no_func(capsys):
     ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"])
     assert ret == 2

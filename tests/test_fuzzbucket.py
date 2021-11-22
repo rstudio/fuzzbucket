@@ -1570,9 +1570,8 @@ def test_box():
     box = Box(instance_id="i-fafafafafafafaf")
     assert box.age == "?"
 
-    box.created_at = str(time.time() - 1000)
-    for unit in ("d", "h", "m", "s"):
-        assert box.age.count(unit) == 1
+    box.created_at = str(time.time() - 108000)
+    assert box.age.startswith("1 day,")
 
     assert "instance_id" in box.as_json()
     assert "age" in box.as_json()

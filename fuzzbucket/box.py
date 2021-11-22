@@ -34,12 +34,10 @@ class Box:
     def age(self) -> str:
         if not self.created_at:
             return "?"
-        delta = datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(
-            float(self.created_at)
+        return str(
+            datetime.datetime.utcnow()
+            - datetime.datetime.fromtimestamp(float(self.created_at))
         )
-        hours, remainder = divmod(delta.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{delta.days}d{hours}h{minutes}m{seconds}s"
 
     @classmethod
     def from_ec2_dict(cls, instance: dict) -> "Box":
