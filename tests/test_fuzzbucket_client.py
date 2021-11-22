@@ -250,13 +250,6 @@ def test_client_version(capsys):
     assert re.match("fuzzbucket-client .+", captured.out) is not None
 
 
-def test_client_help_ttl(capsys):
-    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "--help-ttl"])
-    assert ret == 0
-    captured = capsys.readouterr()
-    assert re.match("Commands that accept a --ttl argument.+", captured.out) is not None
-
-
 @pytest.mark.parametrize(
     ("args", "expected_lines"),
     [
@@ -633,6 +626,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
+                        "created_at": 1637623908.630157,
                     },
                 ]
             },
@@ -679,6 +673,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
+                        "created_at": 1637623908.630157,
                     },
                 ]
             },
@@ -699,6 +694,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
+                        "created_at": 1637623908.630157,
                     },
                 ]
             },
@@ -719,6 +715,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
+                        "created_at": 1637623908.630157,
                     },
                 ]
             },

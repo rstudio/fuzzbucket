@@ -680,7 +680,7 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
             True,
             {
                 "instance_tags": {"withered": "hand", "early": "seasons"},
-                "ttl": "10800.0",
+                "ttl": "108000.0",
             },
             204,
             id="happy",
@@ -726,23 +726,28 @@ def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expe
     assert "boxes" in response.json
 
     with app.test_client() as c:
-        all_instances = ec2_client.describe_instances()
+        with monkeypatch.context() as mp:
+            all_instances = ec2_client.describe_instances()
 
-        def fake_describe_instances(*_args, **_kwargs):
-            return all_instances
+            def fake_describe_instances(*_args, **_kwargs):
+                return all_instances
 
-        monkeypatch.setattr(
-            ec2_client,
-            "describe_instances",
-            fake_describe_instances,
-        )
-        monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
-        response = c.put(
-            f'/box/{response.json["boxes"][0]["instance_id"]}',
-            json=update_body,
-            headers=authd_headers,
-        )
-        assert response.status_code == expected
+            mp.setattr(
+                ec2_client,
+                "describe_instances",
+                fake_describe_instances,
+            )
+            mp.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+            response = c.put(
+                f'/box/{response.json["boxes"][0]["instance_id"]}',
+                json=update_body,
+                headers=authd_headers,
+            )
+            assert response.status_code == expected
+
+    if "ttl" in update_body:
+        re_fetched = fuzzbucket.list_boxes_filtered(ec2_client, [])
+        assert re_fetched[0].ttl == int(float(update_body["ttl"]))
 
 
 @pytest.mark.parametrize(

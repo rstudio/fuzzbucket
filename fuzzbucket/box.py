@@ -57,7 +57,7 @@ class Box:
                 "Name": ["name", str],
                 Tags.created_at.value: ["created_at", float],
                 Tags.image_alias.value: ["image_alias", str],
-                Tags.ttl.value: ["ttl", int],
+                Tags.ttl.value: ["ttl", lambda s: int(float(s))],
                 Tags.user.value: ["user", str],
             }.get(tag["Key"], [None, str])
             if attr is not None:

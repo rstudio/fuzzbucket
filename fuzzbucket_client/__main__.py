@@ -39,7 +39,7 @@ from fuzzbucket_client.__version__ import version as __version__
 MIN_TTL = datetime.timedelta(minutes=10)
 MAX_TTL = datetime.timedelta(weeks=12)
 TTL_HELP = """\
-Commands that accept a --ttl argument may be given values that include the following:
+The --ttl argument may be given values that include the following:
 
 seconds as integers or floats
     123
@@ -55,8 +55,8 @@ datetime.timedelta-like strings as alternating <value> <unit>
     '12 weeks, 3.9 days 4 hour 56 minutes'
 
 
-The --check-ttl flag may be used to check a ttl value prior to using it with a command
-that supports --ttl.
+The top-level --check-ttl flag may be used to check a ttl value prior to using it with
+this command.
 """
 
 
@@ -172,11 +172,6 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "--version", action="store_true", help="print the version and exit"
     )
     parser.add_argument(
-        "--help-ttl",
-        action="store_true",
-        help="print help about ttl arguments and exit",
-    )
-    parser.add_argument(
         "--check-ttl",
         type=parse_timedelta,
         default=None,
@@ -230,6 +225,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "create",
         aliases=["new"],
         help="create a box",
+        description="\n\n".join(["Create a box.", TTL_HELP]),
         formatter_class=CustomHelpFormatter,
     )
     parser_create.add_argument(
@@ -249,8 +245,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "--ttl",
         type=parse_timedelta,
         default=datetime.timedelta(hours=4),
-        help="set the TTL for the box, after which it will be reaped "
-        + "(see --help-ttl for more)",
+        help="set the TTL for the box, after which it will be reaped ",
     )
     parser_create.add_argument("-t", "--instance-type", default=None)
     parser_create.add_argument(
@@ -285,6 +280,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         "update",
         aliases=["up"],
         help="update matching boxes",
+        description="\n\n".join(["Update matching boxes.", TTL_HELP]),
         formatter_class=CustomHelpFormatter,
     )
     parser_update.add_argument(
@@ -293,8 +289,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         type=parse_timedelta,
         default=None,
         help="set the new TTL for the matching boxes relative to the current time, "
-        + "after which they will be reaped"
-        + "(see --help-ttl for more)",
+        + "after which they will be reaped",
     )
     parser_update.add_argument(
         "-X",
@@ -488,9 +483,6 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
         print(f"fuzzbucket-client {__version__}")
-        return 0
-    if known_args.help_ttl:
-        print(TTL_HELP)
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON
@@ -784,7 +776,6 @@ class Client:
             if known_args.ttl.total_seconds() > MAX_TTL.total_seconds():
                 log.error(f"ttl={known_args.ttl!r} is above the maximum of {MAX_TTL}")
                 return False
-            payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         if known_args.instance_tags:
             payload["instance_tags"] = {}
             for pair in known_args.instance_tags.split(","):
@@ -796,13 +787,23 @@ class Client:
                 ]
                 log.debug(f"adding instance tag to request key={key!r} value={value!r}")
                 payload["instance_tags"][key] = value
-        if len(payload) == 0:
+        if len(payload) == 0 and known_args.ttl is None:
             log.error(f"no updates specified for {known_args.box_match!r}")
             return False
         for matching_box in matching_boxes:
+            box_payload = payload.copy()
+            box_payload["ttl"] = str(
+                int(
+                    (
+                        datetime.datetime.utcnow().timestamp()
+                        - float(matching_box["created_at"])
+                    )
+                    + known_args.ttl.total_seconds()
+                )
+            )
             req = self._build_request(
                 _pjoin(self._url, "box", matching_box["instance_id"]),
-                data=json.dumps(payload).encode("utf-8"),
+                data=json.dumps(box_payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="PUT",
             )
