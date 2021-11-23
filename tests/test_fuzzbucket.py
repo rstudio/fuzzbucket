@@ -1526,8 +1526,9 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         def fake_list_vpc_boxes(ec2_client, vpc_id):
             ret = []
             for box_dict in response.json["boxes"]:
-                if "age" in box_dict:
-                    box_dict.pop("age")
+                for virtual in ("age", "max_age"):
+                    if virtual in box_dict:
+                        box_dict.pop(virtual)
                 box = Box(**box_dict)
                 box.created_at = None
                 ret.append(box)
@@ -1546,8 +1547,9 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         def fake_list_vpc_boxes(ec2_client, vpc_id):
             ret = []
             for box_dict in response.json["boxes"]:
-                if "age" in box_dict:
-                    box_dict.pop("age")
+                for virtual in ("age", "max_age"):
+                    if virtual in box_dict:
+                        box_dict.pop(virtual)
                 box = Box(**box_dict)
                 box.ttl = None
                 ret.append(box)
@@ -1566,8 +1568,9 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         def fake_list_vpc_boxes(ec2_client, vpc_id):
             ret = []
             for box_dict in response.json["boxes"]:
-                if "age" in box_dict:
-                    box_dict.pop("age")
+                for virtual in ("age", "max_age"):
+                    if virtual in box_dict:
+                        box_dict.pop(virtual)
                 box = Box(**box_dict)
                 ret.append(box)
             return ret

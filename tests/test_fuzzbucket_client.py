@@ -632,10 +632,11 @@ def test_client_create(
             {
                 "boxes": [
                     {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
-                        "instance_id": "i-fafafafafaf",
-                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -651,7 +652,7 @@ def test_client_create(
             0,
             dict(
                 instance_tags=dict(scutum="scorpius", castle="keys", wat=""),
-                ttl="459431",
+                ttl="456623",
             ),
             id="happy",
         ),
@@ -659,10 +660,11 @@ def test_client_create(
             {
                 "boxes": [
                     {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
-                        "instance_id": "i-fafafafafaf",
-                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -707,10 +709,11 @@ def test_client_create(
             {
                 "boxes": [
                     {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
-                        "instance_id": "i-fafafafafaf",
-                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -729,10 +732,11 @@ def test_client_create(
             {
                 "boxes": [
                     {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
-                        "instance_id": "i-fafafafafaf",
-                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -751,10 +755,11 @@ def test_client_create(
             {
                 "boxes": [
                     {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
-                        "instance_id": "i-fafafafafaf",
-                        "created_at": 1584282124.655788,
                     },
                 ]
             },
