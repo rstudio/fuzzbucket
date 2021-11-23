@@ -57,8 +57,17 @@ class Box:
                 "Name": ["name", str],
                 Tags.created_at.value: ["created_at", float],
                 Tags.image_alias.value: ["image_alias", str],
-                Tags.ttl.value: ["ttl", lambda s: int(float(s))],
                 Tags.user.value: ["user", str],
+                # NOTE: the `ttl` at this point is expected to be a
+                # `str(int)`, but the string coercion of `float`
+                # will safely handle both `int` and `float` values,
+                # which is why there's a double-casting through
+                # `float` and `int` here. Sub-second precision for
+                # a `ttl` value can be safely discarded given that
+                # the reaping process is typically run on a
+                # multiple-minute interval. {{
+                Tags.ttl.value: ["ttl", lambda s: int(float(s))],
+                # }}
             }.get(tag["Key"], [None, str])
             if attr is not None:
                 setattr(box, attr, cast(tag["Value"]))  # type: ignore

@@ -682,8 +682,24 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
                 "instance_tags": {"withered": "hand", "early": "seasons"},
                 "ttl": "108000.0",
             },
-            204,
+            200,
             id="happy",
+        ),
+        pytest.param(
+            True,
+            {
+                "ttl": "108000.0",
+            },
+            200,
+            id="happy_ttl_only",
+        ),
+        pytest.param(
+            True,
+            {
+                "instance_tags": {"withered": "hand", "early": "seasons"},
+            },
+            200,
+            id="happy_tags_only",
         ),
         pytest.param(False, {}, 403, id="forbidden"),
     ],

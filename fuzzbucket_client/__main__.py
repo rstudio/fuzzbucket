@@ -153,6 +153,23 @@ def parse_timedelta(as_string: str) -> datetime.timedelta:
     )
 
 
+def _instance_tags_from_string(input_string: str) -> typing.Dict[str, str]:
+    instance_tags = {}
+    for pair in filter(
+        lambda s: s != "",
+        [s.strip() for s in input_string.split(",")],
+    ):
+        if ":" not in pair:
+            raise ValueError(f"instance_tag={pair!r} is not a '<key>:<value>' pair")
+        key, value = [
+            urllib.parse.unquote(str(s.strip()))
+            for s in pair.strip().split(":", maxsplit=1)
+        ]
+        log.debug(f"adding instance tag key={key!r} value={value!r}")
+        instance_tags[key] = value
+    return instance_tags
+
+
 log = logging.getLogger("fuzzbucket")
 
 
@@ -724,16 +741,9 @@ class Client:
         if known_args.name != "":
             payload["name"] = known_args.name
         if known_args.instance_tags:
-            payload["instance_tags"] = {}
-            for pair in known_args.instance_tags.split(","):
-                if ":" not in pair:
-                    continue
-                key, value = [
-                    urllib.parse.unquote(str(s.strip()))
-                    for s in pair.strip().split(":", maxsplit=1)
-                ]
-                log.debug(f"adding instance tag to request key={key!r} value={value!r}")
-                payload["instance_tags"][key] = value
+            payload["instance_tags"] = _instance_tags_from_string(
+                known_args.instance_tags
+            )
         if known_args.ttl.total_seconds() < MIN_TTL.total_seconds():
             log.error(f"ttl={known_args.ttl!r} is below the minimum of {MIN_TTL}")
             return False
@@ -777,30 +787,24 @@ class Client:
                 log.error(f"ttl={known_args.ttl!r} is above the maximum of {MAX_TTL}")
                 return False
         if known_args.instance_tags:
-            payload["instance_tags"] = {}
-            for pair in known_args.instance_tags.split(","):
-                if ":" not in pair:
-                    continue
-                key, value = [
-                    urllib.parse.unquote(str(s.strip()))
-                    for s in pair.strip().split(":", maxsplit=1)
-                ]
-                log.debug(f"adding instance tag to request key={key!r} value={value!r}")
-                payload["instance_tags"][key] = value
+            payload["instance_tags"] = _instance_tags_from_string(
+                known_args.instance_tags
+            )
         if len(payload) == 0 and known_args.ttl is None:
             log.error(f"no updates specified for {known_args.box_match!r}")
             return False
         for matching_box in matching_boxes:
             box_payload = payload.copy()
-            box_payload["ttl"] = str(
-                int(
-                    (
-                        datetime.datetime.utcnow().timestamp()
-                        - float(matching_box["created_at"])
+            if known_args.ttl:
+                box_payload["ttl"] = str(
+                    int(
+                        (
+                            datetime.datetime.utcnow().timestamp()
+                            - float(matching_box["created_at"])
+                        )
+                        + known_args.ttl.total_seconds()
                     )
-                    + known_args.ttl.total_seconds()
                 )
-            )
             req = self._build_request(
                 _pjoin(self._url, "box", matching_box["instance_id"]),
                 data=json.dumps(box_payload).encode("utf-8"),

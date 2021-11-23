@@ -636,11 +636,32 @@ def test_client_create(
                 "--ttl",
                 "5 days, 6 hours, 37 minutes, 11 seconds",
                 "--instance-tags",
-                "scutum:scorpius,castle:keys,wat",
+                "scutum:scorpius,castle:keys,wat:",
             ),
             ("updated box for user=.+",),
             0,
             id="happy",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                        "instance_id": "i-fafafafafaf",
+                        "created_at": 1637623908.630157,
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--instance-tags",
+                "scutum:scorpius,castle:keys,wat:",
+            ),
+            ("updated box for user=.+",),
+            0,
+            id="happy_tags_only",
         ),
         pytest.param(
             {},
