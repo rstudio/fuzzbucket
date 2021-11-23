@@ -109,9 +109,11 @@ def test_client_setup():
         client._setup()
 
 
-def gen_fake_urlopen(response, http_exc=None, empty_methods=()):
+def gen_fake_urlopen(response, http_exc=None, empty_methods=(), request_hook=None):
     @contextlib.contextmanager
     def fake_urlopen(request):
+        if request_hook is not None:
+            request_hook(request)
         if request.get_method() in empty_methods:
             yield io.StringIO("")
             return
@@ -617,7 +619,14 @@ def test_client_create(
 
 
 @pytest.mark.parametrize(
-    ("api_response", "http_exc", "cmd_args", "log_matches", "expected"),
+    (
+        "api_response",
+        "http_exc",
+        "cmd_args",
+        "log_matches",
+        "expected",
+        "expected_request",
+    ),
     [
         pytest.param(
             {
@@ -626,7 +635,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
-                        "created_at": 1637623908.630157,
+                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -640,6 +649,10 @@ def test_client_create(
             ),
             ("updated box for user=.+",),
             0,
+            dict(
+                instance_tags=dict(scutum="scorpius", castle="keys", wat=""),
+                ttl="459431",
+            ),
             id="happy",
         ),
         pytest.param(
@@ -649,7 +662,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
-                        "created_at": 1637623908.630157,
+                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -661,6 +674,7 @@ def test_client_create(
             ),
             ("updated box for user=.+",),
             0,
+            None,
             id="happy_tags_only",
         ),
         pytest.param(
@@ -673,6 +687,7 @@ def test_client_create(
             ),
             (),
             2,
+            None,
             id="bad_ttl",
         ),
         pytest.param(
@@ -685,6 +700,7 @@ def test_client_create(
             ),
             (),
             2,
+            None,
             id="worse_ttl",
         ),
         pytest.param(
@@ -694,7 +710,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
-                        "created_at": 1637623908.630157,
+                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -706,6 +722,7 @@ def test_client_create(
             ),
             ("ttl=.+ is below the minimum.+",),
             86,
+            None,
             id="low_ttl",
         ),
         pytest.param(
@@ -715,7 +732,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
-                        "created_at": 1637623908.630157,
+                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -727,6 +744,7 @@ def test_client_create(
             ),
             ("ttl=.+ is above the maximum.+",),
             86,
+            None,
             id="high_ttl",
         ),
         pytest.param(
@@ -736,7 +754,7 @@ def test_client_create(
                         "name": "ubuntu49",
                         "public_ip": "256.256.256.256",
                         "instance_id": "i-fafafafafaf",
-                        "created_at": 1637623908.630157,
+                        "created_at": 1584282124.655788,
                     },
                 ]
             },
@@ -744,6 +762,7 @@ def test_client_create(
             ("ubuntu49",),
             ("no updates specified for .+",),
             86,
+            None,
             id="no_updates",
         ),
         pytest.param(
@@ -752,12 +771,21 @@ def test_client_create(
             ("ubuntu49",),
             ("no boxes found matching .+",),
             86,
+            None,
             id="no_match",
         ),
     ],
 )
 def test_client_update(
-    monkeypatch, caplog, api_response, http_exc, cmd_args, log_matches, expected
+    monkeypatch,
+    caplog,
+    api_response,
+    http_exc,
+    cmd_args,
+    log_matches,
+    expected,
+    expected_request,
+    nowish,
 ):
     client = fuzzbucket_client.__main__.Client()
 
@@ -766,12 +794,26 @@ def test_client_update(
     def capture_sys_exit(status):
         sys_exit_state["status"] = status
 
+    request_state = {}
+
+    def request_hook(request):
+        request_state.update(request=request)
+
+    monkeypatch.setattr(
+        fuzzbucket_client.__main__,
+        "utcnow",
+        lambda: nowish,
+    )
     monkeypatch.setattr(argparse._sys, "exit", capture_sys_exit)
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO(json.dumps(api_response)), http_exc=http_exc),
+        gen_fake_urlopen(
+            io.StringIO(json.dumps(api_response)),
+            http_exc=http_exc,
+            request_hook=request_hook,
+        ),
     )
     ret = fuzzbucket_client.__main__.main(
         ["fuzzbucket-client", "update"] + list(cmd_args)
@@ -782,6 +824,11 @@ def test_client_update(
         assert ret == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
+
+    if expected_request is None:
+        return
+
+    assert expected_request == json.loads(request_state["request"].data)
 
 
 @pytest.mark.parametrize(

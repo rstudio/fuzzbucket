@@ -170,6 +170,10 @@ def _instance_tags_from_string(input_string: str) -> typing.Dict[str, str]:
     return instance_tags
 
 
+def utcnow() -> datetime.datetime:
+    return datetime.datetime.utcnow()
+
+
 log = logging.getLogger("fuzzbucket")
 
 
@@ -796,14 +800,13 @@ class Client:
         for matching_box in matching_boxes:
             box_payload = payload.copy()
             if known_args.ttl:
+                box_age = parse_timedelta(matching_box["age"])
                 box_payload["ttl"] = str(
-                    int(
-                        (
-                            datetime.datetime.utcnow().timestamp()
-                            - float(matching_box["created_at"])
-                        )
-                        + known_args.ttl.total_seconds()
-                    )
+                    int(box_age.total_seconds() + known_args.ttl.total_seconds())
+                )
+                log.debug(
+                    f"setting ttl={box_payload['ttl']!r} for "
+                    + f"matching_box={matching_box!r}"
                 )
             req = self._build_request(
                 _pjoin(self._url, "box", matching_box["instance_id"]),
@@ -1098,7 +1101,7 @@ class Client:
             return
 
         preferences["//"] = "WARNING: this file is generated"
-        preferences["__updated_at__"] = str(datetime.datetime.utcnow())
+        preferences["__updated_at__"] = str(utcnow())
 
         with self._preferences_file.open("w") as outfile:
             json.dump(preferences, outfile, sort_keys=True, indent=2)
@@ -1164,8 +1167,7 @@ class Client:
             creds.set(self._credentials_section, "name", str(name))
         with self._credentials_file.open("w") as outfile:
             outfile.write(
-                "# WARNING: this file is generated "
-                + f"(last update {datetime.datetime.utcnow()})\n"
+                "# WARNING: this file is generated " + f"(last update {utcnow()})\n"
             )
             creds.write(outfile)
         self._cached_credentials = None

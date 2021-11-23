@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import typing
 import urllib.parse
 
@@ -20,6 +19,7 @@ from . import (
     get_ec2_client,
     list_user_boxes,
     log,
+    utcnow,
 )
 
 
@@ -332,7 +332,7 @@ def create_box():
 
     instance_tags = [
         dict(Key="Name", Value=name),
-        dict(Key=Tags.created_at.value, Value=str(time.time())),
+        dict(Key=Tags.created_at.value, Value=str(utcnow().timestamp())),
         dict(Key=Tags.image_alias.value, Value=image_alias),
         dict(Key=Tags.ttl.value, Value=ttl),
         dict(Key=Tags.user.value, Value=username),

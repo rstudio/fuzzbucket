@@ -1,10 +1,10 @@
 import base64
 import collections
+import datetime
 import json
 import os
 import random
 import re
-import time
 import typing
 
 import boto3
@@ -1518,7 +1518,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     instance_id = response.json["boxes"][0]["instance_id"]
     assert instance_id != ""
 
-    the_future = time.time() + 3600
+    the_future = fuzzbucket.utcnow() + datetime.timedelta(hours=1)
 
     with monkeypatch.context() as mp:
         ec2_client = boto3.client("ec2")
@@ -1533,7 +1533,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
                 ret.append(box)
             return ret
 
-        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
@@ -1553,7 +1553,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
                 ret.append(box)
             return ret
 
-        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
@@ -1572,7 +1572,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
                 ret.append(box)
             return ret
 
-        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
@@ -1591,7 +1591,9 @@ def test_box():
     box = Box(instance_id="i-fafafafafafafaf")
     assert box.age == "?"
 
-    box.created_at = str(time.time() - 108000)
+    box.created_at = (
+        fuzzbucket.utcnow() - datetime.timedelta(days=1, minutes=1)
+    ).timestamp()
     assert box.age.startswith("1 day,")
 
     assert "instance_id" in box.as_json()

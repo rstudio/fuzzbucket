@@ -3,7 +3,7 @@ import dataclasses
 import datetime
 
 from .tags import Tags
-from . import NoneString
+from . import NoneString, utcnow
 
 
 @dataclasses.dataclass
@@ -25,7 +25,7 @@ class Box:
         return dict(
             [
                 (key, getattr(self, key))
-                for key in (list(self.__dict__.keys()) + ["age"])
+                for key in (list(self.__dict__.keys()) + ["age", "max_age"])
                 if getattr(self, key) is not None
             ]
         )
@@ -34,10 +34,13 @@ class Box:
     def age(self) -> str:
         if not self.created_at:
             return "?"
-        return str(
-            datetime.datetime.utcnow()
-            - datetime.datetime.fromtimestamp(float(self.created_at))
-        )
+        return str(utcnow() - datetime.datetime.fromtimestamp(float(self.created_at)))
+
+    @property
+    def max_age(self) -> str:
+        if not self.ttl:
+            return "?"
+        return str(datetime.timedelta(seconds=self.ttl))
 
     @classmethod
     def from_ec2_dict(cls, instance: dict) -> "Box":

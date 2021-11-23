@@ -1,3 +1,4 @@
+import datetime
 import functools
 import logging
 import os
@@ -99,3 +100,7 @@ def list_user_boxes(ec2_client, user, vpc_id):
             dict(Name="vpc-id", Values=[vpc_id]),
         ],
     )
+
+
+def utcnow() -> datetime.datetime:
+    return datetime.datetime.utcnow()
