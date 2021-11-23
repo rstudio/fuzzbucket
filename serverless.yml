@@ -5,7 +5,7 @@ useDotenv: true
 custom: ${file(${env:FUZZBUCKET_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
 provider:
   name: aws
-  runtime: python3.8
+  runtime: python3.9
   memorySize: ${self:custom.memorySize, 128}
   timeout: ${self:custom.timeout, 6}
   region: ${self:custom.awsRegion, 'us-east-1'}

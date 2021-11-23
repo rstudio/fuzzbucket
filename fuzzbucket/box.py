@@ -3,7 +3,7 @@ import dataclasses
 import datetime
 
 from .tags import Tags
-from . import NoneString
+from . import NoneString, utcnow
 
 
 @dataclasses.dataclass
@@ -25,7 +25,7 @@ class Box:
         return dict(
             [
                 (key, getattr(self, key))
-                for key in (list(self.__dict__.keys()) + ["age"])
+                for key in (list(self.__dict__.keys()) + ["age", "max_age"])
                 if getattr(self, key) is not None
             ]
         )
@@ -34,12 +34,13 @@ class Box:
     def age(self) -> str:
         if not self.created_at:
             return "?"
-        delta = datetime.datetime.utcnow() - datetime.datetime.fromtimestamp(
-            float(self.created_at)
-        )
-        hours, remainder = divmod(delta.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{delta.days}d{hours}h{minutes}m{seconds}s"
+        return str(utcnow() - datetime.datetime.fromtimestamp(float(self.created_at)))
+
+    @property
+    def max_age(self) -> str:
+        if not self.ttl:
+            return "?"
+        return str(datetime.timedelta(seconds=self.ttl))
 
     @classmethod
     def from_ec2_dict(cls, instance: dict) -> "Box":
@@ -59,8 +60,17 @@ class Box:
                 "Name": ["name", str],
                 Tags.created_at.value: ["created_at", float],
                 Tags.image_alias.value: ["image_alias", str],
-                Tags.ttl.value: ["ttl", int],
                 Tags.user.value: ["user", str],
+                # NOTE: the `ttl` at this point is expected to be a
+                # `str(int)`, but the string coercion of `float`
+                # will safely handle both `int` and `float` values,
+                # which is why there's a double-casting through
+                # `float` and `int` here. Sub-second precision for
+                # a `ttl` value can be safely discarded given that
+                # the reaping process is typically run on a
+                # multiple-minute interval. {{
+                Tags.ttl.value: ["ttl", lambda s: int(float(s))],
+                # }}
             }.get(tag["Key"], [None, str])
             if attr is not None:
                 setattr(box, attr, cast(tag["Value"]))  # type: ignore

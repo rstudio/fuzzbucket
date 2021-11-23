@@ -1,10 +1,10 @@
 import base64
 import collections
+import datetime
 import json
 import os
 import random
 import re
-import time
 import typing
 
 import boto3
@@ -671,6 +671,99 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
         assert response.json is not None
         assert "boxes" in response.json
         assert response.json["boxes"] != []
+
+
+@pytest.mark.parametrize(
+    ("authd", "update_body", "expected"),
+    [
+        pytest.param(
+            True,
+            {
+                "instance_tags": {"withered": "hand", "early": "seasons"},
+                "ttl": "108000.0",
+            },
+            200,
+            id="happy",
+        ),
+        pytest.param(
+            True,
+            {
+                "ttl": "108000.0",
+            },
+            200,
+            id="happy_ttl_only",
+        ),
+        pytest.param(
+            True,
+            {
+                "instance_tags": {"withered": "hand", "early": "seasons"},
+            },
+            200,
+            id="happy_tags_only",
+        ),
+        pytest.param(False, {}, 403, id="forbidden"),
+    ],
+)
+@mock_ec2
+@mock_dynamodb2
+def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expected):
+    ec2_client = boto3.client("ec2")
+    monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+    monkeypatch.setattr(
+        fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
+    )
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    def fake_describe_images(*_, **__):
+        return {
+            "Images": [
+                {
+                    "RootDeviceName": "/dev/xyz",
+                    "BlockDeviceMappings": [
+                        {"DeviceName": "/dev/xyz", "Ebs": {"VolumeSize": 9}}
+                    ],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
+
+    response = None
+    with monkeypatch.context() as mp:
+        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        with app.test_client() as c:
+            response = c.post(
+                "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
+            )
+    assert response is not None
+    assert "boxes" in response.json
+
+    with app.test_client() as c:
+        with monkeypatch.context() as mp:
+            all_instances = ec2_client.describe_instances()
+
+            def fake_describe_instances(*_args, **_kwargs):
+                return all_instances
+
+            mp.setattr(
+                ec2_client,
+                "describe_instances",
+                fake_describe_instances,
+            )
+            mp.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+            response = c.put(
+                f'/box/{response.json["boxes"][0]["instance_id"]}',
+                json=update_body,
+                headers=authd_headers,
+            )
+            assert response.status_code == expected
+
+    if "ttl" in update_body:
+        re_fetched = fuzzbucket.list_boxes_filtered(ec2_client, [])
+        assert re_fetched[0].ttl == int(float(update_body["ttl"]))
 
 
 @pytest.mark.parametrize(
@@ -1425,7 +1518,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     instance_id = response.json["boxes"][0]["instance_id"]
     assert instance_id != ""
 
-    the_future = time.time() + 3600
+    the_future = fuzzbucket.utcnow() + datetime.timedelta(hours=1)
 
     with monkeypatch.context() as mp:
         ec2_client = boto3.client("ec2")
@@ -1433,14 +1526,15 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         def fake_list_vpc_boxes(ec2_client, vpc_id):
             ret = []
             for box_dict in response.json["boxes"]:
-                if "age" in box_dict:
-                    box_dict.pop("age")
+                for virtual in ("age", "max_age"):
+                    if virtual in box_dict:
+                        box_dict.pop(virtual)
                 box = Box(**box_dict)
                 box.created_at = None
                 ret.append(box)
             return ret
 
-        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
@@ -1453,14 +1547,15 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         def fake_list_vpc_boxes(ec2_client, vpc_id):
             ret = []
             for box_dict in response.json["boxes"]:
-                if "age" in box_dict:
-                    box_dict.pop("age")
+                for virtual in ("age", "max_age"):
+                    if virtual in box_dict:
+                        box_dict.pop(virtual)
                 box = Box(**box_dict)
                 box.ttl = None
                 ret.append(box)
             return ret
 
-        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
@@ -1473,13 +1568,14 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         def fake_list_vpc_boxes(ec2_client, vpc_id):
             ret = []
             for box_dict in response.json["boxes"]:
-                if "age" in box_dict:
-                    box_dict.pop("age")
+                for virtual in ("age", "max_age"):
+                    if virtual in box_dict:
+                        box_dict.pop(virtual)
                 box = Box(**box_dict)
                 ret.append(box)
             return ret
 
-        mp.setattr(time, "time", lambda: the_future)
+        mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
@@ -1498,9 +1594,10 @@ def test_box():
     box = Box(instance_id="i-fafafafafafafaf")
     assert box.age == "?"
 
-    box.created_at = str(time.time() - 1000)
-    for unit in ("d", "h", "m", "s"):
-        assert box.age.count(unit) == 1
+    box.created_at = (
+        fuzzbucket.utcnow() - datetime.timedelta(days=1, minutes=1)
+    ).timestamp()
+    assert box.age.startswith("1 day,")
 
     assert "instance_id" in box.as_json()
     assert "age" in box.as_json()

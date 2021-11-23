@@ -1,7 +1,6 @@
 import os
-import time
 
-from . import list_vpc_boxes, log, get_ec2_client
+from . import list_vpc_boxes, log, get_ec2_client, utcnow
 
 
 def reap_boxes(event: dict, context: dict, ec2_client=None, env: dict = None) -> dict:
@@ -16,7 +15,7 @@ def reap_boxes(event: dict, context: dict, ec2_client=None, env: dict = None) ->
         if ttl is None:
             ttl = float(env.get("FUZZBUCKET_DEFAULT_TTL", str(3600 * 4)))
         expires_at = box.created_at + ttl
-        now = time.time()
+        now = utcnow().timestamp()
         if expires_at > now:
             log.warning(
                 f"skipping box that is not stale instance_id={box.instance_id!r} "

@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import datetime
 import io
 import json
 import logging
@@ -45,6 +46,49 @@ def config_setup(tmpdir, monkeypatch):
     os.environ.pop("FUZZBUCKET_CREDENTIALS", None)
 
 
+@pytest.mark.parametrize(
+    ("input_string", "expected", "expect_error"),
+    [
+        pytest.param(
+            "4:30:05",
+            datetime.timedelta(hours=4, minutes=30, seconds=5),
+            False,
+            id="only_sexagesimal",
+        ),
+        pytest.param(
+            "20:95",
+            datetime.timedelta(minutes=20, seconds=95),
+            False,
+            id="short_sexagesimal",
+        ),
+        pytest.param("4 days", datetime.timedelta(days=4), False, id="days"),
+        pytest.param("3 hours", datetime.timedelta(hours=3), False, id="hours"),
+        pytest.param("3 minutes", datetime.timedelta(minutes=3), False, id="minutes"),
+        pytest.param(
+            "900.5 seconds", datetime.timedelta(seconds=900.5), False, id="seconds"
+        ),
+        pytest.param("2 week", datetime.timedelta(weeks=2), False, id="weeks"),
+        pytest.param(
+            "1 days, 1:10:00",
+            datetime.timedelta(days=1, hours=1, minutes=10),
+            False,
+            id="stdlib_string",
+        ),
+        pytest.param(
+            "10800", datetime.timedelta(seconds=10800.0), False, id="seconds_only"
+        ),
+        pytest.param("parrots", None, True, id="bogus"),
+    ],
+)
+def test_parse_timedelta(input_string, expected, expect_error):
+    if expect_error:
+        with pytest.raises(ValueError):
+            fuzzbucket_client.__main__.parse_timedelta(input_string)
+        return
+
+    assert expected == fuzzbucket_client.__main__.parse_timedelta(input_string)
+
+
 def test_default_client():
     assert fuzzbucket_client.__main__.default_client() is not None
 
@@ -65,9 +109,11 @@ def test_client_setup():
         client._setup()
 
 
-def gen_fake_urlopen(response, http_exc=None, empty_methods=()):
+def gen_fake_urlopen(response, http_exc=None, empty_methods=(), request_hook=None):
     @contextlib.contextmanager
     def fake_urlopen(request):
+        if request_hook is not None:
+            request_hook(request)
         if request.get_method() in empty_methods:
             yield io.StringIO("")
             return
@@ -204,6 +250,35 @@ def test_client_version(capsys):
     assert ret == 0
     captured = capsys.readouterr()
     assert re.match("fuzzbucket-client .+", captured.out) is not None
+
+
+@pytest.mark.parametrize(
+    ("args", "expected_lines"),
+    [
+        pytest.param(
+            ["4 weeks, 3 days"],
+            ["[ttl]", "str = 31 days, 0:00:00", "float = 2678400.0"],
+            id="ini",
+        ),
+        pytest.param(
+            ["9 weeks, 5 days", "-j"],
+            [
+                "{",
+                '  "ttl": {',
+                '    "str": "68 days, 0:00:00",',
+                '    "float": "5875200.0"',
+                "  }",
+                "}",
+            ],
+            id="json",
+        ),
+    ],
+)
+def test_client_check_ttl(capsys, args, expected_lines):
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "--check-ttl"] + args)
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert expected_lines == captured.out.strip().splitlines()
 
 
 def test_client_no_func(capsys):
@@ -497,6 +572,32 @@ def test_client_logout(monkeypatch):
             86,
             id="api_err",
         ),
+        pytest.param(
+            {},
+            (),
+            (
+                "ubuntu49",
+                "--instance-type=t8.pico",
+                "--ttl",
+                "42",
+            ),
+            ("ttl=.+ is below the minimum.+",),
+            86,
+            id="low_ttl",
+        ),
+        pytest.param(
+            {},
+            (),
+            (
+                "ubuntu49",
+                "--instance-type=t8.pico",
+                "--ttl",
+                "42 weeks",
+            ),
+            ("ttl=.+ is above the maximum.+",),
+            86,
+            id="high_ttl",
+        ),
     ],
 )
 def test_client_create(
@@ -515,6 +616,224 @@ def test_client_create(
     assert ret == expected
     for log_match in log_matches:
         assert re.search(log_match, caplog.text) is not None
+
+
+@pytest.mark.parametrize(
+    (
+        "api_response",
+        "http_exc",
+        "cmd_args",
+        "log_matches",
+        "expected",
+        "expected_request",
+    ),
+    [
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "5 days, 6 hours, 37 minutes, 11 seconds",
+                "--instance-tags",
+                "scutum:scorpius,castle:keys,wat:",
+            ),
+            ("updated box for user=.+",),
+            0,
+            dict(
+                instance_tags=dict(scutum="scorpius", castle="keys", wat=""),
+                ttl="456623",
+            ),
+            id="happy",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--instance-tags",
+                "scutum:scorpius,castle:keys,wat:",
+            ),
+            ("updated box for user=.+",),
+            0,
+            None,
+            id="happy_tags_only",
+        ),
+        pytest.param(
+            {},
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "what is this",
+            ),
+            (),
+            2,
+            None,
+            id="bad_ttl",
+        ),
+        pytest.param(
+            {},
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "12 parsecs",
+            ),
+            (),
+            2,
+            None,
+            id="worse_ttl",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "42",
+            ),
+            ("ttl=.+ is below the minimum.+",),
+            86,
+            None,
+            id="low_ttl",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                    },
+                ]
+            },
+            None,
+            (
+                "ubuntu49",
+                "--ttl",
+                "42 weeks",
+            ),
+            ("ttl=.+ is above the maximum.+",),
+            86,
+            None,
+            id="high_ttl",
+        ),
+        pytest.param(
+            {
+                "boxes": [
+                    {
+                        "age": "0:13:12",
+                        "created_at": 1584282124.655788,
+                        "instance_id": "i-fafafafafaf",
+                        "name": "ubuntu49",
+                        "public_ip": "256.256.256.256",
+                    },
+                ]
+            },
+            None,
+            ("ubuntu49",),
+            ("no updates specified for .+",),
+            86,
+            None,
+            id="no_updates",
+        ),
+        pytest.param(
+            {"boxes": []},
+            None,
+            ("ubuntu49",),
+            ("no boxes found matching .+",),
+            86,
+            None,
+            id="no_match",
+        ),
+    ],
+)
+def test_client_update(
+    monkeypatch,
+    caplog,
+    api_response,
+    http_exc,
+    cmd_args,
+    log_matches,
+    expected,
+    expected_request,
+    nowish,
+):
+    client = fuzzbucket_client.__main__.Client()
+
+    sys_exit_state = {"status": None}
+
+    def capture_sys_exit(status):
+        sys_exit_state["status"] = status
+
+    request_state = {}
+
+    def request_hook(request):
+        request_state.update(request=request)
+
+    monkeypatch.setattr(
+        fuzzbucket_client.__main__,
+        "utcnow",
+        lambda: nowish,
+    )
+    monkeypatch.setattr(argparse._sys, "exit", capture_sys_exit)
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(
+            io.StringIO(json.dumps(api_response)),
+            http_exc=http_exc,
+            request_hook=request_hook,
+        ),
+    )
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "update"] + list(cmd_args)
+    )
+    if sys_exit_state["status"] is not None:
+        assert sys_exit_state["status"] == expected
+    else:
+        assert ret == expected
+    for log_match in log_matches:
+        assert re.search(log_match, caplog.text) is not None
+
+    if expected_request is None:
+        return
+
+    assert expected_request == json.loads(request_state["request"].data)
 
 
 @pytest.mark.parametrize(

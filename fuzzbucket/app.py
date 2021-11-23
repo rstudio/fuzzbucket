@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import typing
 import urllib.parse
 
@@ -20,6 +19,7 @@ from . import (
     get_ec2_client,
     list_user_boxes,
     log,
+    utcnow,
 )
 
 
@@ -275,6 +275,11 @@ def create_box():
     if str(ttl or "").strip() == "":
         ttl = str(3600 * 4)
 
+    # NOTE: the `ttl` value must by a string for use as a tag
+    # value, and it's also nice of us to normalize it to an
+    # integer.
+    ttl = str(int(ttl))
+
     for instance in list_user_boxes(get_ec2_client(), username, os.getenv("CF_VPC")):
         if instance.name == name:
             return jsonify(boxes=[instance], you=username), 409
@@ -327,7 +332,7 @@ def create_box():
 
     instance_tags = [
         dict(Key="Name", Value=name),
-        dict(Key=Tags.created_at.value, Value=str(time.time())),
+        dict(Key=Tags.created_at.value, Value=str(utcnow().timestamp())),
         dict(Key=Tags.image_alias.value, Value=image_alias),
         dict(Key=Tags.ttl.value, Value=ttl),
         dict(Key=Tags.user.value, Value=username),
@@ -383,6 +388,44 @@ def create_box():
             you=username,
         ),
         201,
+    )
+
+
+@app.route("/box/<string:instance_id>", methods=["PUT"])
+def update_box(instance_id):
+    if not is_fully_authd():
+        return auth_403_github()
+    log.debug(
+        f"handling update_box for user={request.remote_user!r} "
+        + f"instance_id={instance_id!r}"
+    )
+    if instance_id not in [
+        b.instance_id
+        for b in list_user_boxes(
+            get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
+        )
+    ]:
+        return jsonify(error="no touching"), 403
+
+    instance_tags = []
+    for key, value in request.json.get("instance_tags", {}).items():
+        tag_spec = dict(Key=str(key), Value=str(value))
+
+        log.debug(f"adding tags from request json 'instance_tags' spec={tag_spec!r}")
+
+        instance_tags.append(tag_spec)
+
+    ttl = (request.json.get("ttl") or "").strip()
+    if ttl != "":
+        instance_tags.append(dict(Key=Tags.ttl.value, Value=ttl))
+
+    response = get_ec2_client().create_tags(Resources=[instance_id], Tags=instance_tags)
+    return (
+        jsonify(
+            raw_response=response.get("ResponseMetadata", {}),
+            you=request.remote_user,
+        ),
+        200,
     )
 
 

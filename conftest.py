@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import pytest
@@ -13,3 +14,8 @@ def env_setup():
         ("FUZZBUCKET_USERS_TABLE_NAME", "users"),
     ):
         os.environ.setdefault(key, value)
+
+
+@pytest.fixture
+def nowish() -> datetime.datetime:
+    return datetime.datetime(2020, 3, 15, 11, 22, 4, 655788)
