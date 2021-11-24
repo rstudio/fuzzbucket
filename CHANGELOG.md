@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.10.1] - 2021-11-24
+
+### Changed
+- minor housekeeping cleanups
+
+## [0.10.0] - 2021-11-23
+
+### Added
+- box updating capabilities
+
+### Changed
+- client: accept multiple formats for `--ttl` options
+
+### Security
+- dependency upgrades
+
 ## [0.9.0] - 2021-09-09
 
 ### Added
@@ -186,7 +202,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.7.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.10.1...HEAD
+[0.10.1]: https://github.com/rstudio/fuzzbucket/compare/0.10.0...0.10.1
+[0.10.0]: https://github.com/rstudio/fuzzbucket/compare/0.9.0...0.10.0
+[0.9.0]: https://github.com/rstudio/fuzzbucket/compare/0.8.1...0.9.0
+[0.8.1]: https://github.com/rstudio/fuzzbucket/compare/0.8.0...0.8.1
+[0.8.0]: https://github.com/rstudio/fuzzbucket/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/rstudio/fuzzbucket/compare/0.6.2...0.7.0
 [0.6.2]: https://github.com/rstudio/fuzzbucket/compare/0.6.1...0.6.2
 [0.6.1]: https://github.com/rstudio/fuzzbucket/compare/0.6.0...0.6.1
