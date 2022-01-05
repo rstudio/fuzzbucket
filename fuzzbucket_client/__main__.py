@@ -620,9 +620,12 @@ class Client:
     default_ssh_user = "ec2-user"
     default_ssh_users = {
         "centos": "centos",
+        "rocky": "rocky",
         "rhel": default_ssh_user,
         "sles": default_ssh_user,
         "suse": default_ssh_user,
+        "almalinux": default_ssh_user,
+        "amzn": default_ssh_user,
         "ubuntu": "ubuntu",
     }
 
