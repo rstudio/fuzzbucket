@@ -1040,6 +1040,13 @@ def test_client_scp(monkeypatch):
             id="ok",
         ),
         pytest.param(
+            {"image_aliases": {"chonk": "ami-fafababacaca", "wee": "ami-0a0a0a0a0a"}},
+            fuzzbucket_client.__main__._DataFormats.TXT,
+            '("chonk": "ami-fafababacaca"|"wee": "ami-0a0a0a0a0a")',
+            True,
+            id="ok",
+        ),
+        pytest.param(
             {"error": "oh no"},
             fuzzbucket_client.__main__._DataFormats.INI,
             None,

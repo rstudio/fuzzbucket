@@ -207,6 +207,13 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         help="format all output as json",
     )
     parser.add_argument(
+        "-T",
+        "--output-txt",
+        action="store_true",
+        default=False,
+        help="format all output as plain text",
+    )
+    parser.add_argument(
         "-D",
         "--debug",
         action="store_true",
@@ -289,11 +296,50 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     )
     parser_create.set_defaults(func=client.create)
 
+    parser_get = subparsers.add_parser(
+        "get",
+        help="get a specific box",
+        formatter_class=CustomHelpFormatter,
+    )
+    parser_get.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="include only field *values* in output (implies '--output-txt')",
+    )
+    parser_get.add_argument(
+        "box_match",
+        help="glob pattern (*not regex*) to match against box name *or* image alias",
+    )
+    parser_get.add_argument(
+        "field",
+        nargs="*",
+        help="which fields to include in output",
+    )
+    parser_get.set_defaults(func=client.get)
+
     parser_list = subparsers.add_parser(
         "list",
         aliases=["ls"],
         help="list your boxes",
         formatter_class=CustomHelpFormatter,
+    )
+    parser_list.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="include only field *values* in output (implies '--output-txt')",
+    )
+    parser_list.add_argument(
+        "box_match",
+        nargs="?",
+        default="*",
+        help="glob pattern (*not regex*) to match against box name *or* image alias",
+    )
+    parser_list.add_argument(
+        "field",
+        nargs="*",
+        help="which fields to include in output",
     )
     parser_list.set_defaults(func=client.list)
 
@@ -507,6 +553,8 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON
+    elif known_args.output_txt:
+        client.data_format = _DataFormats.TXT
     if known_args.check_ttl:
         client.show_valid_ttl(known_args.check_ttl)
         return 0
@@ -601,6 +649,7 @@ class CredentialsError(ValueError):
 class _DataFormats(enum.Enum):
     INI = "ini"
     JSON = "json"
+    TXT = "txt"
 
 
 class _Preferences(enum.Enum):
@@ -698,11 +747,36 @@ class Client:
         return True
 
     @_command
-    def list(self, *_):
+    def get(self, known_args, _):
+        log.debug(f"fetching box for user={self._user!r}")
+        matching_boxes = self._find_boxes(known_args.box_match)
+        if matching_boxes is None:
+            log.error(f"no boxes found matching {known_args.box_match!r}")
+            return False
+        if not known_args.quiet and len(matching_boxes) > 1:
+            log.warning(
+                f"more than one box matches {known_args.box_match!r}; "
+                + f"using first match with name={matching_boxes[0]['name']!r}"
+            )
+        if known_args.quiet:
+            self.data_format = _DataFormats.TXT
+        print(self._format_boxes([matching_boxes[0]], fields=known_args.field), end="")
+        return True
+
+    @_command
+    def list(self, known_args, _):
         log.debug(f"fetching boxes for user={self._user!r}")
-        boxes = self._list_boxes()
-        log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
-        print(self._format_boxes(boxes), end="")
+        matching_boxes = self._find_boxes(known_args.box_match)
+        if matching_boxes is None:
+            log.error(f"no boxes found matching {known_args.box_match!r}")
+            return False
+        if known_args.quiet:
+            self.data_format = _DataFormats.TXT
+        else:
+            log.info(
+                f"fetched boxes for user={self._user!r} count={len(matching_boxes)}"
+            )
+        print(self._format_boxes(matching_boxes, fields=known_args.field), end="")
         return True
 
     @_command
@@ -1244,10 +1318,22 @@ class Client:
             unknown_args = ["-o", "UserKnownHostsFile=/dev/null"] + unknown_args
         return unknown_args
 
-    def _format_boxes(self, boxes):
-        return getattr(self, f"_format_boxes_{self.data_format.value}")(boxes)
+    def _format_boxes(self, boxes, fields=()):
+        return getattr(self, f"_format_boxes_{self.data_format.value}")(boxes, fields)
 
-    def _format_boxes_ini(self, boxes):
+    def _format_boxes_txt(self, boxes, fields=()):
+        buf = []
+        for box in boxes:
+            if box.get("public_ip") is None:
+                box["public_ip"] = "(pending)"
+            for key, value in box.items():
+                if value is None:
+                    continue
+                if len(fields) == 0 or str(key) in fields:
+                    buf.append(str(value))
+        return "\n".join(buf)
+
+    def _format_boxes_ini(self, boxes, fields=()):
         boxes_ini = configparser.ConfigParser()
         for box in boxes:
             boxes_ini.add_section(box["name"])
@@ -1256,17 +1342,34 @@ class Client:
             for key, value in box.items():
                 if value is None:
                     continue
-                boxes_ini.set(box["name"], str(key), str(value))
+                if len(fields) == 0 or str(key) in fields:
+                    boxes_ini.set(box["name"], str(key), str(value))
         buf = io.StringIO()
         boxes_ini.write(buf)
         buf.seek(0)
         return buf.read()
 
-    def _format_boxes_json(self, boxes):
-        return json.dumps({"boxes": {box["name"]: box for box in boxes}}, indent=2)
+    def _format_boxes_json(self, boxes, fields=()):
+        copied_boxes = []
+        for box in boxes:
+            copied_box = box.copy()
+            for key in box.keys():
+                if len(fields) != 0 and str(key) not in fields:
+                    copied_box.pop(key)
+            copied_boxes.append(copied_box)
+        return json.dumps({"boxes": copied_boxes}, indent=2)
 
     def _format_keys(self, keys):
         return getattr(self, f"_format_keys_{self.data_format.value}")(keys)
+
+    def _format_keys_txt(self, keys):
+        buf = []
+        for i, key in enumerate(keys):
+            for value in key.values():
+                if value is None:
+                    continue
+                buf.append(str(value))
+        return "\n".join(buf)
 
     def _format_keys_ini(self, keys):
         keys_ini = configparser.ConfigParser()
@@ -1301,7 +1404,7 @@ class Client:
         return buf.read()
 
     def _format_image_aliases_json(self, image_aliases):
-        return json.dumps({"image_aliases": dict(image_aliases)}, indent=2)
+        return json.dumps({"image_aliases": image_aliases}, indent=2)
 
     def _format_valid_ttl(self, ttl):
         return getattr(self, f"_format_valid_ttl_{self.data_format.value}")(ttl)
