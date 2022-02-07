@@ -74,6 +74,14 @@ def set_user():
         if user is None:
             user, source = request.args.get("user"), "qs"
         session["user"] = user
+    if (
+        session.get("user") is not None
+        and session["user"] != str(session["user"]).lower()
+    ):
+        session["user"] = str(session["user"]).lower()
+        log.debug(
+            f"migrated session user to lowercase session user={session['user']!r}"
+        )
     log.debug(f"setting remote_user from user={session['user']!r} source={source!r}")
     request.environ["REMOTE_USER"] = session["user"]
     if not github.authorized:

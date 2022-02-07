@@ -51,5 +51,8 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
 
     def _load_user(self) -> NoneString:
         value = session.get("user")
+        if value is not None and value != str(value).lower():
+            value = str(value).lower()
+            log.debug(f"migrated session user to lowercase session user={value!r}")
         log.debug(f"storage fetched from session user={value!r}")
         return value
