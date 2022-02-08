@@ -170,6 +170,23 @@ def _instance_tags_from_string(input_string: str) -> typing.Dict[str, str]:
     return instance_tags
 
 
+def _normalize_known_args(known_args: argparse.Namespace) -> argparse.Namespace:
+    cloned_args = argparse.Namespace(**known_args.__dict__)
+
+    if hasattr(cloned_args, "user") and cloned_args.user is not None:
+        username = str(cloned_args.user).strip()
+        lower_username = username.lower()
+        if lower_username != username:
+            log.warning(
+                "mixed-case and upper-case GitHub usernames are known to contribute to"
+                + "weirdness; the lower-case string will be used instead "
+                + f"(username={username!r}"
+            )
+            cloned_args.user = lower_username
+
+    return cloned_args
+
+
 def utcnow() -> datetime.datetime:
     return datetime.datetime.utcnow()
 
@@ -501,6 +518,7 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
     parser_delete_key.set_defaults(func=client.delete_key)
 
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
+    known_args = _normalize_known_args(known_args)
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
         print(f"fuzzbucket-client {__version__}")
