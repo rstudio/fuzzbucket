@@ -81,6 +81,13 @@ def log_level() -> int:
     )
 
 
+def _env_creds_log(msg: str):  # pragma: no cover
+    if sys.stdout.isatty():
+        log.warning(msg)
+        return
+    log.debug(msg)
+
+
 def _reverse_map_float(el: typing.Tuple[str, str]) -> typing.Tuple[str, float]:
     return (el[1].rstrip("s")) + "s", float(el[0])
 
@@ -1159,7 +1166,7 @@ class Client:
 
     def _read_credentials(self):
         if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
-            log.debug("reading credentials directly from FUZZBUCKET_CREDENTIALS")
+            _env_creds_log("reading credentials directly from FUZZBUCKET_CREDENTIALS")
             return self._env.get("FUZZBUCKET_CREDENTIALS")
 
         self._credentials_file.touch()
@@ -1172,7 +1179,7 @@ class Client:
 
     def _write_credentials(self, user, secret, name=None):
         if self._env.get("FUZZBUCKET_CREDENTIALS") is not None:
-            log.debug(
+            _env_creds_log(
                 "skipping writing credentials due to presence of FUZZBUCKET_CREDENTIALS"
             )
             return
