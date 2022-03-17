@@ -1228,6 +1228,13 @@ def test_client_list_keys(monkeypatch, capsys, data_format, matches):
         ),
         pytest.param(
             None,
+            FakePath("/dev/null/glamorous_ed25519.pub"),
+            "ssh-ed25519 watermelons",
+            True,
+            id="happy_filename_also",
+        ),
+        pytest.param(
+            None,
             FakePath("/dev/null/id_rsa.pub"),
             "ssh-rsa cow2",
             True,
@@ -1235,7 +1242,14 @@ def test_client_list_keys(monkeypatch, capsys, data_format, matches):
         ),
         pytest.param(
             None,
-            FakePath("/dev/null/fancy_rsa.pub"),
+            FakePath("/dev/null/id_ed25519.pub"),
+            "ssh-ed25519 cow2",
+            True,
+            id="happy_filename_default_alias_also",
+        ),
+        pytest.param(
+            None,
+            FakePath("/dev/null/empty_rsa.pub"),
             None,
             False,
             id="failed_file_read",

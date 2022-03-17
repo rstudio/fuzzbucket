@@ -260,11 +260,13 @@ def create_box():
                 400,
             )
 
-        key_material = _fetch_first_github_rsa_key(session["user"])
+        key_material = _fetch_first_compatible_github_key(session["user"])
         username = session["user"]
         if key_material == "":
             return (
-                jsonify(error=f"could not fetch rsa public key for user={username}"),
+                jsonify(
+                    error=f"could not fetch compatible public key for user={username}"
+                ),
                 400,
             )
 
@@ -272,7 +274,7 @@ def create_box():
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
         resolved_key_name = username
-        log.debug(f"imported rsa public key for user={username}")
+        log.debug(f"imported compatible public key for user={username}")
 
     name = request.json.get("name")
     if str(name or "").strip() == "":
@@ -618,10 +620,11 @@ def put_key(alias):
             400,
         )
 
-    if not key_material.startswith("ssh-rsa"):
+    if not _is_ec2_compatible_key(key_material):
         return (
             jsonify(
-                error="key material must be of type ssh-rsa", you=request.remote_user
+                error="key material must be an ec2-compatible format",
+                you=request.remote_user,
             ),
             400,
         )
@@ -629,7 +632,7 @@ def put_key(alias):
     get_ec2_client().import_key_pair(
         KeyName=full_key_alias, PublicKeyMaterial=key_material.encode("utf-8")
     )
-    log.debug(f"imported rsa public key with alias={full_key_alias}")
+    log.debug(f"imported compatible public key with alias={full_key_alias}")
 
     matching_key = _find_matching_ec2_key_pair(full_key_alias)
     if matching_key is None:
@@ -716,16 +719,20 @@ def _resolve_ami_alias(image_alias: str) -> NoneString:
         return None
 
 
-def _fetch_first_github_rsa_key(user: str) -> str:
+def _fetch_first_compatible_github_key(user: str) -> str:
     try:
         for key in github.get("/user/keys").json():
             stripped_key = key.get("key", "").strip()
-            if stripped_key.startswith("ssh-rsa"):
+            if _is_ec2_compatible_key(stripped_key):
                 return stripped_key
-        log.warning(f"no ssh-rsa key could be found in github for user={user}")
+        log.warning(f"no compatible ssh key could be found in github for user={user}")
         return ""
     except Exception as exc:
         log.warning(
-            f"error while fetching first github ssh-rsa key for user={user} err={exc}"
+            f"error while fetching first compatible github key for user={user} err={exc}"
         )
         return ""
+
+
+def _is_ec2_compatible_key(key_material: str) -> bool:
+    return key_material.startswith("ssh-rsa") or key_material.startswith("ssh-ed25519")

@@ -658,7 +658,9 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        mp.setattr(
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+        )
         with app.test_client() as c:
             response = c.post(
                 "/box",
@@ -733,7 +735,9 @@ def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expe
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        mp.setattr(
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+        )
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
@@ -806,7 +810,9 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        mp.setattr(
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+        )
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
@@ -893,7 +899,9 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        mp.setattr(
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+        )
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
@@ -1448,6 +1456,16 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
             "ssh-rsa second",
             id="3_keys",
         ),
+        pytest.param(
+            False,
+            [
+                {"key": "ssh-ecdsagoop first"},
+                {"key": "ssh-nope second"},
+                {"key": "ssh-ed25519 third"},
+            ],
+            "ssh-ed25519 third",
+            id="3_keys_also",
+        ),
         pytest.param(False, [{"key": "ssh-rsa first"}], "ssh-rsa first", id="1_key"),
         pytest.param(False, [], "", id="empty"),
         pytest.param(
@@ -1460,7 +1478,9 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
         pytest.param(True, [], "", id="err_empty"),
     ],
 )
-def test_fetch_first_github_rsa_key(monkeypatch, raises, api_response, expected_key):
+def test_fetch_first_compatible_github_key(
+    monkeypatch, raises, api_response, expected_key
+):
     class FakeGithub:
         def get(self, *_):
             if raises:
@@ -1471,7 +1491,7 @@ def test_fetch_first_github_rsa_key(monkeypatch, raises, api_response, expected_
             return api_response
 
     monkeypatch.setattr(fuzzbucket.app, "github", FakeGithub())
-    assert fuzzbucket.app._fetch_first_github_rsa_key("user") == expected_key
+    assert fuzzbucket.app._fetch_first_compatible_github_key("user") == expected_key
 
 
 @mock_ec2
@@ -1506,7 +1526,9 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
     response = None
     with monkeypatch.context() as mp:
-        mp.setattr(fuzzbucket.app, "_fetch_first_github_rsa_key", lambda u: pubkey)
+        mp.setattr(
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+        )
         with app.test_client() as c:
             response = c.post(
                 "/box",
