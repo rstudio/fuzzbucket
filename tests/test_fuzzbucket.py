@@ -1456,6 +1456,16 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
             "ssh-rsa second",
             id="3_keys",
         ),
+        pytest.param(
+            False,
+            [
+                {"key": "ssh-ecdsagoop first"},
+                {"key": "ssh-nope second"},
+                {"key": "ssh-ed25519 third"},
+            ],
+            "ssh-ed25519 third",
+            id="3_keys_also",
+        ),
         pytest.param(False, [{"key": "ssh-rsa first"}], "ssh-rsa first", id="1_key"),
         pytest.param(False, [], "", id="empty"),
         pytest.param(
