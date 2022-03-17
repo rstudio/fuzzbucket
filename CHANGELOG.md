@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.12.0] - 2022-03-17
+
+### Added
+- server: ensure usernames are stored in lowercase
+- client: warn when mixed-case GitHub usernames are used
+- client: log at warning level about `FUZZBUCKET_CREDENTIALS` when
+  tty is detected
+- support for ed25519 ssh keys
+
+### Security
+- dependency upgrades
+
 ## [0.11.0] - 2022-01-06
 
 ### Added
@@ -207,7 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.11.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.12.0...HEAD
+[0.12.0]: https://github.com/rstudio/fuzzbucket/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/rstudio/fuzzbucket/compare/0.10.1...0.11.0
 [0.10.1]: https://github.com/rstudio/fuzzbucket/compare/0.10.0...0.10.1
 [0.10.0]: https://github.com/rstudio/fuzzbucket/compare/0.9.0...0.10.0
