@@ -86,7 +86,13 @@ def set_user():
     if not github.authorized:
         log.debug("not currently github authorized; assuming login flow")
         return
-    github_login = github.get("/user").json()["login"]
+    user_response = github.get("/user").json()
+    github_login = user_response.get("login")
+    if github_login is None:
+        log.warning(f"no login available in github user response={user_response!r}")
+        github.token = None
+        del session["user"]
+        return
     if str(github_login).lower() == str(session["user"]).lower():
         log.debug(
             f"github login={github_login!r} case-insensitive matches session"
