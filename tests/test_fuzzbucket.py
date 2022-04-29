@@ -331,6 +331,16 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             id="happy_nothing",
         ),
         pytest.param(
+            "session-pytest",
+            "session-pytest",
+            "session-pytest",
+            True,
+            {},
+            None,
+            None,
+            id="expired_token",
+        ),
+        pytest.param(
             "elmer",
             None,
             None,
