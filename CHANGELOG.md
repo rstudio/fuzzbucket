@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.12.1] - 2022-04-29
+
+### Fixed
+- server: remove session token and user when github token
+  expiration is detected
+
 ## [0.12.0] - 2022-03-17
 
 ### Added
@@ -219,7 +225,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.12.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.12.1...HEAD
+[0.12.1]: https://github.com/rstudio/fuzzbucket/compare/0.12.0...0.12.1
 [0.12.0]: https://github.com/rstudio/fuzzbucket/compare/0.11.0...0.12.0
 [0.11.0]: https://github.com/rstudio/fuzzbucket/compare/0.10.1...0.11.0
 [0.10.1]: https://github.com/rstudio/fuzzbucket/compare/0.10.0...0.10.1
