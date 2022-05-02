@@ -9,7 +9,7 @@ boto3 = "*"
 coverage = "*"
 flake8 = "*"
 ipython = "*"
-moto = "*"
+moto = { version = "*", extras = ["ec2", "dynamodb2"] }
 mypy = "*"
 pytest = "*"
 pytest-cover = "*"
@@ -25,6 +25,3 @@ werkzeug = "*"
 
 [requires]
 python_version = "3.9"
-
-[pipenv]
-allow_prereleases = true

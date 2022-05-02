@@ -107,6 +107,7 @@ def setup_dynamodb_tables(dynamodb):
         AttributeDefinitions=[dict(AttributeName="alias", AttributeType="S")],
         KeySchema=[dict(AttributeName="alias", KeyType="HASH")],
         TableName=image_aliases_table,
+        BillingMode="PAY_PER_REQUEST",
     )
     table.meta.client.get_waiter("table_exists").wait(TableName=image_aliases_table)
 
@@ -121,6 +122,7 @@ def setup_dynamodb_tables(dynamodb):
         AttributeDefinitions=[dict(AttributeName="user", AttributeType="S")],
         KeySchema=[dict(AttributeName="user", KeyType="HASH")],
         TableName=users_table,
+        BillingMode="PAY_PER_REQUEST",
     )
     table.meta.client.get_waiter("table_exists").wait(TableName=users_table)
 
