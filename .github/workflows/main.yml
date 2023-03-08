@@ -10,8 +10,43 @@ env:
 permissions:
   contents: write
 jobs:
-  default:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      releasable: steps.check_releasable.outputs.releasable
+    steps:
+    - uses: actions/checkout@v3
+    - run: git fetch --prune --unshallow
+    - uses: actions/setup-python@v4
+    - uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+    - uses: extractions/setup-just@v1
+    - uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
+        restore-keys: ${{ runner.os }}-pip-
+    - uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node18-${{ hashFiles('**/yarn.lock') }}
+        restore-keys: ${{ runner.os }}-node18-
+    - run: pip install -U pipenv
+    - run: just deps
+    - run: pipenv check
+    - run: just lint
+    - run: just test
+    - run: just is-releasable
+      id: check_releasable
+    - run: just release-artifact
+      id: create_release_artifact
+    - uses: actions/upload-artifact@v3
+      name: tarball
+      path: ${{ steps.create_release_artifact.outputs.tarball }}
+  smoke:
+    runs-on: ubuntu-latest
+    needs: [build]
     strategy:
       matrix:
         python: [3.9.x, 3.10.x, 3.11.x]
@@ -21,52 +56,32 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python }}
-        architecture: x64
-    - uses: actions/setup-node@v3
-      with:
-        node-version: 18.x
+    - uses: actions/download-artifact@v3
+      id: download
+      name: tarball
+    - run: pip install -vvv ${{ steps.download.outputs.download-path }}
+    - run: fuzzbucket-client --version
+    - run: fuzzbucket-client --help
+  release:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags') && fromJson(jobs.build.outputs.releasable)
+    steps:
+    - uses: actions/checkout@v3
+    - run: git fetch --prune --unshallow
     - uses: extractions/setup-just@v1
-    - uses: actions/cache@v3
+    - uses: actions/download-artifact@v3
+      id: download
+      name: tarball
+    - uses: softprops/action-gh-release@v1
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-${{ matrix.python }}-pip-${{ hashFiles('**/Pipfile.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.python }}-pip-
-    - uses: actions/cache@v3
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node18-${{ hashFiles('**/yarn.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-node18-
-    - run: pip install -U pipenv
-    - run: just deps
-    - run: pipenv check
-    - run: just lint
-    # NOTE: python 3.9 has a bug that is fixed in 3.10 that
-    # prevents urllib.error.HTTPError from being printed
-    # https://github.com/python/cpython/commit/85be25827bb94112037c391eca66a0d796468825
-    - if: matrix.python != '3.9.x'
-      run: just test
-    - run: just release-artifact
-      id: create_release_artifact
-    - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
-    - run: pipenv run fuzzbucket-client --version
-    - run: pipenv run fuzzbucket-client --help
-    - run: just is-releasable
-      id: check_releasable
-    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ${{ steps.create_release_artifact.outputs.tarball }}
-    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
-      uses: aws-actions/configure-aws-credentials@v2
+        files: ${{ steps.download.outputs.download-path }}
+    - uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET }}
         aws-region: us-east-1
-    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
-      run: just sync-to-s3
-    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
-      uses: pypa/gh-action-pypi-publish@release/v1
+    - run: just sync-to-s3
+    - uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_TOKEN }}

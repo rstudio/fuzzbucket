@@ -55,11 +55,13 @@ release-artifact:
   #!/usr/bin/env bash
   set -euo pipefail
   pipenv run python setup.py bdist_wheel
-  echo "::set-output name=tarball::{{ fuzzbucket_release_artifact }}"
-  echo "::set-output name=tarball_basename::$(basename '{{ fuzzbucket_release_artifact }}')"
+  printf 'tarball={{ fuzzbucket_release_artifact }}\n' | grep = |
+    tee -a "${GITHUB_OUTPUT:-/dev/null}"
+  printf 'tarball_basename='"$(basename '{{ fuzzbucket_release_artifact }}')" | grep = |
+    tee -a "${GITHUB_OUTPUT:-/dev/null}"
 
 is-releasable:
-  pipenv run python setup.py is_releasable
+  pipenv run python setup.py is_releasable | grep = | tee -a "${GITHUB_OUTPUT:-/dev/null}"
 
 sync-to-s3:
   aws s3 cp --acl bucket-owner-full-control \
