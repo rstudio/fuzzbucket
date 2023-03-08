@@ -5,6 +5,13 @@ useDotenv: true
 custom: ${file(${env:FUZZBUCKET_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
 provider:
   name: aws
+  ecr:
+    images:
+      baseimage:
+        path: ./
+        buildArgs:
+          STAGE: ${opt:stage}
+        platform: linux/amd64
   runtime: python3.9
   memorySize: ${self:custom.memorySize, 128}
   timeout: ${self:custom.timeout, 6}
@@ -252,6 +259,7 @@ resources:
         TableName: ${self:custom.usersTableName}
 functions:
   api:
+    image: baseimage
     handler: wsgi_handler.handler
     custom:
       env-resources:
@@ -263,6 +271,7 @@ functions:
     - http: { method: ANY, path: / }
     - http: { method: ANY, path: '{proxy+}' }
   reap:
+    image: baseimage
     handler: fuzzbucket.deferred_reap_boxes
     custom:
       env-resources:

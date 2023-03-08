@@ -1,0 +1,4 @@
+*
+!fuzzbucket/
+!requirements.txt
+!docker-entrypoint.sh
