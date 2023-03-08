@@ -288,10 +288,12 @@ def test_client_no_func(capsys):
     for match in (
         "^usage: .+--version.+",
         "^A client for fuzzbucket",
-        "^optional arguments:",
+        "^option(al argument|)s:",
         "^ +delete-alias.+delete an image alias",
     ):
-        assert re.search(match, captured.out, re.MULTILINE) is not None
+        assert re.search(match, captured.out, re.MULTILINE) is not None, (
+            "usage does not match " + match
+        )
 
 
 def test_client_failing_func(monkeypatch, capsys):
