@@ -37,7 +37,11 @@ jobs:
     - run: just deps
     - run: pipenv check
     - run: just lint
-    - run: just test
+    # NOTE: python 3.9 has a bug that is fixed in 3.10 that
+    # prevents urllib.error.HTTPError from being printed
+    # https://github.com/python/cpython/commit/85be25827bb94112037c391eca66a0d796468825
+    - if: matrix.python == '3.10.x'
+      run: just test
     - run: just release-artifact
       id: create_release_artifact
     - run: pipenv run pip install -vvv ${{ steps.create_release_artifact.outputs.tarball }}
