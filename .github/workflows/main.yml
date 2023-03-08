@@ -67,7 +67,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [build]
-    if: startsWith(github.ref, 'refs/tags') && fromJson(jobs.build.outputs.releasable)
+    if: startsWith(github.ref, 'refs/tags') && fromJson(needs.build.outputs.releasable)
     steps:
     - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
