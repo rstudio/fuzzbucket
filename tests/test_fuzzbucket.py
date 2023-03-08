@@ -12,7 +12,7 @@ import botocore.exceptions
 import pytest
 
 from flask import Response
-from moto import mock_ec2, mock_dynamodb2
+from moto import mock_ec2, mock_dynamodb
 from werkzeug.exceptions import InternalServerError
 
 import fuzzbucket
@@ -495,7 +495,7 @@ def test__login(monkeypatch):
         pytest.param(True, "eggs", 404, id="unknown_user"),
     ],
 )
-@mock_dynamodb2
+@mock_dynamodb
 def test__logout(monkeypatch, authd, session_user, expected_status):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -592,7 +592,7 @@ def test_auth_complete(
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_list_boxes(authd_headers, monkeypatch, authd, expected):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -637,7 +637,7 @@ def test_list_boxes(authd_headers, monkeypatch, authd, expected):
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected):
     ec2_client = boto3.client("ec2")
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
@@ -719,7 +719,7 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expected):
     ec2_client = boto3.client("ec2")
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
@@ -794,7 +794,7 @@ def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expe
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
     ec2_client = boto3.client("ec2")
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
@@ -883,7 +883,7 @@ def test_delete_box_not_yours(monkeypatch, authd_headers, fake_github):
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
     ec2_client = boto3.client("ec2")
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
@@ -969,7 +969,7 @@ def test_reboot_box_not_yours(monkeypatch):
         pytest.param(False, 403, id="forbidden"),
     ],
 )
-@mock_dynamodb2
+@mock_dynamodb
 def test_list_image_aliases(authd_headers, monkeypatch, authd, expected):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -994,7 +994,7 @@ def test_list_image_aliases(authd_headers, monkeypatch, authd, expected):
         pytest.param(False, 403, id="forbidden"),
     ],
 )
-@mock_dynamodb2
+@mock_dynamodb
 def test_create_image_alias(authd_headers, monkeypatch, authd, expected):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -1012,7 +1012,7 @@ def test_create_image_alias(authd_headers, monkeypatch, authd, expected):
     assert response.status_code == expected
 
 
-@mock_dynamodb2
+@mock_dynamodb
 def test_create_image_alias_not_json(authd_headers, monkeypatch):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -1034,7 +1034,7 @@ def test_create_image_alias_not_json(authd_headers, monkeypatch):
     ("authd", "expected"),
     [pytest.param(True, 204, id="happy"), pytest.param(False, 403, id="forbidden")],
 )
-@mock_dynamodb2
+@mock_dynamodb
 def test_delete_image_alias(authd_headers, monkeypatch, authd, expected):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -1048,7 +1048,7 @@ def test_delete_image_alias(authd_headers, monkeypatch, authd, expected):
     assert response.status_code == expected
 
 
-@mock_dynamodb2
+@mock_dynamodb
 def test_delete_image_alias_no_alias(authd_headers, monkeypatch):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -1062,7 +1062,7 @@ def test_delete_image_alias_no_alias(authd_headers, monkeypatch):
     assert response.status_code == 404
 
 
-@mock_dynamodb2
+@mock_dynamodb
 def test_delete_image_alias_not_yours(monkeypatch):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -1102,7 +1102,7 @@ def test_delete_image_alias_not_yours(monkeypatch):
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_get_key(authd_headers, monkeypatch, authd, session_user, key_alias, expected):
     ec2_client = boto3.client("ec2")
     dynamodb = boto3.resource("dynamodb")
@@ -1163,7 +1163,7 @@ def test_get_key(authd_headers, monkeypatch, authd, session_user, key_alias, exp
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_list_keys(authd_headers, monkeypatch, authd, session_user, n_keys, expected):
     ec2_client = boto3.client("ec2")
     dynamodb = boto3.resource("dynamodb")
@@ -1290,7 +1290,7 @@ def test_list_keys(authd_headers, monkeypatch, authd, session_user, n_keys, expe
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_put_key(
     authd_headers,
     monkeypatch,
@@ -1383,7 +1383,7 @@ def test_put_key(
     ],
 )
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_delete_key(
     authd_headers, monkeypatch, authd, session_user, key_alias, expected
 ):
@@ -1425,7 +1425,7 @@ def test_delete_key(
         assert response.json["key"] is not None
 
 
-@mock_dynamodb2
+@mock_dynamodb
 @pytest.mark.parametrize(
     ("image_alias", "raises", "expected"),
     [
@@ -1507,7 +1507,7 @@ def test_fetch_first_compatible_github_key(
 
 
 @mock_ec2
-@mock_dynamodb2
+@mock_dynamodb
 def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     ec2_client = boto3.client("ec2")
     monkeypatch.setattr(fuzzbucket.app, "get_ec2_client", lambda: ec2_client)
@@ -1653,7 +1653,7 @@ def test_box():
         pytest.param(None, "busytown1999", True, {}, id="no_user"),
     ],
 )
-@mock_dynamodb2
+@mock_dynamodb
 def test_flask_dance_storage(monkeypatch, user, token, raises, expected):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)

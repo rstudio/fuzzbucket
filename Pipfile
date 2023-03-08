@@ -9,7 +9,7 @@ boto3 = "*"
 coverage = "*"
 flake8 = "*"
 ipython = "*"
-moto = { version = "*", extras = ["ec2", "dynamodb2"] }
+moto = { version = "*", extras = ["ec2", "dynamodb"] }
 mypy = "*"
 pytest = "*"
 pytest-cover = "*"
