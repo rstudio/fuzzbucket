@@ -58,8 +58,8 @@ jobs:
       with:
         python-version: ${{ matrix.python }}
     - uses: actions/download-artifact@v3
+      id: download
       with:
-        id: download
         name: tarball
     - run: pip install -vvv ${{ steps.download.outputs.download-path }}
     - run: fuzzbucket-client --version
@@ -73,8 +73,8 @@ jobs:
     - run: git fetch --prune --unshallow
     - uses: extractions/setup-just@v1
     - uses: actions/download-artifact@v3
+      id: download
       with:
-        id: download
         name: tarball
     - uses: softprops/action-gh-release@v1
       with:
