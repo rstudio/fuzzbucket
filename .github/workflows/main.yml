@@ -2,6 +2,8 @@ name: main
 on: [push, pull_request]
 env:
   AWS_DEFAULT_REGION: us-east-1
+permissions:
+  contents: write
 jobs:
   default:
     runs-on: ubuntu-latest
@@ -45,8 +47,6 @@ jobs:
       id: check_releasable
     - if: matrix.python == '3.10.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       uses: softprops/action-gh-release@v1
-      permissions:
-        contents: write
       with:
         files: ${{ steps.create_release_artifact.outputs.tarball }}
     - if: matrix.python == '3.10.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
