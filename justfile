@@ -23,6 +23,12 @@ deps:
   pipenv install --dev
   yarn install
 
+deps-up:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  pipenv update
+  yarn upgrade
+
 lint:
   #!/usr/bin/env bash
   set -euo pipefail
