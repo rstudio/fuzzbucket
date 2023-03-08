@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [3.9.x, 3.10.x]
+        python: [3.9.x, 3.10.x, 3.11.x]
     steps:
     - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
@@ -45,7 +45,7 @@ jobs:
     # NOTE: python 3.9 has a bug that is fixed in 3.10 that
     # prevents urllib.error.HTTPError from being printed
     # https://github.com/python/cpython/commit/85be25827bb94112037c391eca66a0d796468825
-    - if: matrix.python == '3.10.x'
+    - if: matrix.python != '3.9.x'
       run: just test
     - run: just release-artifact
       id: create_release_artifact
@@ -54,19 +54,19 @@ jobs:
     - run: pipenv run fuzzbucket-client --help
     - run: just is-releasable
       id: check_releasable
-    - if: matrix.python == '3.10.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
+    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       uses: softprops/action-gh-release@v1
       with:
         files: ${{ steps.create_release_artifact.outputs.tarball }}
-    - if: matrix.python == '3.10.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
+    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       uses: aws-actions/configure-aws-credentials@v2
       with:
         aws-access-key-id: ${{ secrets.AWS_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET }}
         aws-region: us-east-1
-    - if: matrix.python == '3.10.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
+    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       run: just sync-to-s3
-    - if: matrix.python == '3.10.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
+    - if: matrix.python == '3.11.x' && startsWith(github.ref, 'refs/tags') && fromJson(steps.check_releasable.outputs.releasable)
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_TOKEN }}
