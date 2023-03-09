@@ -62,8 +62,7 @@ jobs:
       id: download
       with:
         name: tarball
-    - run: find ${{ steps.download.outputs.download-path }} -type f
-    - run: pip install -vvv ${{ steps.download.outputs.download-path }}
+    - run: pip install -vvv ${{ steps.download.outputs.download-path }}/fuzzbucket_client*.whl
     - run: fuzzbucket-client --version
     - run: fuzzbucket-client --help
   release:
