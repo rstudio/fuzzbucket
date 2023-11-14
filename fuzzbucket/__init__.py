@@ -6,7 +6,7 @@ import typing
 
 import boto3
 
-from flask.json import JSONEncoder
+from flask.json.provider import DefaultJSONProvider
 
 from .tags import Tags
 
@@ -65,13 +65,14 @@ DEFAULT_FILTERS = [
 ]
 
 
-class AsJSONEncoder(JSONEncoder):
-    def default(self, o: typing.Any) -> typing.Any:
+class AsJSONProvider(DefaultJSONProvider):
+    @staticmethod
+    def default(o: typing.Any) -> typing.Any:
         if hasattr(o, "as_json") and callable(o.as_json):
             return o.as_json()
         if hasattr(o, "__dict__"):
             return o.__dict__
-        return JSONEncoder.default(self, o)  # pragma: no cover
+        return DefaultJSONProvider.default(o)  # pragma: no cover
 
 
 def list_vpc_boxes(ec2_client, vpc_id):

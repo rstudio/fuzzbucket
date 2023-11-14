@@ -31,6 +31,8 @@ FakeRequest = collections.namedtuple(
 )
 WrappedError = collections.namedtuple("WrappedError", ("original_exception",))
 
+AnyDict = dict[str, typing.Any]
+
 
 @pytest.fixture(autouse=True)
 def resetti():
@@ -138,7 +140,7 @@ def test_deferred_app():
 
     response = fuzzbucket.deferred_app(
         {
-            "BUSTED_ENV": True,
+            "BUSTED_ENV": typing.cast(str, True),
             "REQUEST_METHOD": "BORK",
             "SERVER_NAME": "nope.example.com",
             "SERVER_PORT": "64434",
@@ -211,7 +213,7 @@ def test_json_encoder():
     other = ("odelay", ["mut", "ati", "ons"])
 
     def enc(thing):
-        return json.dumps(thing, cls=fuzzbucket.AsJSONEncoder)
+        return fuzzbucket.AsJSONProvider(app).dumps(thing)
 
     assert enc(WithAsJson()) == '{"golden": "feelings"}'
     assert enc(Dictish()) == '{"mellow": "gold"}'
@@ -671,7 +673,7 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(
-            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda _: pubkey
         )
         with app.test_client() as c:
             response = c.post(
@@ -748,20 +750,20 @@ def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expe
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(
-            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda _: pubkey
         )
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
     assert response is not None
-    assert "boxes" in response.json
+    assert "boxes" in typing.cast(AnyDict, response.json)
 
     with app.test_client() as c:
         with monkeypatch.context() as mp:
             all_instances = ec2_client.describe_instances()
 
-            def fake_describe_instances(*_args, **_kwargs):
+            def fake_describe_instances(*_, **__):
                 return all_instances
 
             mp.setattr(
@@ -771,7 +773,7 @@ def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expe
             )
             mp.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
             response = c.put(
-                f'/box/{response.json["boxes"][0]["instance_id"]}',
+                f'/box/{typing.cast(AnyDict, response.json)["boxes"][0]["instance_id"]}',
                 json=update_body,
                 headers=authd_headers,
             )
@@ -823,19 +825,19 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(
-            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda _: pubkey
         )
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
     assert response is not None
-    assert "boxes" in response.json
+    assert "boxes" in typing.cast(AnyDict, response.json)
 
     with app.test_client() as c:
         all_instances = ec2_client.describe_instances()
 
-        def fake_describe_instances(*_args, **_kwargs):
+        def fake_describe_instances(*_, **__):
             return all_instances
 
         monkeypatch.setattr(
@@ -845,7 +847,7 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
         )
         monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
         response = c.delete(
-            f'/box/{response.json["boxes"][0]["instance_id"]}',
+            f'/box/{typing.cast(AnyDict, response.json)["boxes"][0]["instance_id"]}',
             headers=authd_headers,
         )
         assert response.status_code == expected
@@ -867,8 +869,8 @@ def test_delete_box_not_yours(monkeypatch, authd_headers, fake_github):
 
     assert response is not None
     assert response.status_code == 403
-    assert "error" in response.json
-    assert response.json["error"] == "no touching"
+    assert "error" in typing.cast(AnyDict, response.json)
+    assert typing.cast(AnyDict, response.json)["error"] == "no touching"
 
 
 @pytest.mark.parametrize(
@@ -912,20 +914,20 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(
-            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda _: pubkey
         )
         with app.test_client() as c:
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
     assert response is not None
-    assert "boxes" in response.json
+    assert "boxes" in typing.cast(AnyDict, response.json)
 
     with app.test_client() as c:
         all_instances = ec2_client.describe_instances()
         with monkeypatch.context() as mp:
 
-            def fake_describe_instances(*_args, **_kwargs):
+            def fake_describe_instances(*_, **__):
                 return all_instances
 
             mp.setattr(
@@ -934,8 +936,9 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
                 fake_describe_instances,
             )
             mp.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
+            instance_id = typing.cast(AnyDict, response.json)["boxes"][0]["instance_id"]
             response = c.post(
-                f'/reboot/{response.json["boxes"][0]["instance_id"]}',
+                f"/reboot/{instance_id}",
                 headers=authd_headers,
             )
             assert response.status_code == expected
@@ -954,8 +957,8 @@ def test_reboot_box_not_yours(monkeypatch):
         response = c.post("/reboot/i-fafafafaf")
     assert response is not None
     assert response.status_code == 403
-    assert "error" in response.json
-    assert response.json["error"] == "no touching"
+    assert "error" in typing.cast(AnyDict, response.json)
+    assert typing.cast(AnyDict, response.json)["error"] == "no touching"
 
 
 @pytest.mark.parametrize(
@@ -1077,8 +1080,8 @@ def test_delete_image_alias_not_yours(monkeypatch):
         )
     assert response is not None
     assert response.status_code == 403
-    assert "error" in response.json
-    assert response.json["error"] == "no touching"
+    assert "error" in typing.cast(AnyDict, response.json)
+    assert typing.cast(AnyDict, response.json)["error"] == "no touching"
 
 
 @pytest.mark.parametrize(
@@ -1539,7 +1542,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(
-            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda u: pubkey
+            fuzzbucket.app, "_fetch_first_compatible_github_key", lambda _: pubkey
         )
         with app.test_client() as c:
             response = c.post(
@@ -1548,8 +1551,8 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
                 headers=authd_headers,
             )
     assert response is not None
-    assert "boxes" in response.json
-    instance_id = response.json["boxes"][0]["instance_id"]
+    assert "boxes" in typing.cast(AnyDict, response.json)
+    instance_id = typing.cast(AnyDict, response.json)["boxes"][0]["instance_id"]
     assert instance_id != ""
 
     the_future = fuzzbucket.utcnow() + datetime.timedelta(hours=1)
@@ -1557,9 +1560,9 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     with monkeypatch.context() as mp:
         ec2_client = boto3.client("ec2")
 
-        def fake_list_vpc_boxes(ec2_client, vpc_id):
+        def fake_list_vpc_boxes(*_, **__):
             ret = []
-            for box_dict in response.json["boxes"]:
+            for box_dict in typing.cast(AnyDict, response.json)["boxes"]:
                 for virtual in ("age", "max_age"):
                     if virtual in box_dict:
                         box_dict.pop(virtual)
@@ -1578,19 +1581,19 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     with monkeypatch.context() as mp:
         ec2_client = boto3.client("ec2")
 
-        def fake_list_vpc_boxes(ec2_client, vpc_id):
+        def fake_list_vpc_boxes_2(*_, **__):
             ret = []
-            for box_dict in response.json["boxes"]:
+            for box_dict in typing.cast(AnyDict, response.json)["boxes"]:
                 for virtual in ("age", "max_age"):
                     if virtual in box_dict:
                         box_dict.pop(virtual)
                 box = Box(**box_dict)
-                box.ttl = None
+                box.ttl = None  # type: ignore
                 ret.append(box)
             return ret
 
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
-        mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
+        mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes_2)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
         )
@@ -1599,9 +1602,9 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     with monkeypatch.context() as mp:
         ec2_client = boto3.client("ec2")
 
-        def fake_list_vpc_boxes(ec2_client, vpc_id):
+        def fake_list_vpc_boxes_3(*_, **__):
             ret = []
-            for box_dict in response.json["boxes"]:
+            for box_dict in typing.cast(AnyDict, response.json)["boxes"]:
                 for virtual in ("age", "max_age"):
                     if virtual in box_dict:
                         box_dict.pop(virtual)
@@ -1610,7 +1613,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
             return ret
 
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
-        mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
+        mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes_3)
         reap_response = fuzzbucket.reaper.reap_boxes(
             None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
         )
@@ -1628,16 +1631,16 @@ def test_box():
     box = Box(instance_id="i-fafafafafafafaf")
     assert box.age == "?"
 
-    box.created_at = (
-        fuzzbucket.utcnow() - datetime.timedelta(days=1, minutes=1)
-    ).timestamp()
+    box.created_at = str(
+        (fuzzbucket.utcnow() - datetime.timedelta(days=1, minutes=1)).timestamp()
+    )
     assert box.age.startswith("1 day,")
 
     assert "instance_id" in box.as_json()
     assert "age" in box.as_json()
 
     with pytest.raises(TypeError):
-        Box(instance_id="i-fafafafbabacaca", frobs=9001)
+        Box(instance_id="i-fafafafbabacaca", frobs=9001)  # type: ignore
 
 
 @pytest.mark.parametrize(

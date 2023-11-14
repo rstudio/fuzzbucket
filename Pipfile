@@ -17,6 +17,7 @@ pytest-mypy = "*"
 setuptools_scm = "*"
 sshpubkeys = "*"
 toml = "*"
+urllib3 = "<2"
 
 [packages]
 Flask = "*"
