@@ -7,9 +7,7 @@ from typing import Optional
 from botocore.exceptions import ClientError
 
 
-def reap_boxes(
-    event: dict, context: dict, ec2_client=None, env: Optional[dict] = None
-) -> dict:
+def reap_boxes(_, __, ec2_client=None, env: Optional[dict] = None) -> dict:
     ec2_client = ec2_client if ec2_client is not None else get_ec2_client()
     env = env if env is not None else dict(os.environ)
     reaped_instance_ids = []

@@ -13,7 +13,7 @@ from .box import Box
 from .tags import Tags
 from .flask_dance_storage import FlaskDanceStorage
 from . import (
-    AsJSONEncoder,
+    AsJSONProvider,
     NoneString,
     get_dynamodb,
     get_ec2_client,
@@ -38,7 +38,7 @@ gh_blueprint = make_github_blueprint(
 )
 app.config["gh_blueprint"] = gh_blueprint
 app.register_blueprint(gh_blueprint, url_prefix="/login")
-app.json_encoder = AsJSONEncoder
+app.json_provider_class = AsJSONProvider
 
 
 @app.errorhandler(InternalServerError)
@@ -59,11 +59,6 @@ def handle_500(exc):
         ),
         500,
     )
-
-
-@app.before_first_request
-def _app_setup():
-    os.environ.setdefault("CF_VPC", "NOTSET")
 
 
 @app.before_request
@@ -742,3 +737,7 @@ def _fetch_first_compatible_github_key(user: str) -> str:
 
 def _is_ec2_compatible_key(key_material: str) -> bool:
     return key_material.startswith("ssh-rsa") or key_material.startswith("ssh-ed25519")
+
+
+with app.app_context():
+    os.environ.setdefault("CF_VPC", "NOTSET")
