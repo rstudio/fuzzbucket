@@ -12,7 +12,7 @@ RUN apt-get update -y \
   && curl -fsSLo /usr/local/bin/aws-lambda-rie https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie \
   && chmod -v +x /usr/local/bin/aws-lambda-rie
 
-COPY . . 
+COPY . .
 
 RUN install -v -m 0755 docker-entrypoint.sh /docker-entrypoint.sh
 

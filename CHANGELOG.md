@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.13.0] - 2023-11-15
+
+### Added
+- custom lambda image scaffolding
+- accept VPC tags from custom yaml
+
+### Changed
+- usage given dependency update compatibility issues
+
+### Fixed
+- continue reaping process on error
+- github actions output integration
+
+### Security
+- dependency updates
+- target runtime update
+
 ## [0.12.2] - 2022-05-03
 
 ### Security
