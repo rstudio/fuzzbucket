@@ -26,15 +26,15 @@ class IsReleasableCommand(distutils.cmd.Command):
         value = get_version()
         releasable = re.match("^[0-9]+\\.[0-9]+\\.[0-9]+$", value) is not None
         self.announce(
-            f"Version {value} is {'' if releasable else 'NOT '}releasable",
-            level=distutils.log.INFO,
+            f"# Version {value} is {'' if releasable else 'NOT '}releasable",
+            level=distutils.log.DEBUG,
         )
-        print(f"::set-output name=releasable::{'true' if releasable else 'false'}")
+        print(f"releasable={'true' if releasable else 'false'}")
 
 
 def main():
-    if sys.version_info[:2] < (3, 5):
-        print("ERROR: fuzzbucket-client requires python 3.5+")
+    if sys.version_info[:2] < (3, 9):
+        print("ERROR: fuzzbucket-client requires python 3.9+")
         print("This python is:")
         print(sys.version)
         return 86

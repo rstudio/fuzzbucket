@@ -17,6 +17,7 @@ pytest-mypy = "*"
 setuptools_scm = "*"
 sshpubkeys = "*"
 toml = "*"
+urllib3 = "<2"
 
 [packages]
 Flask = "*"
@@ -24,4 +25,4 @@ Flask-Dance = "*"
 werkzeug = "*"
 
 [requires]
-python_version = "3.10"
+python_version = "3.11"
