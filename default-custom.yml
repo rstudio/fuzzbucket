@@ -1,24 +1,34 @@
 allowedGithubOrgs: ""
 apiKeys: []
-branding: Not Overridden Branding Value For Fuzzbucket
-flaskSecretKey: not even trying to be secure here ok
 awsRegion: us-east-1
-defaultImageAlias: ubuntu18
+branding: Not Overridden Branding Value For Fuzzbucket
+defaultImageAlias: ubuntu22
+defaultInstanceTags: very%3Aserious:ok,hams:steamed
 defaultInstanceType: t3.small
 defaultTtl: '14400'
 dynamodb:
   start:
     migrate: true
   stages:
+  - dev
+  - prod
   - test
+flaskSecretKey: not even trying to be secure here ok
 imageAliasesTableName: fuzzbucket-${opt:stage, 'dev'}-image-aliases
-usersTableName: fuzzbucket-${opt:stage, 'dev'}-users
 logLevel: info
 memorySize: 128
+oauth:
+  clientID: ffffffffffffffffffff
+  clientSecret: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 publicSubnetAvailabilityZone: us-east-1a
 publicSubnetCidrBlock: 172.98.0.0/19
 reapSchedule: rate(10 minutes)
+timeout: 30
+usersTableName: fuzzbucket-${opt:stage, 'dev'}-users
 vpcCidrBlock: 172.98.0.0/18
+vpcTags:
+- Key: Name
+  Value: fuzzbucket-${opt:stage, 'dev'}-vpc
 wsgi:
   app: fuzzbucket.deferred_app
   packRequirements: false
