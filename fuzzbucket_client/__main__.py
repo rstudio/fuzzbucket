@@ -315,12 +315,12 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_create.set_defaults(func=client.create)
 
     parser_list = subparsers.add_parser(
-        "list",
-        aliases=["ls"],
+        "ls",
+        aliases=["list"],
         help="list your boxes",
         formatter_class=CustomHelpFormatter,
     )
-    parser_list.set_defaults(func=client.list)
+    parser_list.set_defaults(func=client.ls)
 
     parser_update = subparsers.add_parser(
         "update",
@@ -649,7 +649,10 @@ class _Preferences(enum.Enum):
     DEFAULT_KEY_ALIAS = "default_key_alias"
 
 
-Box: typing.TypeAlias = dict[str, typing.Union[str, None, int, dict[str, str]]]
+if sys.version_info >= (3, 10):
+    Box: typing.TypeAlias = dict[str, typing.Union[str, None, int, dict[str, str]]]
+else:
+    Box = typing.Any
 
 
 def execvp(*args, **kwargs):
@@ -690,8 +693,7 @@ class Client:
         self.data_format = _DataFormats.INI
 
     def _setup(self):
-        if self._url is None:
-            raise ValueError("missing FUZZBUCKET_URL")
+        assert self._url
         if self._credentials in (None, ""):
             raise CredentialsError(self._url, str(self._credentials_file))
 
@@ -704,8 +706,6 @@ class Client:
 
     @_command
     def login(self, known_args, _):
-        if self._url is None:
-            raise ValueError("missing FUZZBUCKET_URL")
         log.debug(f"starting login flow for user={known_args.user}")
         login_url = "?".join(
             [
@@ -743,14 +743,14 @@ class Client:
     @_command
     def logout(self, *_):
         log.debug(f"starting logout for user={self._user!r}")
-        req = self._build_request(_pjoin(str(self._url), "_logout"), method="POST")
+        req = self._build_request(_pjoin(self._url, "_logout"), method="POST")
         with self._urlopen(req) as response:
             _ = response.read()
         log.info(f"logged out user={self._user!r}")
         return True
 
     @_command
-    def list(self, *_):
+    def ls(self, *_):
         log.debug(f"fetching boxes for user={self._user!r}")
         boxes = self._list_boxes()
         log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
@@ -808,7 +808,7 @@ class Client:
             return False
         payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         req = self._build_request(
-            _pjoin(str(self._url), "box"),
+            _pjoin(self._url, "box"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -861,7 +861,7 @@ class Client:
                     + f"matching_box={matching_box!r}"
                 )
             req = self._build_request(
-                _pjoin(str(self._url), "box", matching_box["instance_id"]),
+                _pjoin(self._url, "box", matching_box["instance_id"]),
                 data=json.dumps(box_payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="PUT",
@@ -880,7 +880,7 @@ class Client:
             return False
         for matching_box in matching_boxes:
             req = self._build_request(
-                _pjoin(str(self._url), "box", matching_box["instance_id"]),
+                _pjoin(self._url, "box", matching_box["instance_id"]),
                 method="DELETE",
             )
             with self._urlopen(req) as response:
@@ -896,7 +896,7 @@ class Client:
             log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
-            _pjoin(str(self._url), "reboot", matching_box["instance_id"]),
+            _pjoin(self._url, "reboot", matching_box["instance_id"]),
             method="POST",
         )
         with self._urlopen(req) as response:
@@ -946,7 +946,7 @@ class Client:
 
     @_command
     def list_aliases(self, *_):
-        req = self._build_request(_pjoin(str(self._url), "image-alias"))
+        req = self._build_request(_pjoin(self._url, "image-alias"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -960,7 +960,7 @@ class Client:
     def create_alias(self, known_args, _):
         payload = {"alias": known_args.alias, "ami": known_args.ami}
         req = self._build_request(
-            _pjoin(str(self._url), "image-alias"),
+            _pjoin(self._url, "image-alias"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -980,7 +980,7 @@ class Client:
     @_command
     def delete_alias(self, known_args, _):
         req = self._build_request(
-            _pjoin(str(self._url), "image-alias", known_args.alias), method="DELETE"
+            _pjoin(self._url, "image-alias", known_args.alias), method="DELETE"
         )
         with self._urlopen(req) as response:
             _ = response.read()
@@ -998,9 +998,9 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(str(self._url), "key")
+        req_url = _pjoin(self._url, "key")
         if key_alias != self.default_key_alias:
-            req_url = _pjoin(str(self._url), "key", key_alias)
+            req_url = _pjoin(self._url, "key", key_alias)
 
         req = self._build_request(req_url, method="GET")
 
@@ -1023,7 +1023,7 @@ class Client:
 
     @_command
     def list_keys(self, *_):
-        req = self._build_request(_pjoin(str(self._url), "keys"), method="GET")
+        req = self._build_request(_pjoin(self._url, "keys"), method="GET")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -1046,9 +1046,9 @@ class Client:
 
         payload = {"key_material": known_args.filename.read_text().strip()}
 
-        req_url = _pjoin(str(self._url), "key")
+        req_url = _pjoin(self._url, "key")
         if key_alias != self.default_key_alias:
-            req_url = _pjoin(str(self._url), "key", key_alias)
+            req_url = _pjoin(self._url, "key", key_alias)
 
         req = self._build_request(
             req_url,
@@ -1076,9 +1076,9 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(str(self._url), "key")
+        req_url = _pjoin(self._url, "key")
         if key_alias != self.default_key_alias:
-            req_url = _pjoin(str(self._url), "key", key_alias)
+            req_url = _pjoin(self._url, "key", key_alias)
 
         req = self._build_request(req_url, method="DELETE")
         raw_response = {}
@@ -1130,8 +1130,11 @@ class Client:
             yield response
 
     @property
-    def _url(self) -> typing.Optional[str]:
-        return self._env.get("FUZZBUCKET_URL")
+    def _url(self) -> str:
+        value = self._env.get("FUZZBUCKET_URL")
+        if value is None:
+            raise ValueError("missing FUZZBUCKET_URL")
+        return value
 
     @property
     def _preferences(self):
@@ -1258,8 +1261,8 @@ class Client:
         return matching_box, True
 
     def _build_ssh_command(
-        self, box: Box, ssm: bool, unknown_args: typing.List[str]
-    ) -> typing.List[str]:
+        self, box: Box, ssm: bool, unknown_args: list[str]
+    ) -> list[str]:
         if "-l" not in unknown_args:
             unknown_args = [
                 "-l",
@@ -1279,8 +1282,8 @@ class Client:
         )
 
     def _build_scp_command(
-        self, box: Box, ssm: bool, unknown_args: typing.List[str]
-    ) -> typing.List[str]:
+        self, box: Box, ssm: bool, unknown_args: list[str]
+    ) -> list[str]:
         for i, value in enumerate(unknown_args):
             if "__BOX__" not in value:
                 continue
@@ -1308,8 +1311,8 @@ class Client:
         self,
         box: Box,
         ssm: bool,
-        unknown_args: typing.List[str],
-    ) -> typing.List[str]:
+        unknown_args: list[str],
+    ) -> list[str]:
         unknown_args_string = " ".join(unknown_args)
         if (
             re.search(
@@ -1330,8 +1333,8 @@ class Client:
         return unknown_args
 
     def _with_ssh_ssm_proxy_command(
-        self, box: Box, unknown_args: typing.List[str]
-    ) -> typing.List[str]:
+        self, box: Box, unknown_args: list[str]
+    ) -> list[str]:
         unknown_args_string = " ".join(unknown_args)
         if (
             re.search(" -o ProxyCommand=.+", unknown_args_string, re.IGNORECASE)

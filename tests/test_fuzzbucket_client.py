@@ -308,18 +308,18 @@ def test_client_no_func(capsys):
         )
 
 
-def test_client_failing_func(monkeypatch, capsys):
+def test_client_failing_func(monkeypatch):
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
-    monkeypatch.setattr(client, "list", lambda _, __: False)
-    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "list"])
+    monkeypatch.setattr(client, "ls", lambda _, __: False)
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "ls"])
     assert ret == 86
 
 
 @pytest.mark.parametrize(
     ("args",),
     [
-        pytest.param(("list",), id="empty"),
+        pytest.param(("ls",), id="empty"),
         pytest.param(("-j", "list"), id="output_json"),
     ],
 )
