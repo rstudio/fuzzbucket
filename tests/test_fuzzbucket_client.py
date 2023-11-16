@@ -217,16 +217,28 @@ def test_command_decorator(
             if "finalize" in errors:
                 raise ValueError("finalize error")
 
-    def fake_method(self, known_args, unknown_args):
+    def fake_method(*_):
         if "method" in errors:
             raise ValueError("method error")
         if "http" in errors:
-            raise urllib.request.HTTPError("http://nope", 599, "ugh", [], None)
+            raise urllib.request.HTTPError(
+                "http://nope",
+                599,
+                "ugh",
+                [],  # type: ignore
+                None,
+            )
         if "http_auth" in errors:
-            raise urllib.request.HTTPError("http://nope", 403, "no", [], None)
+            raise urllib.request.HTTPError(
+                "http://nope",
+                403,
+                "no",
+                [],  # type: ignore
+                None,
+            )
         return True
 
-    def fake_load(fp):
+    def fake_load(_):
         if "json" in errors:
             raise ValueError("json error")
         if "http_auth" in errors:
@@ -380,7 +392,7 @@ def test_client_list(monkeypatch, args):
 def test_client_login(
     monkeypatch, capsys, cmd_args, secrets, url, raises, written, expected
 ):
-    state = {"secret_count": 0}
+    state: dict[str, str | int | None] = {"secret_count": 0}
 
     def fake_write_credentials(user, secret, name=None):
         state.update(user=user, secret=secret, name=name)
@@ -388,14 +400,14 @@ def test_client_login(
     def fake_getpass(prompt):
         state.update(prompt=prompt)
         ret = secrets[state["secret_count"]]
-        state["secret_count"] += 1
+        state["secret_count"] += 1  # type: ignore
         if raises:
             raise KeyboardInterrupt("control this")
         return ret
 
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
-    monkeypatch.setattr(fuzzbucket_client.__main__.webbrowser, "open", lambda u: None)
+    monkeypatch.setattr(fuzzbucket_client.__main__.webbrowser, "open", lambda _: None)
     monkeypatch.setattr(fuzzbucket_client.__main__.getpass, "getpass", fake_getpass)
     monkeypatch.setattr(client, "_write_credentials", fake_write_credentials)
     client._env["FUZZBUCKET_URL"] = url
@@ -811,7 +823,7 @@ def test_client_update(
         "utcnow",
         lambda: nowish,
     )
-    monkeypatch.setattr(argparse._sys, "exit", capture_sys_exit)
+    monkeypatch.setattr(argparse._sys, "exit", capture_sys_exit)  # type: ignore
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
     monkeypatch.setattr(
         client,
@@ -977,13 +989,45 @@ def test_client_ssh(monkeypatch):
         ]
 
     def fake_list_boxes():
-        return [{"name": "koolthing", "public_dns_name": "ethereal-plane.example.org"}]
+        return [
+            {
+                "name": "koolthing",
+                "public_dns_name": "ethereal-plane.example.org",
+                "instance_id": "i-dadb0dcafebaba",
+            }
+        ]
 
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
 
     ret = fuzzbucket_client.__main__.main(
         ["fuzzbucket-client", "ssh", "koolthing", "ls", "-la"]
+    )
+    assert ret == 0
+
+    def fake_execvp_with_ssm(file, args):
+        assert file == "ssh"
+        assert args == [
+            "ssh",
+            "ethereal-plane.example.org",
+            "-o",
+            "ProxyCommand=sh -c 'aws ssm start-session --target i-dadb0dcafebaba "
+            + "--region us-east-1 --document-name AWS-StartSSHSession "
+            + "--parameters portNumber=%p'",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-l",
+            "ubuntu",
+            "ls",
+            "-la",
+        ]
+
+    monkeypatch.setattr(os, "execvp", fake_execvp_with_ssm)
+
+    ret = fuzzbucket_client.__main__.main(
+        ["fuzzbucket-client", "ssh", "--ssm", "koolthing", "ls", "-la"]
     )
     assert ret == 0
 
@@ -1006,7 +1050,13 @@ def test_client_scp(monkeypatch):
         ]
 
     def fake_list_boxes():
-        return [{"name": "koolthing", "public_dns_name": "ethereal-plane.example.org"}]
+        return [
+            {
+                "name": "koolthing",
+                "public_dns_name": "ethereal-plane.example.org",
+                "instance_id": "i-feedfacecafebeef",
+            }
+        ]
 
     monkeypatch.setattr(os, "execvp", fake_execvp)
     monkeypatch.setattr(client, "_list_boxes", fake_list_boxes)
@@ -1015,6 +1065,38 @@ def test_client_scp(monkeypatch):
         [
             "fuzzbucket-client",
             "scp",
+            "koolthing",
+            "-r",
+            "cornelius@__BOX__:/var/log/",
+            "./local/dump",
+        ]
+    )
+    assert ret == 0
+
+    def fake_execvp_with_ssm(file, args):
+        assert file == "scp"
+        assert args == [
+            "scp",
+            "-o",
+            "ProxyCommand=sh -c 'aws ssm start-session --target i-feedfacecafebeef "
+            + "--region us-east-1 --document-name AWS-StartSSHSession "
+            + "--parameters portNumber=%p'",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-r",
+            "cornelius@ethereal-plane.example.org:/var/log/",
+            "./local/dump",
+        ]
+
+    monkeypatch.setattr(os, "execvp", fake_execvp_with_ssm)
+
+    ret = fuzzbucket_client.__main__.main(
+        [
+            "fuzzbucket-client",
+            "scp",
+            "--ssm",
             "koolthing",
             "-r",
             "cornelius@__BOX__:/var/log/",
