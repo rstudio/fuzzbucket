@@ -22,7 +22,6 @@ downloads/
 eggs/
 env/
 fuzzbucket/__version__.py
-fuzzbucket_client/__version__.py
 htmlcov/
 lib/
 lib64/
