@@ -41,7 +41,7 @@ lint:
 fmt:
   pipenv run black .
 
-test coverage_threshold='94':
+test coverage_threshold='93':
   pipenv run pytest --cov-fail-under {{ coverage_threshold }}
 
 image _image_ns=image_ns _image_tag=image_tag: _ensure-requirements

@@ -18,6 +18,7 @@ class Box:
     other_tags: typing.Dict[str, str] = dataclasses.field(default_factory=dict)
     public_dns_name: NoneString = None
     public_ip: NoneString = None
+    region: NoneString = None
     ttl: int = 0
     user: NoneString = None
 
@@ -54,6 +55,10 @@ class Box:
             ),
             public_ip=instance.get("PublicIpAddress", None),
         )
+
+        az = instance.get("Placement", {}).get("AvailabilityZone")
+        if az is not None:
+            box.region = str(az[:-1])
 
         for tag in instance.get("Tags", []):
             attr, cast = {

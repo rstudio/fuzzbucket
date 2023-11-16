@@ -27,6 +27,7 @@ import logging
 import os
 import pathlib
 import re
+import shlex
 import sys
 import textwrap
 import typing
@@ -88,18 +89,18 @@ def _env_creds_log(msg: str):  # pragma: no cover
     log.debug(msg)
 
 
-def _reverse_map_float(el: typing.Tuple[str, str]) -> typing.Tuple[str, float]:
+def _reverse_map_float(el: tuple[str, str]) -> tuple[str, float]:
     return (el[1].rstrip("s")) + "s", float(el[0])
 
 
-def _timedelta_kwargs_from_pairs(pairs: typing.List[str]) -> typing.Dict[str, float]:
+def _timedelta_kwargs_from_pairs(pairs: list[str]) -> dict[str, float]:
     as_iter = iter(pairs)
     return dict(map(_reverse_map_float, list(zip(as_iter, as_iter))))
 
 
 def _timedelta_kwargs_from_sexagesimal(
     sexagesimal_string: str,
-) -> typing.Dict[str, float]:
+) -> dict[str, float]:
     return dict(
         map(
             _reverse_map_float,
@@ -160,7 +161,7 @@ def parse_timedelta(as_string: str) -> datetime.timedelta:
     )
 
 
-def _instance_tags_from_string(input_string: str) -> typing.Dict[str, str]:
+def _instance_tags_from_string(input_string: str) -> dict[str, str]:
     instance_tags = {}
     for pair in filter(
         lambda s: s != "",
@@ -207,7 +208,7 @@ class CustomHelpFormatter(
     ...
 
 
-def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
+def main(sysargs: list[str] = sys.argv[:]) -> int:
     client = default_client()
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -372,7 +373,12 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         action="store_true",
         help="suppress box info header",
     )
-    parser_ssh.usage = "usage: %(prog)s [-hq] box [ssh-arguments]"
+    parser_ssh.add_argument(
+        "--ssm",
+        action="store_true",
+        help="open session via Amazon SSM proxy",
+    )
+    parser_ssh.usage = "usage: %(prog)s [-hq|--ssm] box [ssh-arguments]"
     parser_ssh.description = textwrap.dedent(
         """
         ssh into a box, optionally passing arbitrary commands as positional
@@ -394,7 +400,18 @@ def main(sysargs: typing.List[str] = sys.argv[:]) -> int:
         help="scp things into or out of a box",
         formatter_class=CustomHelpFormatter,
     )
-    parser_scp.usage = "usage: %(prog)s [-h] box [scp-arguments]"
+    parser_scp.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="suppress box info header",
+    )
+    parser_scp.add_argument(
+        "--ssm",
+        action="store_true",
+        help="open session via Amazon SSM proxy",
+    )
+    parser_scp.usage = "usage: %(prog)s [-hq|--ssm] box [scp-arguments]"
     parser_scp.description = textwrap.dedent(
         """
         scp things into or out of a box, optionally passing arbitrary commands
@@ -632,6 +649,13 @@ class _Preferences(enum.Enum):
     DEFAULT_KEY_ALIAS = "default_key_alias"
 
 
+Box: typing.TypeAlias = dict[str, str | None | int | dict[str, str]]
+
+
+def execvp(*args, **kwargs):
+    os.execvp(*args, **kwargs)
+
+
 class Client:
     default_instance_type = "t3.small"
     default_image_alias = "ubuntu18"
@@ -656,7 +680,7 @@ class Client:
 
     def __init__(
         self,
-        env: typing.Optional[typing.Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
     ):
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
@@ -669,7 +693,7 @@ class Client:
         if self._url is None:
             raise ValueError("missing FUZZBUCKET_URL")
         if self._credentials in (None, ""):
-            raise CredentialsError(self._url, self._credentials_file)
+            raise CredentialsError(self._url, str(self._credentials_file))
 
     def _finalize(self):
         self._write_preferences(self._preferences)
@@ -719,7 +743,7 @@ class Client:
     @_command
     def logout(self, *_):
         log.debug(f"starting logout for user={self._user!r}")
-        req = self._build_request(_pjoin(self._url, "_logout"), method="POST")
+        req = self._build_request(_pjoin(str(self._url), "_logout"), method="POST")
         with self._urlopen(req) as response:
             _ = response.read()
         log.info(f"logged out user={self._user!r}")
@@ -784,7 +808,7 @@ class Client:
             return False
         payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         req = self._build_request(
-            _pjoin(self._url, "box"),
+            _pjoin(str(self._url), "box"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -837,7 +861,7 @@ class Client:
                     + f"matching_box={matching_box!r}"
                 )
             req = self._build_request(
-                _pjoin(self._url, "box", matching_box["instance_id"]),
+                _pjoin(str(self._url), "box", matching_box["instance_id"]),
                 data=json.dumps(box_payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="PUT",
@@ -856,7 +880,7 @@ class Client:
             return False
         for matching_box in matching_boxes:
             req = self._build_request(
-                _pjoin(self._url, "box", matching_box["instance_id"]),
+                _pjoin(str(self._url), "box", matching_box["instance_id"]),
                 method="DELETE",
             )
             with self._urlopen(req) as response:
@@ -872,7 +896,7 @@ class Client:
             log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
-            _pjoin(self._url, "reboot", matching_box["instance_id"]),
+            _pjoin(str(self._url), "reboot", matching_box["instance_id"]),
             method="POST",
         )
         with self._urlopen(req) as response:
@@ -886,7 +910,10 @@ class Client:
         matching_box, ok = self._resolve_sshable_box(known_args.box)
         if not ok:
             return False
-        ssh_command = self._build_ssh_command(matching_box, unknown_args)
+        assert matching_box is not None
+        ssh_command = self._build_ssh_command(
+            matching_box, known_args.ssm, unknown_args
+        )
         if not known_args.quiet:
             log.info(
                 f"sshing into matching_box={matching_box['name']!r} "
@@ -895,7 +922,7 @@ class Client:
             print(self._format_boxes([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
-        os.execvp("ssh", ssh_command)
+        execvp("ssh", ssh_command)
         return True
 
     @_command
@@ -903,7 +930,10 @@ class Client:
         matching_box, ok = self._resolve_sshable_box(known_args.box)
         if not ok:
             return False
-        scp_command = self._build_scp_command(matching_box, unknown_args)
+        assert matching_box is not None
+        scp_command = self._build_scp_command(
+            matching_box, known_args.ssm, unknown_args
+        )
         log.info(
             f"scping with matching_box={matching_box['name']!r} "
             + f"scp_command={scp_command!r}"
@@ -911,12 +941,12 @@ class Client:
         print(self._format_boxes([matching_box]), end="")
         sys.stdout.flush()
         sys.stderr.flush()
-        os.execvp("scp", scp_command)
+        execvp("scp", scp_command)
         return True
 
     @_command
     def list_aliases(self, *_):
-        req = self._build_request(_pjoin(self._url, "image-alias"))
+        req = self._build_request(_pjoin(str(self._url), "image-alias"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -930,7 +960,7 @@ class Client:
     def create_alias(self, known_args, _):
         payload = {"alias": known_args.alias, "ami": known_args.ami}
         req = self._build_request(
-            _pjoin(self._url, "image-alias"),
+            _pjoin(str(self._url), "image-alias"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -950,7 +980,7 @@ class Client:
     @_command
     def delete_alias(self, known_args, _):
         req = self._build_request(
-            _pjoin(self._url, "image-alias", known_args.alias), method="DELETE"
+            _pjoin(str(self._url), "image-alias", known_args.alias), method="DELETE"
         )
         with self._urlopen(req) as response:
             _ = response.read()
@@ -968,9 +998,9 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(self._url, "key")
+        req_url = _pjoin(str(self._url), "key")
         if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
+            req_url = _pjoin(str(self._url), "key", key_alias)
 
         req = self._build_request(req_url, method="GET")
 
@@ -993,7 +1023,7 @@ class Client:
 
     @_command
     def list_keys(self, *_):
-        req = self._build_request(_pjoin(self._url, "keys"), method="GET")
+        req = self._build_request(_pjoin(str(self._url), "keys"), method="GET")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -1016,9 +1046,9 @@ class Client:
 
         payload = {"key_material": known_args.filename.read_text().strip()}
 
-        req_url = _pjoin(self._url, "key")
+        req_url = _pjoin(str(self._url), "key")
         if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
+            req_url = _pjoin(str(self._url), "key", key_alias)
 
         req = self._build_request(
             req_url,
@@ -1046,9 +1076,9 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(self._url, "key")
+        req_url = _pjoin(str(self._url), "key")
         if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
+            req_url = _pjoin(str(self._url), "key", key_alias)
 
         req = self._build_request(req_url, method="DELETE")
         raw_response = {}
@@ -1100,7 +1130,7 @@ class Client:
             yield response
 
     @property
-    def _url(self):
+    def _url(self) -> str | None:
         return self._env.get("FUZZBUCKET_URL")
 
     @property
@@ -1111,9 +1141,10 @@ class Client:
 
     def _read_preferences(self):
         try:
-            if self._env.get("FUZZBUCKET_PREFERENCES") is not None:
+            env_prefs = self._env.get("FUZZBUCKET_PREFERENCES")
+            if env_prefs is not None:
                 log.debug("reading preferences directly from FUZZBUCKET_PREFERENCES")
-                return json.loads(self._env.get("FUZZBUCKET_PREFERENCES"))
+                return json.loads(env_prefs)
             self._preferences_file.touch()
             with self._preferences_file.open() as infile:
                 return json.load(infile)
@@ -1147,9 +1178,10 @@ class Client:
         return f'server "{self._url}"'
 
     @property
-    def _credentials(self):
+    def _credentials(self) -> str:
         if self._cached_credentials is None:
             self._cached_credentials = self._read_credentials()
+        assert self._cached_credentials is not None
         return self._cached_credentials
 
     @property
@@ -1215,17 +1247,19 @@ class Client:
         req.headers["Fuzzbucket-Secret"] = self._secret
         return req
 
-    def _resolve_sshable_box(self, box):
-        matching_box = self._find_box(box)
+    def _resolve_sshable_box(self, box_name: str) -> tuple[Box | None, bool]:
+        matching_box = self._find_box(box_name)
         if matching_box is None:
-            log.error(f"no box found matching {box!r}")
+            log.error(f"no box found matching {box_name!r}")
             return None, False
         if matching_box.get("public_dns_name") is None:
             log.error(f"no public dns name found for box={matching_box['name']}")
             return None, False
         return matching_box, True
 
-    def _build_ssh_command(self, box, unknown_args):
+    def _build_ssh_command(
+        self, box: Box, ssm: bool, unknown_args: typing.List[str]
+    ) -> typing.List[str]:
         if "-l" not in unknown_args:
             unknown_args = [
                 "-l",
@@ -1234,14 +1268,24 @@ class Client:
                     self.default_ssh_user,
                 ),
             ] + unknown_args
-        return ["ssh", box.get("public_dns_name")] + self._with_ssh_opts(unknown_args)
+        return typing.cast(
+            list[str],
+            ["ssh", box.get("public_dns_name")]
+            + self._with_ssh_opts(
+                box,
+                ssm,
+                unknown_args,
+            ),
+        )
 
-    def _build_scp_command(self, box, unknown_args):
+    def _build_scp_command(
+        self, box: Box, ssm: bool, unknown_args: typing.List[str]
+    ) -> typing.List[str]:
         for i, value in enumerate(unknown_args):
             if "__BOX__" not in value:
                 continue
 
-            box_value = box["public_dns_name"]
+            box_value = typing.cast(str, box["public_dns_name"])
             if "@" not in value:
                 box_value = "@".join(
                     [
@@ -1254,9 +1298,18 @@ class Client:
                 )
 
             unknown_args[i] = value.replace("__BOX__", box_value)
-        return ["scp"] + self._with_ssh_opts(unknown_args)
+        return ["scp"] + self._with_ssh_opts(
+            box,
+            ssm,
+            unknown_args,
+        )
 
-    def _with_ssh_opts(self, unknown_args: typing.List[str]) -> typing.List[str]:
+    def _with_ssh_opts(
+        self,
+        box: Box,
+        ssm: bool,
+        unknown_args: typing.List[str],
+    ) -> typing.List[str]:
         unknown_args_string = " ".join(unknown_args)
         if (
             re.search(
@@ -1270,7 +1323,50 @@ class Client:
             is None
         ):
             unknown_args = ["-o", "UserKnownHostsFile=/dev/null"] + unknown_args
+
+        if ssm:
+            return self._with_ssh_ssm_proxy_command(box, unknown_args)
+
         return unknown_args
+
+    def _with_ssh_ssm_proxy_command(
+        self, box: Box, unknown_args: typing.List[str]
+    ) -> typing.List[str]:
+        unknown_args_string = " ".join(unknown_args)
+        if (
+            re.search(" -o ProxyCommand=.+", unknown_args_string, re.IGNORECASE)
+            is not None
+        ):
+            return unknown_args
+
+        aws_region = box.get(
+            "region",
+            self._env.get(
+                "AWS_REGION",
+                self._env.get("AWS_DEFAULT_REGION", "us-east-2"),
+            ),
+        )
+
+        aws_ssm_command = [
+            "aws",
+            "ssm",
+            "start-session",
+            "--target",
+            str(box["instance_id"]),
+            "--region",
+            str(aws_region),
+            "--document-name",
+            "AWS-StartSSHSession",
+            "--parameters",
+            "portNumber=%p",
+        ]
+        proxy_command = [
+            "sh",
+            "-c",
+            shlex.quote(" ".join(aws_ssm_command)),
+        ]
+
+        return ["-o", f"ProxyCommand={' '.join(proxy_command)}"] + unknown_args
 
     def _format_boxes(self, boxes):
         return getattr(self, f"_format_boxes_{self.data_format.value}")(boxes)
@@ -1350,7 +1446,7 @@ class Client:
         )
 
     @classmethod
-    def _guess_ssh_user(cls, image_alias, default=default_ssh_user):
+    def _guess_ssh_user(cls, image_alias, default=default_ssh_user) -> str:
         image_alias = image_alias.lower()
         for prefix, user in cls.default_ssh_users.items():
             if image_alias.startswith(prefix):
