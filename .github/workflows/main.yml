@@ -70,6 +70,7 @@ jobs:
     needs: [build]
 #   if: startsWith(github.ref, 'refs/tags/') && fromJson(needs.build.outputs.releasable)
     steps:
+    - run: echo '${{ needs.build.outputs }}' | jq
     - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
     - uses: extractions/setup-just@v1
@@ -80,14 +81,14 @@ jobs:
     - uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: ${{ steps.download.outputs.download-path }}//fuzzbucket_client*.whl
-    - uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET }}
-        aws-region: us-east-1
-    - run: just sync-to-s3
-      if: startsWith(github.ref, 'refs/tags/')
+        files: ${{ steps.download.outputs.download-path }}/fuzzbucket_client*.whl
+#   - uses: aws-actions/configure-aws-credentials@v2
+#     with:
+#       aws-access-key-id: ${{ secrets.AWS_ID }}
+#       aws-secret-access-key: ${{ secrets.AWS_SECRET }}
+#       aws-region: us-east-1
+#   - run: just sync-to-s3
+#     if: startsWith(github.ref, 'refs/tags/')
     - uses: pypa/gh-action-pypi-publish@release/v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
