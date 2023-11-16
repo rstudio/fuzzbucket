@@ -24,6 +24,7 @@ provider:
     FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret, ''}
     FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName}
     FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
+    FUZZBUCKET_REGION: ${self:provider.region}
     FUZZBUCKET_ROOT_LOG_LEVEL: ${self:custom.rootLogLevel, 'info'}
     FUZZBUCKET_USERS_TABLE_NAME: ${self:custom.usersTableName}
   iamRoleStatements:

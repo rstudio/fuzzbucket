@@ -5,7 +5,16 @@ import urllib.parse
 
 from botocore.exceptions import ClientError
 
-from flask import Flask, jsonify, request, url_for, session, redirect, render_template
+from flask import (
+    Flask,
+    jsonify,
+    request,
+    Response,
+    url_for,
+    session,
+    redirect,
+    render_template,
+)
 from flask_dance.contrib.github import make_github_blueprint, github
 from werkzeug.exceptions import InternalServerError
 
@@ -21,6 +30,7 @@ from . import (
     log,
     utcnow,
 )
+from .__version__ import __version__
 
 
 app = Flask(__name__)
@@ -97,6 +107,13 @@ def set_user():
     log.warning(f"mismatched github_login={github_login!r} user={session['user']!r}")
     github.token = None
     del session["user"]
+
+
+@app.after_request
+def set_headers(resp: Response) -> Response:
+    resp.headers["server"] = f"fuzzbucket/{__version__}"
+    resp.headers["fuzzbucket-region"] = str(os.getenv("FUZZBUCKET_REGION"))
+    return resp
 
 
 def is_fully_authd():

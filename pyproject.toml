@@ -7,4 +7,4 @@ omit = ["tests/*"]
 branch = true
 
 [tool.setuptools_scm]
-write_to = "fuzzbucket_client/__version__.py"
+write_to = "fuzzbucket/__version__.py"
