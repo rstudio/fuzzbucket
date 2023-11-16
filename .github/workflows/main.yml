@@ -64,7 +64,7 @@ jobs:
       with:
         name: tarball
         path: dist
-    - run: pip install -vvv ${{ steps.download.outputs.download-path }}/dist/${{ fromJson(needs.build.outputs.tarball_basename) }}
+    - run: pip install -vvv ${{ steps.download.outputs.download-path }}/${{ fromJson(needs.build.outputs.tarball_basename) }}
     - run: fuzzbucket-client --version
     - run: fuzzbucket-client --help
   release:
@@ -85,5 +85,5 @@ jobs:
         path: dist
     - uses: softprops/action-gh-release@v1
       with:
-        files: ${{ steps.download.outputs.download-path }}/dist/${{ fromJson(needs.build.outputs.tarball_basename) }}
+        files: ${{ steps.download.outputs.download-path }}/${{ fromJson(needs.build.outputs.tarball_basename) }}
     - uses: pypa/gh-action-pypi-publish@release/v1
