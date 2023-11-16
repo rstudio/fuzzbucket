@@ -50,6 +50,12 @@ app.config["gh_blueprint"] = gh_blueprint
 app.register_blueprint(gh_blueprint, url_prefix="/login")
 app.json_provider_class = AsJSONProvider
 
+DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
+    ("server", f"fuzzbucket/{__version__}"),
+    ("fuzzbucket-region", str(os.getenv("FUZZBUCKET_REGION"))),
+    ("fuzzbucket-version", __version__),
+)
+
 
 @app.errorhandler(InternalServerError)
 def handle_500(exc):
@@ -110,10 +116,9 @@ def set_user():
 
 
 @app.after_request
-def set_headers(resp: Response) -> Response:
-    resp.headers["server"] = f"fuzzbucket/{__version__}"
-    resp.headers["fuzzbucket-region"] = str(os.getenv("FUZZBUCKET_REGION"))
-    resp.headers["fuzzbucket-version"] = __version__
+def set_default_headers(resp: Response) -> Response:
+    for key, value in DEFAULT_HEADERS:
+        resp.headers[key] = value
     return resp
 
 
