@@ -649,7 +649,7 @@ class _Preferences(enum.Enum):
     DEFAULT_KEY_ALIAS = "default_key_alias"
 
 
-Box: typing.TypeAlias = dict[str, str | None | int | dict[str, str]]
+Box: typing.TypeAlias = dict[str, typing.Union[str, None, int, dict[str, str]]]
 
 
 def execvp(*args, **kwargs):
@@ -680,7 +680,7 @@ class Client:
 
     def __init__(
         self,
-        env: dict[str, str] | None = None,
+        env: typing.Optional[dict[str, str]] = None,
     ):
         self._env = env if env is not None else dict(os.environ)
         self._cached_url_opener = None
@@ -1130,7 +1130,7 @@ class Client:
             yield response
 
     @property
-    def _url(self) -> str | None:
+    def _url(self) -> typing.Optional[str]:
         return self._env.get("FUZZBUCKET_URL")
 
     @property
@@ -1247,7 +1247,7 @@ class Client:
         req.headers["Fuzzbucket-Secret"] = self._secret
         return req
 
-    def _resolve_sshable_box(self, box_name: str) -> tuple[Box | None, bool]:
+    def _resolve_sshable_box(self, box_name: str) -> tuple[typing.Optional[Box], bool]:
         matching_box = self._find_box(box_name)
         if matching_box is None:
             log.error(f"no box found matching {box_name!r}")

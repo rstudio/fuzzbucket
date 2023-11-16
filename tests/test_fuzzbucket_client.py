@@ -994,6 +994,7 @@ def test_client_ssh(monkeypatch):
                 "name": "koolthing",
                 "public_dns_name": "ethereal-plane.example.org",
                 "instance_id": "i-dadb0dcafebaba",
+                "region": "mp-south-2",
             }
         ]
 
@@ -1012,7 +1013,7 @@ def test_client_ssh(monkeypatch):
             "ethereal-plane.example.org",
             "-o",
             "ProxyCommand=sh -c 'aws ssm start-session --target i-dadb0dcafebaba "
-            + "--region us-east-1 --document-name AWS-StartSSHSession "
+            + "--region mp-south-2 --document-name AWS-StartSSHSession "
             + "--parameters portNumber=%p'",
             "-o",
             "UserKnownHostsFile=/dev/null",
@@ -1055,6 +1056,7 @@ def test_client_scp(monkeypatch):
                 "name": "koolthing",
                 "public_dns_name": "ethereal-plane.example.org",
                 "instance_id": "i-feedfacecafebeef",
+                "region": "mp-south-2",
             }
         ]
 
@@ -1079,7 +1081,7 @@ def test_client_scp(monkeypatch):
             "scp",
             "-o",
             "ProxyCommand=sh -c 'aws ssm start-session --target i-feedfacecafebeef "
-            + "--region us-east-1 --document-name AWS-StartSSHSession "
+            + "--region mp-south-2 --document-name AWS-StartSSHSession "
             + "--parameters portNumber=%p'",
             "-o",
             "UserKnownHostsFile=/dev/null",
