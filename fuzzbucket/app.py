@@ -113,6 +113,7 @@ def set_user():
 def set_headers(resp: Response) -> Response:
     resp.headers["server"] = f"fuzzbucket/{__version__}"
     resp.headers["fuzzbucket-region"] = str(os.getenv("FUZZBUCKET_REGION"))
+    resp.headers["fuzzbucket-version"] = __version__
     return resp
 
 
