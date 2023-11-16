@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      releasable: steps.check_releasable.outputs.releasable
+      releasable: ${{ toJson(steps.check_releasable.outputs.releasable) }}
     steps:
     - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
