@@ -63,13 +63,17 @@ jobs:
       id: download
       with:
         name: tarball
-    - run: pip install -vvv ${{ steps.download.outputs.download-path }}/${{ fromJson(needs.build.outputs.tarball_basename) }}
+        path: dist
+    - run: pip install -vvv ${{ steps.download.outputs.download-path }}/dist/${{ fromJson(needs.build.outputs.tarball_basename) }}
     - run: fuzzbucket-client --version
     - run: fuzzbucket-client --help
   release:
     runs-on: ubuntu-latest
     needs: [build]
     if: startsWith(github.ref, 'refs/tags/') && fromJson(needs.build.outputs.releasable)
+    environment: production
+    permissions:
+      id-token: write
     steps:
     - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
@@ -78,17 +82,8 @@ jobs:
       id: download
       with:
         name: tarball
+        path: dist
     - uses: softprops/action-gh-release@v1
       with:
-        files: ${{ steps.download.outputs.download-path }}/${{ fromJson(needs.build.outputs.tarball_basename) }}
-# FIXME: get aws session via oidc
-#   - uses: aws-actions/configure-aws-credentials@v2
-#     with:
-#       aws-access-key-id: ${{ secrets.AWS_ID }}
-#       aws-secret-access-key: ${{ secrets.AWS_SECRET }}
-#       aws-region: us-east-1
-#   - run: just sync-to-s3
-#     if: startsWith(github.ref, 'refs/tags/')
+        files: ${{ steps.download.outputs.download-path }}/dist/${{ fromJson(needs.build.outputs.tarball_basename) }}
     - uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_TOKEN }}
