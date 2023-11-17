@@ -1,63 +1,17 @@
 set shell := ["bash", "-c"]
 
-fuzzbucket_version := `pipenv run python setup.py --version 2>/dev/null || echo 0.0.0`
-fuzzbucket_release_artifact := 'dist/fuzzbucket_client-' + fuzzbucket_version + '-py3-none-any.whl'
-
-default: lint test
-
-clean:
-  rm -rf \
-    ./.coverage \
-    ./.mypy_cache \
-    ./.pytest_cache \
-    ./__pycache__ \
-    ./build \
-    ./dist \
-    ./fuzzbucket_client.egg-info \
-    ./htmlcov
+default:
+  hatch run lint
+  hatch run test
 
 deps:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  pipenv install --dev
-  yarn install
+  hatch run yarn install
 
 deps-up:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  pipenv update
-  yarn upgrade
-
-lint:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  pipenv run black --check --diff .
-  pipenv run flake8 .
-  pipenv run pytest -m mypy --no-cov
-
-fmt:
-  pipenv run black .
-
-test coverage_threshold='95':
-  pipenv run pytest --cov-fail-under {{ coverage_threshold }}
+  hatch run yarn upgrade
 
 deploy stage='dev' region='us-east-1':
   npx sls deploy --stage {{ stage }} --region {{ region }} --verbose
 
 logs function='api' stage='dev' region='us-east-1':
   npx sls logs --function {{ function }} --region {{ region }} --stage {{ stage }} --tail
-
-serve-htmlcov:
-  pushd ./htmlcov && python -m http.server
-
-release-artifact:
-  #!/usr/bin/env bash
-  set -euo pipefail
-  pipenv run python setup.py bdist_wheel
-  printf 'tarball={{ fuzzbucket_release_artifact }}\n' | grep = |
-    tee -a "${GITHUB_OUTPUT:-/dev/null}"
-  printf 'tarball_basename='"$(basename '{{ fuzzbucket_release_artifact }}')" | grep = |
-    tee -a "${GITHUB_OUTPUT:-/dev/null}"
-
-is-releasable:
-  pipenv run python setup.py is_releasable | grep = | tee -a "${GITHUB_OUTPUT:-/dev/null}"

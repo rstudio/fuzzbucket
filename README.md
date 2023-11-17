@@ -65,13 +65,13 @@ Prerequisites for development are:
 
 -    `just`
 -    `yarn`
--    `pipenv`
+-    `hatch`
 
 The `just` tool may be installed via `brew` on macOS and [other
 ways, too](https://github.com/casey/just#installation). Similarly,
 the `yarn` tool may be installed via `brew` on macOS and [other
 ways, too](https://yarnpkg.com/getting-started/install). The
-`pipenv` tool may be installed via `pip`.
+`hatch` tool may be installed via `pip`.
 
 Once these prerequisites are available, the default workflow is nearly
 identical to what is captured in the [github

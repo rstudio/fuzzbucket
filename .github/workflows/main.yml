@@ -34,14 +34,14 @@ jobs:
         path: ~/.npm
         key: ${{ runner.os }}-node18-${{ hashFiles('**/yarn.lock') }}
         restore-keys: ${{ runner.os }}-node18-
-    - run: pip install -U pipenv
+    - run: pipx install hatch
     - run: just deps
-    - run: pipenv check
-    - run: just lint
-    - run: just test
-    - run: just is-releasable
+    - run: hatch run lint
+    - run: hatch run test
+    - run: hatch run is-releasable
       id: check_releasable
-    - run: just release-artifact
+    - run: hatch build
+    - run: hatch run release-artifact
       id: create_release_artifact
     - uses: actions/upload-artifact@v3
       with:
@@ -78,7 +78,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: git fetch --prune --unshallow
-    - uses: extractions/setup-just@v1
     - uses: actions/download-artifact@v3
       id: download
       with:

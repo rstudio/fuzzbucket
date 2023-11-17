@@ -1,6 +1,93 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fuzzbucket-client"
+dynamic = ["version"]
+description = "Command line client for fuzzbucket"
+readme = "README.md"
+license = "MIT"
+license-files = { paths = ["LICENSE.md"] }
+requires-python = ">=3.9, <4"
+authors = [
+    { name = "Posit Humans", email = "ptd-dev+fuzzbucket@posit.co" },
+]
+dependencies = []
+
+[project.scripts]
+fuzzbucket-client = "fuzzbucket_client.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/rstudio/fuzzbucket"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "fuzzbucket/__version__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+  "Flask",
+  "Flask-Dance",
+  "black",
+  "boto3",
+  "boto3-stubs",
+  "botocore-stubs",
+  "coverage",
+  "ipython",
+  "moto[ec2,dynamodb]",
+  "mypy",
+  "pytest",
+  "pytest-cover",
+  "pytest-mypy",
+  "sshpubkeys",
+  "toml",
+  "urllib3 <2",
+  "werkzeug"
+]
+
+[tool.hatch.envs.default.scripts]
+clean = """\
+rm -rf \
+  ./.coverage \
+  ./.mypy_cache \
+  ./.pytest_cache \
+  ./__pycache__ \
+  ./build \
+  ./coverage.xml \
+  ./dist \
+  ./fuzzbucket_client.egg-info \
+  ./htmlcov
+"""
+lint = [
+  "black --check --diff {root}",
+  "pytest -m mypy --no-cov"
+]
+test = "pytest --cov-fail-under=95"
+fmt = "black {root}"
+is-releasable = '''\
+python -c '
+import sys
+import re
+if re.match(r"^\d+\.\d+\.\d+$", sys.argv[1]) is not None:
+    print("releasable=true")
+else:
+    print("releasable=false")
+' "$(hatch version)"
+'''
+release-artifact = '''\
+FUZZBUCKET_VERSION="$(hatch version)"
+printf 'tarball=dist/fuzzbucket_client-%s-py3-none-any.whl\n' "$FUZZBUCKET_VERSION"
+printf 'tarball_basename=fuzzbucket_client-%s-py3-none-any.whl\n' "$FUZZBUCKET_VERSION"
+'''
+serve-htmlcov = "cd ./htmlcov && python -m http.server"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/fuzzbucket_client",
+]
 
 [tool.black]
 extend-exclude = '''
@@ -9,6 +96,18 @@ __version__.py
 
 [tool.coverage.run]
 branch = true
+parallel = true
+omit = [
+  "fuzzbucket/__version__.py",
+  "fuzzbucket_client/__version__.py"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -27,6 +126,3 @@ addopts = '''
   --mypy
   --disable-warnings
 '''
-
-[tool.setuptools_scm]
-write_to = "fuzzbucket/__version__.py"
