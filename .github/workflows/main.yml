@@ -34,7 +34,7 @@ jobs:
         path: ~/.npm
         key: ${{ runner.os }}-node18-${{ hashFiles('**/yarn.lock') }}
         restore-keys: ${{ runner.os }}-node18-
-    - run: pipx install hatch
+    - run: pip install hatch
     - run: just deps
     - run: hatch run lint
     - run: hatch run test
