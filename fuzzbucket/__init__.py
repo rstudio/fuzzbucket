@@ -52,17 +52,24 @@ def get_dynamodb():
             region_name="localhost",
             endpoint_url="http://localhost:8000",
         )
+
     return boto3.resource("dynamodb")
 
 
-DEFAULT_FILTERS = [
-    dict(
-        Name="instance-state-name",
-        Values=["pending", "running", "stopping", "stopped"],
+DEFAULT_FILTERS: tuple[tuple[tuple[str, str | list[str]], ...], ...] = (
+    (
+        ("Name", "instance-state-name"),
+        ("Values", ["pending", "running", "stopping", "stopped"]),
     ),
-    dict(Name="tag-key", Values=[Tags.created_at.value]),
-    dict(Name="tag-key", Values=[Tags.image_alias.value]),
-]
+    (
+        ("Name", "tag-key"),
+        ("Values", [Tags.created_at.value]),
+    ),
+    (
+        ("Name", "tag-key"),
+        ("Values", [Tags.image_alias.value]),
+    ),
+)
 
 
 class AsJSONProvider(DefaultJSONProvider):
@@ -70,14 +77,17 @@ class AsJSONProvider(DefaultJSONProvider):
     def default(o: typing.Any) -> typing.Any:
         if hasattr(o, "as_json") and callable(o.as_json):
             return o.as_json()
+
         if hasattr(o, "__dict__"):
             return o.__dict__
+
         return DefaultJSONProvider.default(o)  # pragma: no cover
 
 
 def list_vpc_boxes(ec2_client, vpc_id):
     return list_boxes_filtered(
-        ec2_client, DEFAULT_FILTERS + [dict(Name="vpc-id", Values=[vpc_id])]
+        ec2_client,
+        [dict(f) for f in DEFAULT_FILTERS] + [dict(Name="vpc-id", Values=[vpc_id])],
     )
 
 
@@ -89,13 +99,14 @@ def list_boxes_filtered(ec2_client, filters):
         "Reservations", []
     ):
         boxes += [Box.from_ec2_dict(inst) for inst in reservation.get("Instances", [])]
+
     return list(sorted(boxes, key=lambda i: i.name))
 
 
 def list_user_boxes(ec2_client, user, vpc_id):
     return list_boxes_filtered(
         ec2_client,
-        DEFAULT_FILTERS
+        [dict(f) for f in DEFAULT_FILTERS]
         + [
             dict(Name=f"tag:{Tags.user.value}", Values=[user]),
             dict(Name="vpc-id", Values=[vpc_id]),
