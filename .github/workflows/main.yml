@@ -38,10 +38,10 @@ jobs:
     - run: just deps
     - run: hatch run lint
     - run: hatch run test
-    - run: hatch run is-releasable
+    - run: hatch run is-releasable | tee -a "${GITHUB_OUTPUT}"
       id: check_releasable
     - run: hatch build
-    - run: hatch run release-artifact
+    - run: hatch run release-artifact | tee -a "${GITHUB_OUTPUT}"
       id: create_release_artifact
     - uses: actions/upload-artifact@v3
       with:
