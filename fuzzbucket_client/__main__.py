@@ -221,7 +221,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
         "--check-ttl",
         type=parse_timedelta,
         default=None,
-        help="check a ttl value and exit, presumably before using it with a command"
+        help="check a ttl value and exit, presumably before using it with a command "
         + "that supports ttl",
     )
     parser.add_argument(

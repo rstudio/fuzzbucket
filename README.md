@@ -1,13 +1,9 @@
 # fuzzbucket
 
 The `fuzzbucket` API and `fuzzbucket-client` command line tool are intended to
-work together to provide humans with a simplified means to perform the
-following operations on ephemeral EC2 instances ("boxes") in a managed VPC:
-
--    list
--    create
--    reboot
--    delete
+work together to provide humans with a simplified means to perform
+["CRUD"](https://en.wikipedia.org/wiki/Create,_read,_update_and_delete)-like
+operations on ephemeral EC2 instances ("boxes") in a managed VPC.
 
 Additionally, there is a periodic function that will terminate stale boxes.
 
@@ -32,7 +28,7 @@ When working with a deployed `fuzzbucket` API, the `fuzzbucket-client` may be
 used to do all the things:
 
 ```bash
-# install fuzzbucket-client via pip with python3.6+
+# install fuzzbucket-client via pip with python3.9+
 pip install fuzzbucket-client
 ```
 
@@ -45,6 +41,7 @@ As described in this help text, the client tool requires configuration of the
 API URL via the following environment variable:
 
 ```bash
+# e.g.:
 export FUZZBUCKET_URL='https://fuzzbucket.example.com/prod'
 ```
 
@@ -55,27 +52,26 @@ export FUZZBUCKET_URL='https://fuzzbucket.example.com/prod'
 > :warning: Without having the `serverless`/`sls` tooling and necessary AWS
 > access, you must get this value from someone who does.
 
-Exactly how you choose to manage this environment variable is up to you, such
-as by including it in your shell configuration (`~/.bashrc`, `~/.zshrc`) or
-by using a tool like [autoenv](https://github.com/inishchith/autoenv).
+Exactly how you choose to manage this environment variable is up to you, such as
+by including it in your shell configuration (`~/.bashrc`, `~/.zshrc`) or by
+using a tool like [direnv](https://direnv.net/).
 
 ## development
 
 Prerequisites for development are:
 
--    `just`
--    `yarn`
--    `hatch`
+- `just`
+- `yarn`
+- `hatch`
 
-The `just` tool may be installed via `brew` on macOS and [other
-ways, too](https://github.com/casey/just#installation). Similarly,
-the `yarn` tool may be installed via `brew` on macOS and [other
-ways, too](https://yarnpkg.com/getting-started/install). The
-`hatch` tool may be installed via `pip`.
+The `just` tool may be installed via `brew` on macOS and [other ways,
+too](https://github.com/casey/just#installation). Similarly, the `yarn` tool may
+be installed via `brew` on macOS and [other ways,
+too](https://yarnpkg.com/getting-started/install). The `hatch` tool may be
+installed via `pip`.
 
-Once these prerequisites are available, the default workflow is nearly
-identical to what is captured in the [github
-workflow](./.github/workflows/main.yml):
+Once these prerequisites are available, the default workflow is nearly identical
+to what is captured in the [github workflow](./.github/workflows/main.yml):
 
 ```bash
 just deps
@@ -99,43 +95,16 @@ additional resources defined in the [serverless config](./serverless.yml).
 
 Defining a custom YAML file for use by `serverless.yml`, e.g.:
 
-```yaml
-# custom-path.yml
-allowedGithubOrgs: VerySeriousOrg
-branding: Very Serious Fuzzbucket
-flaskSecretKey: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-dynamodb:
-  start:
-    migrate: true
-  stages:
-  - prod
-oauth:
-  clientID: yyyyyyyyyyyyyyyyyyyy
-  clientSecret: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-wsgi:
-  app: fuzzbucket.deferred_app
-  packRequirements: false
-```
-
-* `allowedGithubOrgs` is a space-delimited string of GitHub organizations, to
-  at least one of which any authenticating user *must* belong.
-* `branding` is an arbitrary string which is used in the OAuth2 flow to provide
-  a hint of customization, reduce confusion, nice human things.
-* `flaskSecretKey` is set as the Flask app's `secret_key` attribute for session
-  security.
-* `oauth` section contains `clientID` and `clientSecret` values which must be
-  set to the values provided upon [registering your GitHub OAuth2
-  app](https://developer.github.com/v3/guides/basics-of-authentication/#registering-your-app)
-  specific to your deployment of Fuzzbucket.
-
-:warning: Notably, the custom sections `dynamodb` and `wsgi` _must_ be defined
-when providing a custom YAML file, as the `serverless` framework does not
-provide a way to merge sections by default (although plugins exist). The values
-in the above example are suitable and should work.
-
 ```bash
+cp -v ./default-custom.yml ./custom-path.yml
+
+# edit ./custom-path.yml
+
 export FUZZBUCKET_CUSTOM_prod='custom-path.yml'
 ```
+
+See [`./default-custom.yml`](./default-custom.yml) for comments about the
+structure and meaning of the file.
 
 ### cycle
 
