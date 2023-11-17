@@ -235,7 +235,7 @@ def test_list_vpc_boxes(monkeypatch):
     listed = fuzzbucket.list_vpc_boxes(ec2_client, vpc_id)
     assert listed == ["ok"]
     assert state["ec2_client"] == ec2_client
-    for default_filter in fuzzbucket.DEFAULT_FILTERS:
+    for default_filter in [dict(f) for f in fuzzbucket.DEFAULT_FILTERS]:
         assert default_filter in state["filters"]
     assert {"Name": "vpc-id", "Values": [vpc_id]} in state["filters"]
 
@@ -474,7 +474,7 @@ def test_is_fully_authd(
         assert fuzzbucket.app.is_fully_authd() == expected
 
 
-def test__login(monkeypatch):
+def test_login(monkeypatch):
     session = {}
     monkeypatch.setattr(fuzzbucket.app, "session", session)
 
@@ -521,28 +521,28 @@ def test__logout(monkeypatch, authd, session_user, expected_status):
     ("allowed_orgs", "orgs_response", "raises", "expected"),
     [
         pytest.param(
-            "frobs globs",
+            {"frobs", "globs"},
             [{"login": "frobs"}],
             False,
             TemplateResponse("auth_complete.html", 200),
             id="happy",
         ),
         pytest.param(
-            "frobs globs",
+            {"frobs", "globs"},
             [],
             False,
             TemplateResponse("error.html", 403),
             id="forbidden",
         ),
         pytest.param(
-            "frobs globs",
+            {"frobs", "globs"},
             {"message": "now you have gone and also done it"},
             False,
             TemplateResponse("error.html", 503),
             id="github_err",
         ),
         pytest.param(
-            "blubs glubs",
+            {"blubs", "glubs"},
             [{"login": "blubs"}],
             True,
             TemplateResponse("error.html", 404),
@@ -563,7 +563,7 @@ def test_auth_complete(
     monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
     monkeypatch.setattr(fuzzbucket.app, "session", {"user": "pytest"})
     fake_github.responses["/user/orgs"] = orgs_response
-    monkeypatch.setenv("FUZZBUCKET_ALLOWED_GITHUB_ORGS", allowed_orgs)
+    monkeypatch.setattr(fuzzbucket.app, "ALLOWED_ORGS", allowed_orgs)
 
     if raises:
 
@@ -1449,7 +1449,7 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
 
         def boom(*_):
             raise botocore.exceptions.ClientError(
-                {"Error": {"Code": 1312, "Message": "nah"}}, "wut"
+                {"Error": {"Code": 1312, "Message": "nah"}}, "wut"  # type: ignore
             )
 
         monkeypatch.setattr(dynamodb, "Table", boom)
@@ -1622,7 +1622,7 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
     assert instance_id not in [
         box.instance_id
         for box in fuzzbucket.list_boxes_filtered(
-            ec2_client, fuzzbucket.DEFAULT_FILTERS
+            ec2_client, [dict(f) for f in fuzzbucket.DEFAULT_FILTERS]
         )
     ]
 

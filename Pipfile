@@ -6,6 +6,8 @@ verify_ssl = true
 [dev-packages]
 black = "*"
 boto3 = "*"
+boto3-stubs = "*"
+botocore-stubs = "*"
 coverage = "*"
 flake8 = "*"
 ipython = "*"

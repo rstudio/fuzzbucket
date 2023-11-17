@@ -55,18 +55,41 @@ DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
     ("fuzzbucket-region", str(os.getenv("FUZZBUCKET_REGION"))),
     ("fuzzbucket-version", __version__),
 )
+DEFAULT_INSTANCE_TAGS: tuple[dict[str, str], ...] = tuple(
+    [
+        dict(
+            Key=urllib.parse.unquote(k.strip()),
+            Value=urllib.parse.unquote(v.strip()),
+        )
+        for k, v in [
+            pair.split(":", maxsplit=1)
+            for pair in os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TAGS", "").split(",")
+            if ":" in pair
+        ]
+    ]
+)
+ALLOWED_ORGS: tuple[str, ...] = tuple(
+    [
+        s.strip()
+        for s in os.environ.get("FUZZBUCKET_ALLOWED_GITHUB_ORGS", "").split()
+        if s.strip() != ""
+    ]
+)
 
 
 @app.errorhandler(InternalServerError)
 def handle_500(exc):
     log.debug(f"handling internal server error={exc!r}")
+
     if getattr(exc, "original_exception", None) is not None:
         exc = exc.original_exception
 
     if hasattr(exc, "get_response"):
         response = exc.get_response()
+
         if response is not None and response.is_json:
             return json.dumps(dict(error=str(exc))), 500
+
     return (
         render_template(
             "error.html",
@@ -80,11 +103,14 @@ def handle_500(exc):
 @app.before_request
 def set_user():
     source = "session"
+
     if session.get("user") is None:
         user, source = request.headers.get("Fuzzbucket-User"), "header"
         if user is None:
             user, source = request.args.get("user"), "qs"
+
         session["user"] = user
+
     if session.get("user") is not None:
         lower_user = str(session["user"]).lower()
         if session["user"] != lower_user:
@@ -92,24 +118,30 @@ def set_user():
             log.debug(
                 f"migrated session user to lowercase session user={session['user']!r}"
             )
+
     log.debug(f"setting remote_user from user={session['user']!r} source={source!r}")
     request.environ["REMOTE_USER"] = session["user"]
+
     if not github.authorized:
         log.debug("not currently github authorized; assuming login flow")
         return
+
     user_response = github.get("/user").json()
     github_login = user_response.get("login")
+
     if github_login is None:
         log.warning(f"no login available in github user response={user_response!r}")
         github.token = None
         del session["user"]
         return
+
     if str(github_login).lower() == str(session["user"]).lower():
         log.debug(
             f"github login={github_login!r} case-insensitive matches session"
             f" user={session['user']!r}"
         )
         return
+
     log.warning(f"mismatched github_login={github_login!r} user={session['user']!r}")
     github.token = None
     del session["user"]
@@ -119,6 +151,7 @@ def set_user():
 def set_default_headers(resp: Response) -> Response:
     for key, value in DEFAULT_HEADERS:
         resp.headers[key] = value
+
     return resp
 
 
@@ -162,18 +195,17 @@ def auth_403_github():
 
 
 @app.route("/_login", methods=["GET"])
-def _login():
+def login():
     return redirect(url_for("github.login"))
 
 
 @app.route("/auth-complete", methods=["GET"])
 def auth_complete():
-    allowed_orgs = {
-        s.strip() for s in os.getenv("FUZZBUCKET_ALLOWED_GITHUB_ORGS").split()
-    }
-    log.debug(f"allowed_orgs={allowed_orgs!r}")
+    log.debug(f"allowed_orgs={ALLOWED_ORGS!r}")
+
     raw_user_orgs = github.get("/user/orgs").json()
     log.debug(f"raw_user_orgs={raw_user_orgs!r}")
+
     if "message" in raw_user_orgs:
         return (
             render_template(
@@ -185,7 +217,8 @@ def auth_complete():
         )
 
     user_orgs = {o["login"] for o in raw_user_orgs}
-    if len(allowed_orgs.intersection(user_orgs)) == 0:
+
+    if len(set(ALLOWED_ORGS) & user_orgs) == 0:
         github.token = None
         del session["user"]
         return (
@@ -196,8 +229,10 @@ def auth_complete():
             ),
             403,
         )
+
     try:
         secret = app.config["gh_storage"].secret()
+
         return (
             render_template(
                 "auth_complete.html",
@@ -221,14 +256,20 @@ def auth_complete():
 def logout():
     if not is_fully_authd():
         return jsonify(error="not logged in"), 400
+
     log.debug(f"handling _logout for user={request.remote_user!r}")
+
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_USERS_TABLE_NAME"))
     existing_user = table.get_item(Key=dict(user=request.remote_user))
+
     if existing_user.get("Item") in (None, {}):
         return jsonify(error=f"no user {existing_user!r}"), 404
+
     resp = table.delete_item(Key=dict(user=request.remote_user))
     log.debug(f"raw dynamodb response={resp!r}")
+
     del session["user"]
+
     return "", 204
 
 
@@ -236,7 +277,9 @@ def logout():
 def list_boxes():
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(f"handling list_boxes for user={request.remote_user!r}")
+
     return (
         jsonify(
             boxes=list_user_boxes(
@@ -252,15 +295,21 @@ def list_boxes():
 def create_box():
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(f"handling create_box for user={session['user']}")
+
     if not request.is_json:
         return jsonify(error="request is not json"), 400
+
+    assert request.json is not None
+
     ami = request.json.get("ami")
     if ami is not None:
         image_alias = "custom"
     else:
         image_alias = request.json.get("image_alias", "ubuntu18")
         ami = _resolve_ami_alias(image_alias)
+
     if ami is None:
         return jsonify(error=f"unknown image_alias={image_alias}"), 400
 
@@ -286,6 +335,7 @@ def create_box():
 
         key_material = _fetch_first_compatible_github_key(session["user"])
         username = session["user"]
+
         if key_material == "":
             return (
                 jsonify(
@@ -317,7 +367,7 @@ def create_box():
         if instance.name == name:
             return jsonify(boxes=[instance], you=username), 409
 
-    network_interface = dict(
+    network_interface: dict[str, int | bool | str | list[str]] = dict(
         DeviceIndex=0,
         AssociatePublicIpAddress=True,
         DeleteOnTermination=True,
@@ -326,6 +376,7 @@ def create_box():
     subnet_id = os.getenv("CF_PublicSubnet", None)
     if subnet_id is not None:
         network_interface["SubnetId"] = subnet_id
+
     security_groups = [
         sg.strip()
         for sg in os.getenv("CF_FuzzbucketDefaultSecurityGroup", "").split(" ")
@@ -336,6 +387,7 @@ def create_box():
             sg.strip()
             for sg in os.getenv("CF_FuzzbucketConnectSecurityGroup", "").split(" ")
         ]
+
     if len(security_groups) > 0:
         network_interface["Groups"] = security_groups
 
@@ -346,7 +398,7 @@ def create_box():
             400,
         )
 
-    root_block_device_mapping = dict(
+    root_block_device_mapping: dict[str, typing.Any] = dict(
         DeviceName=ami_desc["Images"][0]["RootDeviceName"],
         Ebs=dict(
             DeleteOnTermination=True,
@@ -363,31 +415,13 @@ def create_box():
     if root_volume_size is not None:
         root_block_device_mapping["Ebs"]["VolumeSize"] = root_volume_size
 
-    instance_tags = [
+    instance_tags: list[dict[str, str]] = [
         dict(Key="Name", Value=name),
         dict(Key=Tags.created_at.value, Value=str(utcnow().timestamp())),
         dict(Key=Tags.image_alias.value, Value=image_alias),
         dict(Key=Tags.ttl.value, Value=ttl),
         dict(Key=Tags.user.value, Value=username),
-    ]
-
-    for pair in os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TAGS", "").split(","):
-        if ":" not in pair:
-            continue
-
-        parts = pair.strip().split(":", maxsplit=1)
-        if len(parts) != 2:
-            log.warning(f"ignoring unexpected key-value pair={pair!r}")
-            continue
-
-        key, value = [urllib.parse.unquote(str(s.strip())) for s in parts]
-        tag_spec = dict(Key=key, Value=value)
-
-        log.debug(
-            f"adding tags from FUZZBUCKET_DEFAULT_INSTANCE_TAGS spec={tag_spec!r}"
-        )
-
-        instance_tags.append(tag_spec)
+    ] + [tag_spec.copy() for tag_spec in DEFAULT_INSTANCE_TAGS]
 
     for key, value in request.json.get("instance_tags", {}).items():
         tag_spec = dict(Key=str(key), Value=str(value))
@@ -428,10 +462,12 @@ def create_box():
 def update_box(instance_id):
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(
         f"handling update_box for user={request.remote_user!r} "
         + f"instance_id={instance_id!r}"
     )
+
     if instance_id not in [
         b.instance_id
         for b in list_user_boxes(
@@ -439,6 +475,11 @@ def update_box(instance_id):
         )
     ]:
         return jsonify(error="no touching"), 403
+
+    if not request.is_json:
+        return jsonify(error="request is not json"), 400
+
+    assert request.json is not None
 
     instance_tags = []
     for key, value in request.json.get("instance_tags", {}).items():
@@ -453,6 +494,7 @@ def update_box(instance_id):
         instance_tags.append(dict(Key=Tags.ttl.value, Value=ttl))
 
     response = get_ec2_client().create_tags(Resources=[instance_id], Tags=instance_tags)
+
     return (
         jsonify(
             raw_response=response.get("ResponseMetadata", {}),
@@ -466,10 +508,12 @@ def update_box(instance_id):
 def reboot_box(instance_id):
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(
         f"handling reboot_box for user={request.remote_user!r} "
         + f"instance_id={instance_id!r}"
     )
+
     if instance_id not in [
         b.instance_id
         for b in list_user_boxes(
@@ -477,7 +521,9 @@ def reboot_box(instance_id):
         )
     ]:
         return jsonify(error="no touching"), 403
+
     get_ec2_client().reboot_instances(InstanceIds=[instance_id])
+
     return "", 204
 
 
@@ -485,10 +531,12 @@ def reboot_box(instance_id):
 def delete_box(instance_id):
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(
         f"handling delete_box for user={request.remote_user!r} "
         + f"instance_id={instance_id!r}"
     )
+
     if instance_id not in [
         b.instance_id
         for b in list_user_boxes(
@@ -496,7 +544,9 @@ def delete_box(instance_id):
         )
     ]:
         return jsonify(error="no touching"), 403
+
     get_ec2_client().terminate_instances(InstanceIds=[instance_id])
+
     return "", 204
 
 
@@ -504,11 +554,15 @@ def delete_box(instance_id):
 def list_image_aliases():
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(f"handling list_image_aliases for user={request.remote_user!r}")
+
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+
     image_aliases = {}
     for item in table.scan().get("Items", []):
         image_aliases[item["alias"]] = item["ami"]
+
     return jsonify(image_aliases=image_aliases, you=request.remote_user), 200
 
 
@@ -516,9 +570,14 @@ def list_image_aliases():
 def create_image_alias():
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(f"handling create_image_alias for user={request.remote_user!r}")
+
     if not request.is_json:
         return jsonify(error="request is not json"), 400
+
+    assert request.json is not None
+
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
     resp = table.put_item(
         Item=dict(
@@ -527,7 +586,9 @@ def create_image_alias():
             ami=request.json["ami"],
         ),
     )
+
     log.debug(f"raw dynamodb response={resp!r}")
+
     return (
         jsonify(
             image_aliases={request.json["alias"]: request.json["ami"]},
@@ -541,17 +602,23 @@ def create_image_alias():
 def delete_image_alias(alias):
     if not is_fully_authd():
         return auth_403_github()
+
     log.debug(
         f"handling delete_image_alias for user={request.remote_user!r} alias={alias!r}"
     )
+
     table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+
     existing_alias = table.get_item(Key=dict(alias=alias))
     if existing_alias.get("Item") in (None, {}):
         return jsonify(error=f"no alias {alias!r}"), 404
+
     if existing_alias.get("Item").get("user") != request.remote_user:
         return jsonify(error="no touching"), 403
+
     resp = table.delete_item(Key=dict(alias=alias))
     log.debug(f"raw dynamodb response={resp!r}")
+
     return "", 204
 
 
@@ -569,6 +636,7 @@ def get_key(alias):
 
     if matching_key is None:
         return jsonify(error="no key exists for you", you=request.remote_user), 404
+
     return (
         jsonify(
             key=dict(
@@ -593,6 +661,7 @@ def list_keys():
     def key_alias(key_name):
         if str(key_name).lower() == str(session["user"]).lower():
             return "default"
+
         return key_name.replace(f"{session['user']}-", "")
 
     return (
@@ -620,6 +689,8 @@ def put_key(alias):
 
     if not request.is_json:
         return jsonify(error="request must be json", you=request.remote_user), 400
+
+    assert request.json is not None
 
     full_key_alias = session["user"]
     if str(alias).lower() != "default":
@@ -737,9 +808,11 @@ def _resolve_ami_alias(image_alias: str) -> NoneString:
             .Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
             .get_item(Key=dict(alias=image_alias))
         )
+
         return resp.get("Item", {}).get("ami")
     except ClientError:
         log.exception("oh no boto3")
+
         return None
 
 
@@ -749,12 +822,15 @@ def _fetch_first_compatible_github_key(user: str) -> str:
             stripped_key = key.get("key", "").strip()
             if _is_ec2_compatible_key(stripped_key):
                 return stripped_key
+
         log.warning(f"no compatible ssh key could be found in github for user={user}")
+
         return ""
     except Exception as exc:
         log.warning(
             f"error while fetching first compatible github key for user={user} err={exc}"
         )
+
         return ""
 
 
