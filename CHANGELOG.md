@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- server: include version and region in response headers
+- server: include region for each box in box-related API responses
+- client: support for SSH and SCP via Amazon SSM with `--ssm` option
+
 ### Changed
+- use hatch and pyproject.toml for many more things
+- client: swapped "list" and "ls" command and alias
+
 ### Deprecated
 ### Removed
+- custom lambda image scaffolding
+- pipenv files
+
 ### Fixed
 ### Security
 
@@ -17,13 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - custom lambda image scaffolding
-- accept VPC tags from custom yaml
+- server: accept VPC tags from custom yaml
 
 ### Changed
 - usage given dependency update compatibility issues
 
 ### Fixed
-- continue reaping process on error
+- server: continue reaping process on error
 - github actions output integration
 
 ### Security
