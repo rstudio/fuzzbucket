@@ -1,11 +1,11 @@
 import secrets
 
 import flask_dance.consumer.storage
-
 from flask import session
 from werkzeug.utils import cached_property
 
-from . import NoneString, get_dynamodb, log
+from . import NoneString, get_dynamodb
+from .log import log
 
 
 class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):

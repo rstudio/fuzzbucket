@@ -1,0 +1,8 @@
+# This file is used by serverless-python-requirements to include the necessary
+# runtime dependencies in the zip file that is published for the lambda. The
+# contents are relatively stable, and so are managed manually rather than doing
+# some automation with `hatch` or whatever.
+
+flask
+flask-dance
+werkzeug

@@ -1,45 +1,44 @@
 import json
-import os
 import typing
 import urllib.parse
 
 from botocore.exceptions import ClientError
-
 from flask import (
     Flask,
-    jsonify,
-    request,
     Response,
-    url_for,
-    session,
+    jsonify,
     redirect,
     render_template,
+    request,
+    session,
+    url_for,
 )
-from flask_dance.contrib.github import make_github_blueprint, github
+from flask_dance.contrib.github import github, make_github_blueprint
 from werkzeug.exceptions import InternalServerError
 
-from .box import Box
-from .tags import Tags
-from .flask_dance_storage import FlaskDanceStorage
+import fuzzbucket.cfg as cfg
+
 from . import (
     AsJSONProvider,
     NoneString,
     get_dynamodb,
     get_ec2_client,
     list_user_boxes,
-    log,
     utcnow,
 )
 from .__version__ import __version__
-
+from .box import Box
+from .flask_dance_storage import FlaskDanceStorage
+from .log import log
+from .tags import Tags
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FUZZBUCKET_FLASK_SECRET_KEY")
-app.config["GITHUB_OAUTH_CLIENT_ID"] = os.getenv("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID")
-app.config["GITHUB_OAUTH_CLIENT_SECRET"] = os.getenv(
+app.secret_key = cfg.get("FUZZBUCKET_FLASK_SECRET_KEY")
+app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID")
+app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
     "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
 )
-gh_storage = FlaskDanceStorage(table_name=os.getenv("FUZZBUCKET_USERS_TABLE_NAME"))
+gh_storage = FlaskDanceStorage(table_name=cfg.get("FUZZBUCKET_USERS_TABLE_NAME"))
 app.config["gh_storage"] = gh_storage
 gh_blueprint = make_github_blueprint(
     scope="read:org,read:public_key",
@@ -52,7 +51,7 @@ app.json_provider_class = AsJSONProvider
 
 DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
     ("server", f"fuzzbucket/{__version__}"),
-    ("fuzzbucket-region", str(os.getenv("FUZZBUCKET_REGION"))),
+    ("fuzzbucket-region", str(cfg.get("FUZZBUCKET_REGION"))),
     ("fuzzbucket-version", __version__),
 )
 DEFAULT_INSTANCE_TAGS: tuple[dict[str, str], ...] = tuple(
@@ -63,18 +62,12 @@ DEFAULT_INSTANCE_TAGS: tuple[dict[str, str], ...] = tuple(
         )
         for k, v in [
             pair.split(":", maxsplit=1)
-            for pair in os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TAGS", "").split(",")
+            for pair in (cfg.get("FUZZBUCKET_DEFAULT_INSTANCE_TAGS") or "").split(",")
             if ":" in pair
         ]
     ]
 )
-ALLOWED_ORGS: tuple[str, ...] = tuple(
-    [
-        s.strip()
-        for s in os.environ.get("FUZZBUCKET_ALLOWED_GITHUB_ORGS", "").split()
-        if s.strip() != ""
-    ]
-)
+ALLOWED_ORGS: tuple[str, ...] = tuple(cfg.getlist("FUZZBUCKET_ALLOWED_GITHUB_ORGS"))
 
 
 @app.errorhandler(InternalServerError)
@@ -93,7 +86,7 @@ def handle_500(exc):
     return (
         render_template(
             "error.html",
-            branding=os.getenv("FUZZBUCKET_BRANDING"),
+            branding=cfg.get("FUZZBUCKET_BRANDING"),
             error=f"NOPE={exc}",
         ),
         500,
@@ -210,7 +203,7 @@ def auth_complete():
         return (
             render_template(
                 "error.html",
-                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                branding=cfg.get("FUZZBUCKET_BRANDING"),
                 error=f"GitHub API error: {raw_user_orgs['message']}",
             ),
             503,
@@ -224,7 +217,7 @@ def auth_complete():
         return (
             render_template(
                 "error.html",
-                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                branding=cfg.get("FUZZBUCKET_BRANDING"),
                 error="You are not a member of an allowed GitHub organization.",
             ),
             403,
@@ -236,7 +229,7 @@ def auth_complete():
         return (
             render_template(
                 "auth_complete.html",
-                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                branding=cfg.get("FUZZBUCKET_BRANDING"),
                 secret=secret,
             ),
             200,
@@ -245,7 +238,7 @@ def auth_complete():
         return (
             render_template(
                 "error.html",
-                branding=os.getenv("FUZZBUCKET_BRANDING"),
+                branding=cfg.get("FUZZBUCKET_BRANDING"),
                 error="There is no secret available for user={user!r}",
             ),
             404,
@@ -259,7 +252,7 @@ def logout():
 
     log.debug(f"handling _logout for user={request.remote_user!r}")
 
-    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_USERS_TABLE_NAME"))
+    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_USERS_TABLE_NAME"))
     existing_user = table.get_item(Key=dict(user=request.remote_user))
 
     if existing_user.get("Item") in (None, {}):
@@ -283,7 +276,9 @@ def list_boxes():
     return (
         jsonify(
             boxes=list_user_boxes(
-                get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
+                get_ec2_client(),
+                request.remote_user,
+                cfg.vpc_id(),
             ),
             you=request.remote_user,
         ),
@@ -363,7 +358,7 @@ def create_box():
     # integer.
     ttl = str(int(ttl))
 
-    for instance in list_user_boxes(get_ec2_client(), username, os.getenv("CF_VPC")):
+    for instance in list_user_boxes(get_ec2_client(), username, cfg.vpc_id()):
         if instance.name == name:
             return jsonify(boxes=[instance], you=username), 409
 
@@ -373,20 +368,21 @@ def create_box():
         DeleteOnTermination=True,
     )
 
-    subnet_id = os.getenv("CF_PublicSubnet", None)
+    subnet_id = cfg.get(
+        "FUZZBUCKET_DEFAULT_SUBNET",
+        "CF_PublicSubnet" if cfg.include_cf_defaults() else "",
+    )
+
     if subnet_id is not None:
         network_interface["SubnetId"] = subnet_id
 
-    security_groups = [
-        sg.strip()
-        for sg in os.getenv("CF_FuzzbucketDefaultSecurityGroup", "").split(" ")
-    ]
+    security_groups = cfg.getlist(
+        "FUZZBUCKET_DEFAULT_SECURITY_GROUPS",
+        "CF_FuzzbucketDefaultSecurityGroup" if cfg.include_cf_defaults() else "",
+    )
 
     if request.json.get("connect") is not None:
-        security_groups += [
-            sg.strip()
-            for sg in os.getenv("CF_FuzzbucketConnectSecurityGroup", "").split(" ")
-        ]
+        security_groups += cfg.getlist("CF_FuzzbucketConnectSecurityGroup")
 
     if len(security_groups) > 0:
         network_interface["Groups"] = security_groups
@@ -435,7 +431,7 @@ def create_box():
         ImageId=ami,
         InstanceType=request.json.get(
             "instance_type",
-            os.getenv("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", "t3.small"),
+            cfg.get("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", default="t3.small"),
         ),
         KeyName=resolved_key_name,
         MinCount=1,
@@ -470,9 +466,7 @@ def update_box(instance_id):
 
     if instance_id not in [
         b.instance_id
-        for b in list_user_boxes(
-            get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
-        )
+        for b in list_user_boxes(get_ec2_client(), request.remote_user, cfg.vpc_id())
     ]:
         return jsonify(error="no touching"), 403
 
@@ -516,9 +510,7 @@ def reboot_box(instance_id):
 
     if instance_id not in [
         b.instance_id
-        for b in list_user_boxes(
-            get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
-        )
+        for b in list_user_boxes(get_ec2_client(), request.remote_user, cfg.vpc_id())
     ]:
         return jsonify(error="no touching"), 403
 
@@ -539,9 +531,7 @@ def delete_box(instance_id):
 
     if instance_id not in [
         b.instance_id
-        for b in list_user_boxes(
-            get_ec2_client(), request.remote_user, os.getenv("CF_VPC")
-        )
+        for b in list_user_boxes(get_ec2_client(), request.remote_user, cfg.vpc_id())
     ]:
         return jsonify(error="no touching"), 403
 
@@ -557,7 +547,7 @@ def list_image_aliases():
 
     log.debug(f"handling list_image_aliases for user={request.remote_user!r}")
 
-    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
 
     image_aliases = {}
     for item in table.scan().get("Items", []):
@@ -578,7 +568,7 @@ def create_image_alias():
 
     assert request.json is not None
 
-    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
     resp = table.put_item(
         Item=dict(
             user=request.remote_user,
@@ -607,7 +597,7 @@ def delete_image_alias(alias):
         f"handling delete_image_alias for user={request.remote_user!r} alias={alias!r}"
     )
 
-    table = get_dynamodb().Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
 
     existing_alias = table.get_item(Key=dict(alias=alias))
     if existing_alias.get("Item") in (None, {}):
@@ -805,7 +795,7 @@ def _resolve_ami_alias(image_alias: str) -> NoneString:
     try:
         resp = (
             get_dynamodb()
-            .Table(os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+            .Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
             .get_item(Key=dict(alias=image_alias))
         )
 
@@ -836,7 +826,3 @@ def _fetch_first_compatible_github_key(user: str) -> str:
 
 def _is_ec2_compatible_key(key_material: str) -> bool:
     return key_material.startswith("ssh-rsa") or key_material.startswith("ssh-ed25519")
-
-
-with app.app_context():
-    os.environ.setdefault("CF_VPC", "NOTSET")

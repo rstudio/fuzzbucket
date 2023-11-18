@@ -1,9 +1,9 @@
-import typing
 import dataclasses
 import datetime
+import typing
 
-from .tags import Tags
 from . import NoneString, utcnow
+from .tags import Tags
 
 
 @dataclasses.dataclass

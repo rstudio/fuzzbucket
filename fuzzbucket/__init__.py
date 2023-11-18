@@ -1,32 +1,19 @@
 import datetime
 import functools
-import logging
 import os
 import typing
 
 import boto3
-
 from flask.json.provider import DefaultJSONProvider
 
 from .tags import Tags
 
-ROOT_LOG = logging.getLogger()
-log = ROOT_LOG.getChild("fuzzbucket")
-
-LOG_LEVEL = getattr(logging, os.environ.get("FUZZBUCKET_LOG_LEVEL", "info").upper())
-log.setLevel(LOG_LEVEL)
-
-ROOT_LOG_LEVEL = getattr(
-    logging, os.environ.get("FUZZBUCKET_ROOT_LOG_LEVEL", "info").upper()
-)
-ROOT_LOG.setLevel(ROOT_LOG_LEVEL)
-
-
-NoneString = typing.Optional[str]
+NoneString = str | None
+NoneEnv = dict[str, str] | None
 
 
 def deferred_app(
-    environ: typing.Dict[str, str], start_response: typing.Callable
+    environ: dict[str, str], start_response: typing.Callable
 ) -> typing.Iterable[str]:
     from .app import app
 

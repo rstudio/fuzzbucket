@@ -29,14 +29,15 @@ version-file = "fuzzbucket/__version__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
-  "Flask",
-  "Flask-Dance",
   "black",
   "boto3",
   "boto3-stubs",
   "botocore-stubs",
   "coverage",
+  "flask",  # lambda dependency
+  "flask-dance",  # lambda dependency
   "ipython",
+  "isort",
   "moto[ec2,dynamodb]",
   "mypy",
   "pytest",
@@ -45,7 +46,7 @@ dependencies = [
   "sshpubkeys",
   "toml",
   "urllib3 <2",
-  "werkzeug"
+  "werkzeug",  # lambda dependency
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -62,11 +63,15 @@ rm -rf \
   ./htmlcov
 """
 lint = [
+  "isort --check --diff {root}",
   "black --check --diff {root}",
   "pytest -m mypy --no-cov"
 ]
 test = "pytest --cov-fail-under=95"
-fmt = "black {root}"
+fmt = [
+  "isort {root}",
+  "black {root}"
+]
 is-releasable = '''\
 python -c '
 import sys
@@ -108,6 +113,10 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
+
+[tool.isort]
+profile = "black"
+extend_skip = [".cache"]
 
 [tool.mypy]
 ignore_missing_imports = true

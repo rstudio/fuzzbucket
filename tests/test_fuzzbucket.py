@@ -10,16 +10,14 @@ import typing
 import boto3
 import botocore.exceptions
 import pytest
-
 from flask import Response
-from moto import mock_ec2, mock_dynamodb
+from moto import mock_dynamodb, mock_ec2
 from werkzeug.exceptions import InternalServerError
 
 import fuzzbucket
 import fuzzbucket.app
 import fuzzbucket.flask_dance_storage
 import fuzzbucket.reaper
-
 from fuzzbucket.app import app
 from fuzzbucket.box import Box
 
@@ -36,7 +34,7 @@ AnyDict = dict[str, typing.Any]
 
 @pytest.fixture(autouse=True)
 def resetti():
-    os.environ.setdefault("CF_VPC", "vpc-fafafafaf")
+    os.environ.setdefault("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafaf")
     fuzzbucket.get_dynamodb.cache_clear()
     fuzzbucket.get_ec2_client.cache_clear()
     fuzzbucket.app.app.testing = True
@@ -1574,7 +1572,10 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
         reap_response = fuzzbucket.reaper.reap_boxes(
-            None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
+            None,
+            None,
+            ec2_client=ec2_client,
+            env={"FUZZBUCKET_DEFAULT_VPC": "vpc-fafafafafaf"},
         )
         assert reap_response["reaped_instance_ids"] == []
 
@@ -1595,7 +1596,10 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes_2)
         reap_response = fuzzbucket.reaper.reap_boxes(
-            None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
+            None,
+            None,
+            ec2_client=ec2_client,
+            env={"FUZZBUCKET_DEFAULT_VPC": "vpc-fafafafafaf"},
         )
         assert reap_response["reaped_instance_ids"] == []
 
@@ -1615,7 +1619,10 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes_3)
         reap_response = fuzzbucket.reaper.reap_boxes(
-            None, None, ec2_client=ec2_client, env={"CF_VPC": "vpc-fafafafafaf"}
+            None,
+            None,
+            ec2_client=ec2_client,
+            env={"FUZZBUCKET_DEFAULT_VPC": "vpc-fafafafafaf"},
         )
         assert reap_response["reaped_instance_ids"] != []
 
