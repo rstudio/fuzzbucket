@@ -366,7 +366,7 @@ def create_box():
 
     network_interface: dict[str, int | bool | str | list[str]] = dict(
         DeviceIndex=0,
-        AssociatePublicIpAddress=True,
+        AssociatePublicIpAddress=cfg.getbool("FUZZBUCKET_DEFAULT_PUBLIC_IP"),
         DeleteOnTermination=True,
     )
 
@@ -376,6 +376,11 @@ def create_box():
     )
 
     if subnet_id is not None:
+        log.debug(
+            f"setting subnet_id={subnet_id!r} on network interface "
+            + f"for user={username!r}"
+        )
+
         network_interface["SubnetId"] = subnet_id
 
     security_groups = cfg.getlist(

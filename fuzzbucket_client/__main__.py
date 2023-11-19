@@ -907,7 +907,7 @@ class Client:
 
     @_command
     def ssh(self, known_args, unknown_args):
-        matching_box, ok = self._resolve_sshable_box(known_args.box)
+        matching_box, ok = self._resolve_sshable_box(known_args.box, known_args.ssm)
         if not ok:
             return False
         assert matching_box is not None
@@ -927,7 +927,7 @@ class Client:
 
     @_command
     def scp(self, known_args, unknown_args):
-        matching_box, ok = self._resolve_sshable_box(known_args.box)
+        matching_box, ok = self._resolve_sshable_box(known_args.box, known_args.ssm)
         if not ok:
             return False
         assert matching_box is not None
@@ -1250,12 +1250,14 @@ class Client:
         req.headers["Fuzzbucket-Secret"] = self._secret
         return req
 
-    def _resolve_sshable_box(self, box_name: str) -> tuple[typing.Optional[Box], bool]:
+    def _resolve_sshable_box(
+        self, box_name: str, ssm: bool
+    ) -> tuple[typing.Optional[Box], bool]:
         matching_box = self._find_box(box_name)
         if matching_box is None:
             log.error(f"no box found matching {box_name!r}")
             return None, False
-        if matching_box.get("public_dns_name") is None:
+        if not ssm and matching_box.get("public_dns_name") is None:
             log.error(f"no public dns name found for box={matching_box['name']}")
             return None, False
         return matching_box, True
@@ -1271,9 +1273,10 @@ class Client:
                     self.default_ssh_user,
                 ),
             ] + unknown_args
+        hostname = box.get("instance_id") if ssm else box.get("public_dns_name", "???")
         return typing.cast(
             list[str],
-            ["ssh", box.get("public_dns_name")]
+            ["ssh", hostname]
             + self._with_ssh_opts(
                 box,
                 ssm,
