@@ -4,22 +4,22 @@ import flask_dance.consumer.storage
 from flask import session
 from werkzeug.utils import cached_property
 
-from . import NoneString, get_dynamodb
+from . import get_dynamodb
 from .log import log
 
 
 class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
-    def __init__(self, table_name: NoneString) -> None:
+    def __init__(self, table_name: str | None) -> None:
         self.table_name = table_name
 
     @cached_property
     def table(self):
         return get_dynamodb().Table(self.table_name)
 
-    def get(self, _) -> NoneString:
+    def get(self, _) -> str | None:
         return self.dump().get("token")
 
-    def secret(self) -> NoneString:
+    def secret(self) -> str | None:
         return self.dump().get("secret")
 
     def dump(self) -> dict:
@@ -54,7 +54,7 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
 
         self.table.put_item(Item=dict(user=user))
 
-    def _load_user(self) -> NoneString:
+    def _load_user(self) -> str | None:
         value = session.get("user")
         if value is not None and value != str(value).lower():
             value = str(value).lower()

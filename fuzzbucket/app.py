@@ -1,4 +1,6 @@
+import functools
 import json
+import random
 import typing
 import urllib.parse
 
@@ -20,9 +22,9 @@ import fuzzbucket.cfg as cfg
 
 from . import (
     AsJSONProvider,
-    NoneString,
     get_dynamodb,
     get_ec2_client,
+    get_vpc_id,
     list_user_boxes,
     utcnow,
 )
@@ -49,7 +51,7 @@ gh_blueprint = make_github_blueprint(
 )
 app.config["gh_blueprint"] = gh_blueprint
 app.register_blueprint(gh_blueprint, url_prefix="/login")
-app.json_provider_class = AsJSONProvider
+app.json = AsJSONProvider(app)
 
 DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
     ("server", f"fuzzbucket/{__version__}"),
@@ -280,7 +282,7 @@ def list_boxes():
             boxes=list_user_boxes(
                 get_ec2_client(),
                 request.remote_user,
-                cfg.vpc_id(),
+                get_vpc_id(get_ec2_client()),
             ),
             you=request.remote_user,
         ),
@@ -360,7 +362,9 @@ def create_box():
     # integer.
     ttl = str(int(ttl))
 
-    for instance in list_user_boxes(get_ec2_client(), username, cfg.vpc_id()):
+    for instance in list_user_boxes(
+        get_ec2_client(), username, get_vpc_id(get_ec2_client())
+    ):
         if instance.name == name:
             return jsonify(boxes=[instance], you=username), 409
 
@@ -370,10 +374,7 @@ def create_box():
         DeleteOnTermination=True,
     )
 
-    subnet_id = cfg.get(
-        "FUZZBUCKET_DEFAULT_SUBNET",
-        "CF_PublicSubnet" if cfg.include_cf_defaults() else "",
-    )
+    subnet_id = _find_subnet()
 
     if subnet_id is not None:
         log.debug(
@@ -383,13 +384,14 @@ def create_box():
 
         network_interface["SubnetId"] = subnet_id
 
-    security_groups = cfg.getlist(
-        "FUZZBUCKET_DEFAULT_SECURITY_GROUPS",
-        "CF_FuzzbucketDefaultSecurityGroup" if cfg.include_cf_defaults() else "",
-    )
+    security_groups = cfg.getlist("FUZZBUCKET_DEFAULT_SECURITY_GROUPS")
 
     if request.json.get("connect") is not None:
-        security_groups += cfg.getlist("CF_FuzzbucketConnectSecurityGroup")
+        security_groups += cfg.getlist(
+            f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-connect-sg"
+        )
+
+    security_groups = _resolve_security_groups(security_groups)
 
     if len(security_groups) > 0:
         network_interface["Groups"] = security_groups
@@ -473,7 +475,9 @@ def update_box(instance_id):
 
     if instance_id not in [
         b.instance_id
-        for b in list_user_boxes(get_ec2_client(), request.remote_user, cfg.vpc_id())
+        for b in list_user_boxes(
+            get_ec2_client(), request.remote_user, get_vpc_id(get_ec2_client())
+        )
     ]:
         return jsonify(error="no touching"), 403
 
@@ -517,7 +521,9 @@ def reboot_box(instance_id):
 
     if instance_id not in [
         b.instance_id
-        for b in list_user_boxes(get_ec2_client(), request.remote_user, cfg.vpc_id())
+        for b in list_user_boxes(
+            get_ec2_client(), request.remote_user, get_vpc_id(get_ec2_client())
+        )
     ]:
         return jsonify(error="no touching"), 403
 
@@ -538,7 +544,9 @@ def delete_box(instance_id):
 
     if instance_id not in [
         b.instance_id
-        for b in list_user_boxes(get_ec2_client(), request.remote_user, cfg.vpc_id())
+        for b in list_user_boxes(
+            get_ec2_client(), request.remote_user, get_vpc_id(get_ec2_client())
+        )
     ]:
         return jsonify(error="no touching"), 403
 
@@ -769,6 +777,7 @@ def delete_key(alias):
         return jsonify(error="no key to delete for you", you=request.remote_user), 404
 
     get_ec2_client().delete_key_pair(KeyName=matching_key["KeyName"])
+
     return (
         jsonify(
             key=dict(
@@ -780,6 +789,43 @@ def delete_key(alias):
         ),
         200,
     )
+
+
+def _find_subnet() -> str | None:
+    default_subnets = cfg.getlist("FUZZBUCKET_DEFAULT_SUBNETS")
+
+    if not cfg.getbool("FUZZBUCKET_AUTO_SUBNET"):
+        return (
+            _resolve_subnet(random.choice(default_subnets)) if default_subnets else None
+        )
+
+    candidate_subnets = (
+        get_ec2_client()
+        .describe_subnets(
+            Filters=[
+                dict(
+                    Name="vpc-id",
+                    Values=[
+                        get_vpc_id(get_ec2_client()),
+                    ],
+                ),
+                dict(
+                    Name="state",
+                    Values=["available"],
+                ),
+            ]
+        )
+        .get("Subnets", [])
+    )
+
+    if len(candidate_subnets) == 0:
+        return (
+            _resolve_subnet(random.choice(default_subnets)) if default_subnets else None
+        )
+
+    candidate_subnets.sort(key=lambda s: s["AvailableIpAddressCount"])
+
+    return _resolve_subnet(candidate_subnets[-1]["SubnetId"])
 
 
 def _find_matching_ec2_key_pair(user: str) -> typing.Optional[dict]:
@@ -804,7 +850,7 @@ def _find_matching_ec2_key_pairs(prefix: str) -> typing.List[dict]:
     return ret
 
 
-def _resolve_ami_alias(image_alias: str) -> NoneString:
+def _resolve_ami_alias(image_alias: str) -> str | None:
     try:
         resp = (
             get_dynamodb()
@@ -817,6 +863,55 @@ def _resolve_ami_alias(image_alias: str) -> NoneString:
         log.exception("oh no boto3")
 
         return None
+
+
+def _resolve_security_groups(security_groups: list[str]) -> list[str]:
+    log.debug(f"resolving security groups={security_groups!r}")
+
+    return [
+        sg
+        for sg in [_resolve_security_group(sg_alias) for sg_alias in security_groups]
+        if sg != ""
+    ]
+
+
+@functools.cache
+def _resolve_security_group(security_group: str) -> str:
+    log.debug(f"resolving security group={security_group!r}")
+
+    if security_group.startswith("sg-"):
+        return security_group
+
+    candidate_groups = (
+        get_ec2_client()
+        .describe_security_groups(
+            Filters=[
+                dict(Name="group-name", Values=[security_group]),
+            ],
+        )
+        .get("SecurityGroups")
+    )
+
+    if not candidate_groups:
+        return security_group
+
+    return candidate_groups[0].get("GroupId", "")
+
+
+@functools.cache
+def _resolve_subnet(subnet_id_or_name: str) -> str | None:
+    log.debug(f"resolving subnet id={subnet_id_or_name!r}")
+
+    return (
+        get_ec2_client()
+        .describe_security_groups(
+            Filters=[
+                dict(Name="tag:Name", Values=[subnet_id_or_name]),
+            ],
+        )
+        .get("Subnets", [{"SubnetId": subnet_id_or_name}])[0]
+        .get("SubnetId")
+    )
 
 
 def _fetch_first_compatible_github_key(user: str) -> str:

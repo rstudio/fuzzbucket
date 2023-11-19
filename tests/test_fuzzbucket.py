@@ -1571,11 +1571,11 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes)
+        mp.setenv("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafafaf")
         reap_response = fuzzbucket.reaper.reap_boxes(
             None,
             None,
             ec2_client=ec2_client,
-            env={"FUZZBUCKET_DEFAULT_VPC": "vpc-fafafafafaf"},
         )
         assert reap_response["reaped_instance_ids"] == []
 
@@ -1595,11 +1595,11 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes_2)
+        mp.setenv("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafafaf")
         reap_response = fuzzbucket.reaper.reap_boxes(
             None,
             None,
             ec2_client=ec2_client,
-            env={"FUZZBUCKET_DEFAULT_VPC": "vpc-fafafafafaf"},
         )
         assert reap_response["reaped_instance_ids"] == []
 
@@ -1618,11 +1618,11 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
         mp.setattr(fuzzbucket, "utcnow", lambda: the_future)
         mp.setattr(fuzzbucket.reaper, "list_vpc_boxes", fake_list_vpc_boxes_3)
+        mp.setenv("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafafaf")
         reap_response = fuzzbucket.reaper.reap_boxes(
             None,
             None,
             ec2_client=ec2_client,
-            env={"FUZZBUCKET_DEFAULT_VPC": "vpc-fafafafafaf"},
         )
         assert reap_response["reaped_instance_ids"] != []
 
@@ -1636,18 +1636,24 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
 
 def test_box():
     box = Box(instance_id="i-fafafafafafafaf")
-    assert box.age == "?"
+    assert box.age is None
 
     box.created_at = str(
         (fuzzbucket.utcnow() - datetime.timedelta(days=1, minutes=1)).timestamp()
     )
+    assert box.age is not None
     assert box.age.startswith("1 day,")
 
     assert "instance_id" in box.as_json()
     assert "age" in box.as_json()
+    assert "max_age" in box.as_json()
 
     with pytest.raises(TypeError):
         Box(instance_id="i-fafafafbabacaca", frobs=9001)  # type: ignore
+
+    dumped = app.json.dumps(box)
+    assert '"age":' in dumped
+    assert '"max_age":' in dumped
 
 
 @pytest.mark.parametrize(

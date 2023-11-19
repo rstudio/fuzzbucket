@@ -3,8 +3,6 @@ configValidationMode: warn
 useDotenv: true
 
 custom:
-  fuzzbucket:
-
   dynamodb:
     start:
       migrate: true
@@ -46,7 +44,6 @@ plugins:
 - serverless-wsgi
 - serverless-dynamodb-local
 - serverless-python-requirements
-- serverless-resources-env
 - serverless-offline
 
 resources: ${file(${env:FUZZBUCKET_RESOURCES_${opt:stage, 'dev'}, 'default-resources.yml'}):resources}
@@ -58,13 +55,6 @@ functions:
     layers:
     - Ref: PythonRequirementsLambdaLayer
 
-    custom:
-      env-resources:
-      - VPC
-      - PublicSubnet
-      - FuzzbucketDefaultSecurityGroup
-      - FuzzbucketConnectSecurityGroup
-
     events:
     - http: { method: ANY, path: / }
     - http: { method: ANY, path: '{proxy+}' }
@@ -74,9 +64,6 @@ functions:
 
     layers:
     - Ref: PythonRequirementsLambdaLayer
-
-    custom:
-      env-resources: [VPC]
 
     events:
     - schedule: rate(10 minutes)

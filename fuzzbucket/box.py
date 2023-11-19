@@ -1,46 +1,41 @@
 import dataclasses
 import datetime
-import typing
 
-from . import NoneString, utcnow
+from . import utcnow
 from .tags import Tags
 
 
 @dataclasses.dataclass
 class Box:
-    created_at: NoneString = None
-    image_alias: NoneString = None
-    image_id: NoneString = None
-    instance_id: NoneString = None
-    instance_type: NoneString = None
-    key_alias: NoneString = None
-    name: NoneString = None
-    other_tags: typing.Dict[str, str] = dataclasses.field(default_factory=dict)
-    public_dns_name: NoneString = None
-    public_ip: NoneString = None
-    region: NoneString = None
-    ttl: int = 0
-    user: NoneString = None
+    created_at: str | None = None
+    image_alias: str | None = None
+    image_id: str | None = None
+    instance_id: str | None = None
+    instance_type: str | None = None
+    key_alias: str | None = None
+    name: str | None = None
+    other_tags: dict[str, str] | None = None
+    public_dns_name: str | None = None
+    public_ip: str | None = None
+    region: str | None = None
+    ttl: int | None = None
+    user: str | None = None
 
     def as_json(self):
-        return dict(
-            [
-                (key, getattr(self, key))
-                for key in (list(self.__dict__.keys()) + ["age", "max_age"])
-                if getattr(self, key) is not None
-            ]
-        )
+        return self.__dict__.copy() | {"age": self.age, "max_age": self.max_age}
 
     @property
-    def age(self) -> str:
-        if not self.created_at:
-            return "?"
+    def age(self) -> str | None:
+        if self.created_at is None:
+            return None
+
         return str(utcnow() - datetime.datetime.fromtimestamp(float(self.created_at)))
 
     @property
-    def max_age(self) -> str:
-        if not self.ttl:
-            return "?"
+    def max_age(self) -> str | None:
+        if self.ttl is None:
+            return None
+
         return str(datetime.timedelta(seconds=self.ttl))
 
     @classmethod
@@ -76,10 +71,13 @@ class Box:
                 # multiple-minute interval. {{
                 Tags.ttl.value: ["ttl", lambda s: int(float(s))],
                 # }}
-            }.get(tag["Key"], [None, str])
+            }.get(tag["Key"], (None, str))
+
             if attr is not None:
                 setattr(box, attr, cast(tag["Value"]))  # type: ignore
                 continue
+
+            assert box.other_tags is not None
 
             box.other_tags[str(tag["Key"])] = str(tag["Value"])
 

@@ -1,10 +1,10 @@
 import os
 import typing
 
-from . import NoneEnv, NoneString
 
-
-def get(*keys: str, default: NoneString = None, env: NoneEnv = None) -> NoneString:
+def get(
+    *keys: str, default: str | None = None, env: dict[str, str] | None = None
+) -> str | None:
     env = env if env is not None else os.environ.copy()
 
     for key in keys:
@@ -19,7 +19,9 @@ def get(*keys: str, default: NoneString = None, env: NoneEnv = None) -> NoneStri
     return default
 
 
-def getbool(*keys: str, default: bool = False, env: NoneEnv = None) -> bool:
+def getbool(
+    *keys: str, default: bool = False, env: dict[str, str] | None = None
+) -> bool:
     value = get(*keys, env=env)
 
     if value is not None:
@@ -29,7 +31,7 @@ def getbool(*keys: str, default: bool = False, env: NoneEnv = None) -> bool:
 
 
 def getlist(
-    *keys: str, default: tuple[str, ...] = (), env: NoneEnv = None
+    *keys: str, default: tuple[str, ...] = (), env: dict[str, str] | None = None
 ) -> list[str]:
     value = [
         s.strip() for s in (get(*keys, env=env) or "").split(" ") if s.strip() != ""
@@ -41,17 +43,12 @@ def getlist(
     return list(default)
 
 
-def vpc_id(env: NoneEnv = None) -> str:
+def vpc_id(env: dict[str, str] | None = None) -> str:
     return typing.cast(
         str,
         get(
             "FUZZBUCKET_DEFAULT_VPC",
-            "CF_VPC" if include_cf_defaults(env) else "",
             default="NOTSET",
             env=env,
         ),
     )
-
-
-def include_cf_defaults(env: NoneEnv = None) -> bool:
-    return getbool("FUZZBUCKET_INCLUDE_CF_DEFAULTS", default=True, env=env)

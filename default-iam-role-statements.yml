@@ -36,6 +36,9 @@ iamRoleStatements:
   - ec2:DescribeImages
   - ec2:DescribeInstances
   - ec2:DescribeKeyPairs
+  - ec2:DescribeSecurityGroups
+  - ec2:DescribeSubnets
+  - ec2:DescribeVpcs
   - ec2:ImportKeyPair
   - ec2:RunInstances
   Resource: '*'

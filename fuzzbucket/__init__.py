@@ -6,10 +6,9 @@ import typing
 import boto3
 from flask.json.provider import DefaultJSONProvider
 
-from .tags import Tags
+import fuzzbucket.cfg as cfg
 
-NoneString = str | None
-NoneEnv = dict[str, str] | None
+from .tags import Tags
 
 
 def deferred_app(
@@ -26,12 +25,12 @@ def deferred_reap_boxes(event, context):
     return reap_boxes(event, context)
 
 
-@functools.lru_cache(maxsize=2)
+@functools.cache
 def get_ec2_client():
     return boto3.client("ec2")
 
 
-@functools.lru_cache(maxsize=2)
+@functools.cache
 def get_dynamodb():
     if os.getenv("IS_OFFLINE") is not None:
         return boto3.resource(
@@ -69,6 +68,25 @@ class AsJSONProvider(DefaultJSONProvider):
             return o.__dict__
 
         return DefaultJSONProvider.default(o)  # pragma: no cover
+
+
+@functools.cache
+def get_vpc_id(ec2_client) -> str:
+    value = cfg.vpc_id()
+
+    if value.startswith("vpc-"):
+        return value
+
+    candidate_vpcs = ec2_client.describe_vpcs(
+        Filters=[
+            dict(Name="tag:Name", Values=[value]),
+        ]
+    ).get("Vpcs", [])
+
+    if len(candidate_vpcs) == 0:
+        return value
+
+    return candidate_vpcs[0]["VpcId"]
 
 
 def list_vpc_boxes(ec2_client, vpc_id):

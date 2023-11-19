@@ -37,9 +37,10 @@ def main(sysargs: list[str] = sys.argv[:]):
     default_config = _load_default_config()
 
     for env_var in default_config["environment"].keys():
-        new_config["environment"].setdefault(
-            env_var, default_config["environment"][env_var]
-        )
+        value = default_config["environment"][env_var]
+
+        if str(value).strip() != "":
+            new_config["environment"].setdefault(env_var, value)
 
     new_text = yaml.dump(new_config)
 
@@ -100,10 +101,9 @@ def _ensure_migrated(config: dict[str, typing.Any]) -> dict[str, typing.Any]:
         ("defaultInstanceType", "FUZZBUCKET_DEFAULT_INSTANCE_TYPE"),
         ("defaultPublicIp", "FUZZBUCKET_DEFAULT_PUBLIC_IP"),
         ("defaultSecurityGroups", "FUZZBUCKET_DEFAULT_SECURITY_GROUPS"),
-        ("defaultSubnet", "FUZZBUCKET_DEFAULT_SUBNET"),
+        ("defaultSubnet", "FUZZBUCKET_DEFAULT_SUBNETS"),
         ("defaultTtl", "FUZZBUCKET_DEFAULT_TTL"),
         ("flaskSecretKey", "FUZZBUCKET_FLASK_SECRET_KEY"),
-        ("includeCfDefaults", "FUZZBUCKET_INCLUDE_CF_DEFAULTS"),
         ("logLevel", "FUZZBUCKET_LOG_LEVEL"),
         ("rootLogLevel", "FUZZBUCKET_ROOT_LOG_LEVEL"),
     ):

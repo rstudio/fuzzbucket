@@ -4,7 +4,7 @@ from botocore.exceptions import ClientError
 
 import fuzzbucket.cfg as cfg
 
-from . import get_ec2_client, list_vpc_boxes, utcnow
+from . import get_ec2_client, get_vpc_id, list_vpc_boxes, utcnow
 from .log import log
 
 DEFAULT_TTL = float(
@@ -15,13 +15,16 @@ DEFAULT_TTL = float(
 )
 
 
-def reap_boxes(
-    _, __, ec2_client=None, env: dict[str, str] | None = None
-) -> dict[str, list[str]]:
+def reap_boxes(_, __, ec2_client=None) -> dict[str, list[str]]:
     ec2_client = ec2_client if ec2_client is not None else get_ec2_client()
 
     reaped_instance_ids = []
-    for box in list_vpc_boxes(ec2_client, cfg.vpc_id(env)):
+    for box in list_vpc_boxes(
+        ec2_client,
+        get_vpc_id(
+            get_ec2_client(),
+        ),
+    ):
         if box.created_at is None:
             log.warning("skipping box without created_at")
             continue
