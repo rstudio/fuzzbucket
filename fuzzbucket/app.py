@@ -38,7 +38,9 @@ app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get("FUZZBUCKET_GITHUB_OAUTH_CLIENT_I
 app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
     "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
 )
-gh_storage = FlaskDanceStorage(table_name=cfg.get("FUZZBUCKET_USERS_TABLE_NAME"))
+gh_storage = FlaskDanceStorage(
+    table_name=f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-users"
+)
 app.config["gh_storage"] = gh_storage
 gh_blueprint = make_github_blueprint(
     scope="read:org,read:public_key",
@@ -252,7 +254,7 @@ def logout():
 
     log.debug(f"handling _logout for user={request.remote_user!r}")
 
-    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_USERS_TABLE_NAME"))
+    table = get_dynamodb().Table(f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-users")
     existing_user = table.get_item(Key=dict(user=request.remote_user))
 
     if existing_user.get("Item") in (None, {}):
@@ -291,7 +293,7 @@ def create_box():
     if not is_fully_authd():
         return auth_403_github()
 
-    log.debug(f"handling create_box for user={session['user']}")
+    log.debug(f"handling create_box for user={session['user']!r}")
 
     if not request.is_json:
         return jsonify(error="request is not json"), 400
@@ -334,7 +336,7 @@ def create_box():
         if key_material == "":
             return (
                 jsonify(
-                    error=f"could not fetch compatible public key for user={username}"
+                    error=f"could not fetch compatible public key for user={username!r}"
                 ),
                 400,
             )
@@ -343,7 +345,7 @@ def create_box():
             KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
         )
         resolved_key_name = username
-        log.debug(f"imported compatible public key for user={username}")
+        log.debug(f"imported compatible public key for user={username!r}")
 
     name = request.json.get("name")
     if str(name or "").strip() == "":
@@ -547,7 +549,9 @@ def list_image_aliases():
 
     log.debug(f"handling list_image_aliases for user={request.remote_user!r}")
 
-    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    table = get_dynamodb().Table(
+        f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-image-aliases"
+    )
 
     image_aliases = {}
     for item in table.scan().get("Items", []):
@@ -568,7 +572,9 @@ def create_image_alias():
 
     assert request.json is not None
 
-    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    table = get_dynamodb().Table(
+        f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-image-aliases"
+    )
     resp = table.put_item(
         Item=dict(
             user=request.remote_user,
@@ -597,7 +603,9 @@ def delete_image_alias(alias):
         f"handling delete_image_alias for user={request.remote_user!r} alias={alias!r}"
     )
 
-    table = get_dynamodb().Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+    table = get_dynamodb().Table(
+        f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-image-aliases"
+    )
 
     existing_alias = table.get_item(Key=dict(alias=alias))
     if existing_alias.get("Item") in (None, {}):
@@ -795,7 +803,7 @@ def _resolve_ami_alias(image_alias: str) -> NoneString:
     try:
         resp = (
             get_dynamodb()
-            .Table(cfg.get("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME"))
+            .Table(f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-image-aliases")
             .get_item(Key=dict(alias=image_alias))
         )
 
@@ -813,12 +821,12 @@ def _fetch_first_compatible_github_key(user: str) -> str:
             if _is_ec2_compatible_key(stripped_key):
                 return stripped_key
 
-        log.warning(f"no compatible ssh key could be found in github for user={user}")
+        log.warning(f"no compatible ssh key could be found in github for user={user!r}")
 
         return ""
     except Exception as exc:
         log.warning(
-            f"error while fetching first compatible github key for user={user} err={exc}"
+            f"error while fetching first compatible github key for user={user!r} err={exc}"
         )
 
         return ""

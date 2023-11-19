@@ -35,12 +35,13 @@ AnyDict = dict[str, typing.Any]
 @pytest.fixture(autouse=True)
 def resetti():
     os.environ.setdefault("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafaf")
+    os.environ.setdefault("FUZZBUCKET_STAGE", "test")
     fuzzbucket.get_dynamodb.cache_clear()
     fuzzbucket.get_ec2_client.cache_clear()
     fuzzbucket.app.app.testing = True
     fuzzbucket.app.app.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
     gh_storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(
-        table_name=os.getenv("FUZZBUCKET_USERS_TABLE_NAME")
+        table_name=f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     )
     fuzzbucket.app.app.config["gh_storage"] = gh_storage
     fuzzbucket.app.app.config["gh_blueprint"].storage = gh_storage
@@ -102,7 +103,7 @@ def pubkey() -> str:
 
 
 def setup_dynamodb_tables(dynamodb):
-    image_aliases_table = os.getenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME")
+    image_aliases_table = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-image-aliases"
     table = dynamodb.create_table(
         AttributeDefinitions=[dict(AttributeName="alias", AttributeType="S")],
         KeySchema=[dict(AttributeName="alias", KeyType="HASH")],
@@ -117,7 +118,7 @@ def setup_dynamodb_tables(dynamodb):
     }.items():
         table.put_item(Item=dict(user="pytest", alias=alias, ami=ami))
 
-    users_table = os.getenv("FUZZBUCKET_USERS_TABLE_NAME")
+    users_table = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     table = dynamodb.create_table(
         AttributeDefinitions=[dict(AttributeName="user", AttributeType="S")],
         KeySchema=[dict(AttributeName="user", KeyType="HASH")],
@@ -496,7 +497,7 @@ def test_login(monkeypatch):
     ],
 )
 @mock_dynamodb
-def test__logout(monkeypatch, authd, session_user, expected_status):
+def test_logout(monkeypatch, authd, session_user, expected_status):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
 
@@ -1436,8 +1437,7 @@ def test_delete_key(
     ],
 )
 def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
-    table_name = "just_imagine"
-    monkeypatch.setenv("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME", table_name)
+    monkeypatch.setenv("FUZZBUCKET_STAGE", "bogus")
 
     dynamodb = boto3.resource("dynamodb")
     monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
@@ -1673,7 +1673,7 @@ def test_flask_dance_storage(monkeypatch, user, token, raises, expected):
     monkeypatch.setattr(fuzzbucket.flask_dance_storage, "session", {"user": user})
 
     storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(
-        os.getenv("FUZZBUCKET_USERS_TABLE_NAME")
+        f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     )
     if raises:
         with pytest.raises(ValueError):

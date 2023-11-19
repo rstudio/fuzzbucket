@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -o errexit
+set -o pipefail
+
+main() {
+  local fuzzbucket_version
+  fuzzbucket_version="$(hatch version)"
+
+  (
+    printf 'tarball=dist/fuzzbucket_client-%s-py3-none-any.whl\n' \
+      "${fuzzbucket_version}"
+    printf 'tarball_basename=fuzzbucket_client-%s-py3-none-any.whl\n' \
+      "${fuzzbucket_version}"
+  ) | tee -a "${GITHUB_OUTPUT:-/dev/null}"
+}
+
+main "${@}"

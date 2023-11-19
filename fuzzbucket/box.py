@@ -85,7 +85,7 @@ class Box:
 
         key_alias = box.user
         if instance["KeyName"] != box.user:
-            key_alias = instance["KeyName"].replace(f"${box.user}-", "")
+            key_alias = instance["KeyName"].replace(f"{box.user}-", "")
 
         box.key_alias = key_alias
 

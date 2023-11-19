@@ -43,8 +43,10 @@ dependencies = [
   "pytest",
   "pytest-cover",
   "pytest-mypy",
+  "pyyaml",
   "sshpubkeys",
   "toml",
+  "types-pyyaml",
   "urllib3 <2",
   "werkzeug",  # lambda dependency
 ]
@@ -72,22 +74,10 @@ fmt = [
   "isort {root}",
   "black {root}"
 ]
-is-releasable = '''\
-python -c '
-import sys
-import re
-if re.match(r"^\d+\.\d+\.\d+$", sys.argv[1]) is not None:
-    print("releasable=true")
-else:
-    print("releasable=false")
-' "$(hatch version)"
-'''
-release-artifact = '''\
-FUZZBUCKET_VERSION="$(hatch version)"
-printf 'tarball=dist/fuzzbucket_client-%s-py3-none-any.whl\n' "$FUZZBUCKET_VERSION"
-printf 'tarball_basename=fuzzbucket_client-%s-py3-none-any.whl\n' "$FUZZBUCKET_VERSION"
-'''
+is-releasable = '{root}/scripts/is_releasable.py "$(hatch version)"'
+release-artifact = '{root}/scripts/release-artifact'
 serve-htmlcov = "cd ./htmlcov && python -m http.server"
+lint-config = '{root}/scripts/lint_config.py {args}'
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -116,7 +106,7 @@ exclude_lines = [
 
 [tool.isort]
 profile = "black"
-extend_skip = [".cache"]
+extend_skip = [".cache", ".serverless"]
 
 [tool.mypy]
 ignore_missing_imports = true

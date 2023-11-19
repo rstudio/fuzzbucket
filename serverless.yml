@@ -1,90 +1,33 @@
 service: fuzzbucket
 configValidationMode: warn
-variablesResolutionMode: 20210219
 useDotenv: true
-custom: ${file(${env:FUZZBUCKET_CUSTOM_${opt:stage, 'dev'}, 'default-custom.yml'})}
+
+custom:
+  fuzzbucket:
+
+  dynamodb:
+    start:
+      migrate: true
+
+    stages: [dev, prod, test]
+
+  pythonRequirements:
+    fileName: requirements-prod.txt
+    slim: true
+    layer: true
+
+  wsgi:
+    app: fuzzbucket.deferred_app
+    packRequirements: false
+
 provider:
   name: aws
   runtime: python3.11
-  memorySize: ${self:custom.memorySize, 128}
-  timeout: ${self:custom.timeout, 6}
-  region: ${self:custom.awsRegion, 'us-east-1'}
-  lambdaHashingVersion: "20201221"
-  apiGateway:
-    apiKeys: ${self:custom.apiKeys}
-  environment:
-    FUZZBUCKET_ALLOWED_GITHUB_ORGS: ${self:custom.allowedGithubOrgs, ''}
-    FUZZBUCKET_BRANDING: ${self:custom.branding, ''}
-    FUZZBUCKET_INCLUDE_CF_DEFAULTS: ${self:custom.includeCfDefaults, 'true'}
-    FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ${self:custom.defaultImageAlias, 'ubuntu22'}
-    FUZZBUCKET_DEFAULT_INSTANCE_TAGS: ${self:custom.defaultInstanceTags, ''}
-    FUZZBUCKET_DEFAULT_INSTANCE_TYPE: ${self:custom.defaultInstanceType, 't3.small'}
-    FUZZBUCKET_DEFAULT_PUBLIC_IP: ${self:custom.defaultPublicIp, 'false'}
-    FUZZBUCKET_DEFAULT_SECURITY_GROUPS: ${self:custom.defaultSecurityGroups, ''}
-    FUZZBUCKET_DEFAULT_SUBNET: ${self:custom.defaultSubnet, ''}
-    FUZZBUCKET_DEFAULT_TTL: ${self:custom.defaultTtl, '14400'}
-    FUZZBUCKET_DEFAULT_VPC: ${self:custom.defaultVpc, ''}
-    FUZZBUCKET_FLASK_SECRET_KEY: ${self:custom.flaskSecretKey, ''}
-    FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ${self:custom.oauth.clientID, ''}
-    FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ${self:custom.oauth.clientSecret, ''}
-    FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME: ${self:custom.imageAliasesTableName}
-    FUZZBUCKET_LOG_LEVEL: ${self:custom.logLevel, 'info'}
-    FUZZBUCKET_REGION: ${self:provider.region}
-    FUZZBUCKET_ROOT_LOG_LEVEL: ${self:custom.rootLogLevel, 'info'}
-    FUZZBUCKET_USERS_TABLE_NAME: ${self:custom.usersTableName}
-  iamRoleStatements:
-  - Effect: Allow
-    Action:
-    - ec2:AssociateIamInstanceProfile
-    - ec2:AttachVolume
-    - ec2:CreateTags
-    - ec2:DetachVolume
-    - ec2:DisassociateIamInstanceProfile
-    - ec2:GetConsoleScreenshot
-    - ec2:RebootInstances
-    - ec2:ReplaceIamInstanceProfileAssociation
-    - ec2:StartInstances
-    - ec2:StopInstances
-    - ec2:TerminateInstances
-    Resource:
-    - Fn::Join:
-      - ':'
-      - - arn:aws:ec2
-        - Ref: AWS::Region
-        - Ref: AWS::AccountId
-        - instance/*
-    - Fn::Join:
-      - ':'
-      - - arn:aws:ec2
-        - Ref: AWS::Region
-        - Ref: AWS::AccountId
-        - volume/*
-  - Effect: Allow
-    Action:
-    - ec2:CreateInstance
-    - ec2:CreateKeyPair
-    - ec2:DeleteKeyPair
-    - ec2:DescribeImages
-    - ec2:DescribeInstances
-    - ec2:DescribeKeyPairs
-    - ec2:ImportKeyPair
-    - ec2:RunInstances
-    Resource: '*'
-  - Effect: Allow
-    Action:
-    - dynamodb:Query
-    - dynamodb:Scan
-    - dynamodb:GetItem
-    - dynamodb:PutItem
-    - dynamodb:UpdateItem
-    - dynamodb:DeleteItem
-    Resource:
-    - Fn::GetAtt:
-      - ImageAliasesDynamoDBTable
-      - Arn
-    - Fn::GetAtt:
-      - UsersDynamoDBTable
-      - Arn
+  memorySize: 128
+  timeout: 30
+  environment: ${file(${env:FUZZBUCKET_CONFIG_${opt:stage, 'dev'}, 'default-config.yml'}):environment}
+  iamRoleStatements: ${file(${env:FUZZBUCKET_IAM_ROLE_STATEMENTS_${opt:stage, 'dev'}, 'default-iam-role-statements.yml'}):iamRoleStatements}
+
 package:
   # NOTE: use of deprecated include and exclude arrays *instead of
   # patterns* is needed for serverless-wsgi to (in|re)ject
@@ -98,182 +41,42 @@ package:
   # - "!./**/**"
   # - fuzzbucket/*.py
   # - fuzzbucket/templates/*.html
+
 plugins:
 - serverless-wsgi
 - serverless-dynamodb-local
 - serverless-python-requirements
 - serverless-resources-env
 - serverless-offline
-resources:
-  Resources:
-    VPC:
-      Type: AWS::EC2::VPC
-      Properties:
-        CidrBlock: ${self:custom.vpcCidrBlock, '172.98.0.0/18'}
-        EnableDnsSupport: true
-        EnableDnsHostnames: true
-        Tags: ${self:custom.vpcTags}
-    PublicSubnet:
-      Type: AWS::EC2::Subnet
-      Properties:
-        VpcId: !Ref VPC
-        AvailabilityZone: ${self:custom.publicSubnetAvailabilityZone, 'us-east-1a'}
-        CidrBlock: ${self:custom.publicSubnetCidrBlock, '172.98.0.0/19'}
-        MapPublicIpOnLaunch: true
-        Tags:
-        - Key: Name
-          Value: fuzzbucket-${opt:stage, 'dev'}-public
-    PublicRouteTable:
-      Type: AWS::EC2::RouteTable
-      Properties:
-        VpcId: !Ref VPC
-        Tags:
-        - Key: Name
-          Value: fuzzbucket-${opt:stage, 'dev'}-public
-    PublicRoute:
-      Type: AWS::EC2::Route
-      DependsOn:
-        - GatewayToInternet
-      Properties:
-        RouteTableId: !Ref PublicRouteTable
-        DestinationCidrBlock: 0.0.0.0/0
-        GatewayId: !Ref InternetGateway
-    PublicSubnetRouteTableAssociation:
-      Type: AWS::EC2::SubnetRouteTableAssociation
-      Properties:
-        SubnetId: !Ref PublicSubnet
-        RouteTableId: !Ref PublicRouteTable
-    InternetGateway:
-      Type: AWS::EC2::InternetGateway
-      Properties:
-        Tags:
-        - Key: Name
-          Value: fuzzbucket-${opt:stage, 'dev'}-ig
-    GatewayToInternet:
-      Type: AWS::EC2::VPCGatewayAttachment
-      Properties:
-        VpcId: !Ref VPC
-        InternetGatewayId: !Ref InternetGateway
-    S3Endpoint:
-      Type: AWS::EC2::VPCEndpoint
-      Properties:
-        RouteTableIds:
-        - !Ref PublicRouteTable
-        ServiceName:
-          Fn::Join:
-          - '.'
-          - - com.amazonaws
-            - Ref: AWS::Region
-            - s3
-        VpcId: !Ref VPC
-    FuzzbucketDefaultSecurityGroup:
-      Type: AWS::EC2::SecurityGroup
-      Properties:
-        GroupDescription: fuzzbucket default access
-        GroupName: fuzzbucket-${opt:stage, 'dev'}-default-sg
-        VpcId: !Ref VPC
-        SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          Description: allow all outgoing
-          FromPort: 0
-          IpProtocol: -1
-          ToPort: 65535
-        SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          Description: allow ssh incoming
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
-        - CidrIp: 0.0.0.0/0
-          Description: allow http incoming
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          Description: allow https incoming
-          FromPort: 443
-          IpProtocol: tcp
-          ToPort: 443
-        - CidrIp: 0.0.0.0/0
-          Description: allow alt http incoming
-          FromPort: 8080
-          IpProtocol: tcp
-          ToPort: 8080
-        - CidrIp: 0.0.0.0/0
-          Description: allow alt https incoming
-          FromPort: 8443
-          IpProtocol: tcp
-          ToPort: 8443
-        - CidrIp: 0.0.0.0/0
-          Description: allow vnc network traffic
-          FromPort: 5900
-          IpProtocol: tcp
-          ToPort: 5900
-        Tags:
-        - Key: Name
-          Value: fuzzbucket-${opt:stage, 'dev'}-default-sg
-    FuzzbucketConnectSecurityGroup:
-      Type: AWS::EC2::SecurityGroup
-      Properties:
-        GroupDescription: fuzzbucket connect access
-        GroupName: fuzzbucket-${opt:stage, 'dev'}-connect-sg
-        VpcId: !Ref VPC
-        SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          Description: allow connect http incoming
-          FromPort: 3939
-          IpProtocol: tcp
-          ToPort: 3939
-        - CidrIp: 0.0.0.0/0
-          Description: allow connect setup http incoming
-          FromPort: 13939
-          IpProtocol: tcp
-          ToPort: 13939
-        Tags:
-        - Key: Name
-          Value: fuzzbucket-${opt:stage, 'dev'}-connect-sg
-    ImageAliasesDynamoDBTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        AttributeDefinitions:
-        - { AttributeName: alias, AttributeType: S }
-        KeySchema:
-        - { AttributeName: alias, KeyType: HASH }
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
-        TableName: ${self:custom.imageAliasesTableName}
-    UsersDynamoDBTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        AttributeDefinitions:
-        - { AttributeName: user, AttributeType: S }
-        KeySchema:
-        - { AttributeName: user, KeyType: HASH }
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
-        TableName: ${self:custom.usersTableName}
+
+resources: ${file(${env:FUZZBUCKET_RESOURCES_${opt:stage, 'dev'}, 'default-resources.yml'}):resources}
+
 functions:
   api:
     handler: wsgi_handler.handler
+
     layers:
     - Ref: PythonRequirementsLambdaLayer
+
     custom:
       env-resources:
       - VPC
       - PublicSubnet
       - FuzzbucketDefaultSecurityGroup
       - FuzzbucketConnectSecurityGroup
+
     events:
     - http: { method: ANY, path: / }
     - http: { method: ANY, path: '{proxy+}' }
+
   reap:
     handler: fuzzbucket.deferred_reap_boxes
+
     layers:
     - Ref: PythonRequirementsLambdaLayer
+
     custom:
-      env-resources:
-      - VPC
+      env-resources: [VPC]
+
     events:
-    - schedule: ${self:custom.reapSchedule, 'rate(10 minutes)'}
+    - schedule: rate(10 minutes)
