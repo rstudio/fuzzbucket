@@ -10,8 +10,7 @@ def env_setup():
         ("FUZZBUCKET_FLASK_SECRET_KEY", "shhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"),
         ("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID", "abc123"),
         ("FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET", "xyz456"),
-        ("FUZZBUCKET_IMAGE_ALIASES_TABLE_NAME", "image-aliases"),
-        ("FUZZBUCKET_USERS_TABLE_NAME", "users"),
+        ("FUZZBUCKET_STAGE", "test"),
     ):
         os.environ.setdefault(key, value)
 

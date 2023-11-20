@@ -1,0 +1,83 @@
+environment:
+  # `FUZZBUCKET_ALLOWED_GITHUB_ORGS` is a space-delimited string of GitHub
+  # organizations, to at least one of which any authenticating user *must*
+  # belong.
+  FUZZBUCKET_ALLOWED_GITHUB_ORGS: ''
+
+  # `FUZZBUCKET_AUTO_SUBNET` is used at instance creation time and will
+  # automatically select the subnet from the set of subnets associated with the
+  # VPC. The subnet with the most available IP addresses will be selected, or a
+  # pseudo-random selection will be made.
+  FUZZBUCKET_AUTO_SUBNET: 'true'
+
+  # `FUZZBUCKET_BRANDING` is an arbitrary string which is used in the OAuth2
+  # flow to provide a hint of customization, reduce confusion, nice human
+  # things.
+  FUZZBUCKET_BRANDING: ''
+
+  # `FUZZBUCKET_DEFAULT_IMAGE_ALIAS` is the fallback value used server-side
+  # when creating instances that do not specify an image alias.
+  FUZZBUCKET_DEFAULT_IMAGE_ALIAS: ubuntu22
+
+  # `FUZZBUCKET_DEFAULT_INSTANCE_TAGS` will be added to every instance and is
+  # expected to be in the format `key:value,key:value` where keys and values
+  # may be URL-encoded such as "very%3Aserious:ok,hams:steamed"
+  FUZZBUCKET_DEFAULT_INSTANCE_TAGS: ''
+
+  # `FUZZBUCKET_DEFAULT_INSTANCE_TYPE` is the fallback value used server-side
+  # when creating instances that do not specify an instance type.
+  FUZZBUCKET_DEFAULT_INSTANCE_TYPE: t3.small
+
+  # `FUZZBUCKET_DEFAULT_PUBLIC_IP` is the value used server-side to determine
+  # if a public IP address should be associated when creating instances.
+  FUZZBUCKET_DEFAULT_PUBLIC_IP: 'false'
+
+  # `FUZZBUCKET_DEFAULT_SECURITY_GROUPS` is the comma-delimited value used
+  # server-side when creating instances. The default value is for the default
+  # security group defined as part of the fuzzbucket CloudFormation stack.
+  FUZZBUCKET_DEFAULT_SECURITY_GROUPS: fuzzbucket-${opt:stage, 'dev'}-default-sg
+
+  # `FUZZBUCKET_DEFAULT_SUBNETS` is the comma-delimited value used server-side
+  # when creating instances. The default value is the public subnet of the VPC
+  # resource created as part of the fuzzbucket CloudFormation stack. This option
+  # will act as a fallback when `FUZZBUCKET_AUTO_SUBNET` is `true` and no
+  # candidate subnets are found in the target VPC.
+  FUZZBUCKET_DEFAULT_SUBNETS: fuzzbucket-${opt:stage, 'dev'}-public
+
+  # `FUZZBUCKET_DEFAULT_TTL` is the fallback value *in seconds* that is used
+  # server-side when creating instances that do not specify a TTL.
+  FUZZBUCKET_DEFAULT_TTL: '14400'
+
+  # `FUZZBUCKET_DEFAULT_VPC` is the value used server-side when creating
+  # instances. The default value is the VPC resource created as part of the
+  # fuzzbucket CloudFormation stack. This value is *not* equivalent to the EC2
+  # concept of a "default VPC" and should be explicitly defined.
+  FUZZBUCKET_DEFAULT_VPC: fuzzbucket-${opt:stage, 'dev'}-vpc
+
+  # `FUZZBUCKET_FLASK_SECRET_KEY` is set as the Flask app's `secret_key`
+  # attribute for session security.
+  FUZZBUCKET_FLASK_SECRET_KEY: ''
+
+  # `FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID` and
+  # `FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET` must be set to the values provided
+  # upon registering your GitHub OAuth2 app specific to your deployment of
+  # Fuzzbucket.
+  # See: https://developer.github.com/v3/guides/basics-of-authentication/#registering-your-app
+  FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ''
+  FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ''
+
+  # `FUZZBUCKET_LOG_LEVEL` is used in the server-side logger specific to
+  # fuzzbucket.
+  FUZZBUCKET_LOG_LEVEL: info
+
+  # `FUZZBUCKET_REGION` is the target deployment region and should match the
+  # region of the AWS auth session.
+  FUZZBUCKET_REGION: ${env:AWS_REGION, ${env:AWS_DEFAULT_REGION, 'us-east-1'}}
+
+  # `FUZZBUCKET_ROOT_LOG_LEVEL` is used in the server-side root logger from
+  # which all standard library loggers descend.
+  FUZZBUCKET_ROOT_LOG_LEVEL: info
+
+  # `FUZZBUCKET_STAGE` is the value of the serverless deploy stage and is used
+  # to construct values such as dynamodb table names.
+  FUZZBUCKET_STAGE: ${opt:stage, 'dev'}

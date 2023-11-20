@@ -93,20 +93,92 @@ additional resources defined in the [serverless config](./serverless.yml).
 
 ### prerequisites
 
-Defining a custom YAML file for use by `serverless.yml`, e.g.:
+Define a YAML config file and environment variable to use it via
+`serverless.yml`, e.g.:
 
 ```bash
-cp -v ./default-custom.yml ./custom-path.yml
+cp -v ./default-config.yml ./my-config.yml
 
-# edit ./custom-path.yml
+# edit ./my-config.yml
 
-export FUZZBUCKET_CUSTOM_prod='custom-path.yml'
+export FUZZBUCKET_CONFIG_prod='my-config.yml'
 ```
 
-See [`./default-custom.yml`](./default-custom.yml) for comments about the
-structure and meaning of the file.
+The copied content of [`./default-config.yml`](./default-config.yml) contains
+comments about the structure and meaning of the file.
 
-### cycle
+> **NOTE**: Existing deployments may be using a config format and environment
+> variable of the form that uses the word "custom", e.g.
+> `FUZZBUCKET_CUSTOM_prod=custom-mine.yml`. This format is no longer supported and must be
+> migrated to the new format via the `lint-config` script:
+>
+> ```bash
+> hatch run lint-config ./custom-mine.yml >my-config.yml
+>
+> # edit ./my-config.yml
+>
+> export FUZZBUCKET_CONFIG_prod='my-config.yml'
+> ```
+
+#### optional IAM role customization
+
+If the IAM role used by the lambda functions requires customization, this may be
+done by defining a YAML file and environment variable, e.g.:
+
+```bash
+cp -v ./default-iam-role-statements.yml ./my-iam-role-statements.yml
+
+# edit ./my-iam-role-statements.yml
+
+export FUZZBUCKET_IAM_ROLE_STATEMENTS_prod='my-iam-role-statements.yml'
+```
+
+#### optional CloudFormation resource customization
+
+If the CloudFormation resources managed via `serverless.yml` require
+customization, this may be done by defining a YAML file and environment
+variable, e.g.:
+
+```bash
+cp -v ./default-resources.yml ./my-resources.yml
+
+# edit ./my-resources.yml
+
+export FUZZBUCKET_RESOURCES_prod='my-resources.yml'
+```
+
+#### combined config and customizations
+
+As each of the config and customization files is merged via a distinct top-level
+key, they may all be combined and managed as a single file, e.g.:
+
+```bash
+cat \
+  ./my-config.yml \
+  <(echo) \
+  ./my-iam-role-statements.yml \
+  <(echo) \
+  ./my-resources.yml | tee ./combo-config.yml
+
+# edit ./combo-config.yml
+
+export FUZZBUCKET_CONFIG_prod='combo-config.yml'
+export FUZZBUCKET_RESOURCES_prod='combo-config.yml'
+export FUZZBUCKET_IAM_ROLE_STATEMENTS_prod='combo-config.yml'
+```
+
+### management lifecycle
+
+Prior to deployment, one's config file should be checked via the `lint-config`
+script:
+
+```bash
+# output a diff, if any:
+hatch run lint-config --diff ./path-to-config.yml
+
+# write back the complete config to the same path:
+hatch run lint-config --write ./path-to-config.yml
+```
 
 The `just deploy` target will run the necessary `serverless` command to create
 the whole shebang.
@@ -122,8 +194,7 @@ just deploy prod us-west-2
 ```
 
 These commands are expected to be re-run as needed, such as after modifying the
-custom YAML described in the prerequisites section above.
-
+YAML config described in the prerequisites section above.
 
 ## changelog
 

@@ -1010,7 +1010,7 @@ def test_client_ssh(monkeypatch):
         assert file == "ssh"
         assert args == [
             "ssh",
-            "ethereal-plane.example.org",
+            "i-dadb0dcafebaba",
             "-o",
             "ProxyCommand=sh -c 'aws ssm start-session --target i-dadb0dcafebaba "
             + "--region mp-south-2 --document-name AWS-StartSSHSession "

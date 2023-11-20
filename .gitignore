@@ -32,4 +32,11 @@ serverless_wsgi.py
 var/
 wsgi_handler.py
 
+*-config.yml
+!default-config.yml
+*-resources.yml
+!default-resources.yml
+*-iam-role-statements.yml
+!default-iam-role-statements.yml
+
 !.example.env

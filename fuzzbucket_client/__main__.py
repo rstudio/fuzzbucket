@@ -831,26 +831,34 @@ class Client:
     @_command
     def update(self, known_args, _):
         matching_boxes = self._find_boxes(known_args.box_match)
+
         if matching_boxes is None:
             log.error(f"no boxes found matching {known_args.box_match!r}")
             return False
+
         payload = {}
+
         if known_args.ttl:
             if known_args.ttl.total_seconds() < MIN_TTL.total_seconds():
                 log.error(f"ttl={known_args.ttl!r} is below the minimum of {MIN_TTL}")
                 return False
+
             if known_args.ttl.total_seconds() > MAX_TTL.total_seconds():
                 log.error(f"ttl={known_args.ttl!r} is above the maximum of {MAX_TTL}")
                 return False
+
         if known_args.instance_tags:
             payload["instance_tags"] = _instance_tags_from_string(
                 known_args.instance_tags
             )
+
         if len(payload) == 0 and known_args.ttl is None:
             log.error(f"no updates specified for {known_args.box_match!r}")
             return False
+
         for matching_box in matching_boxes:
             box_payload = payload.copy()
+
             if known_args.ttl:
                 box_age = parse_timedelta(matching_box["age"])
                 box_payload["ttl"] = str(
@@ -860,16 +868,20 @@ class Client:
                     f"setting ttl={box_payload['ttl']!r} for "
                     + f"matching_box={matching_box!r}"
                 )
+
             req = self._build_request(
                 _pjoin(self._url, "box", matching_box["instance_id"]),
                 data=json.dumps(box_payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"},
                 method="PUT",
             )
+
             with self._urlopen(req) as response:
                 _ = response.read()
+
             log.info(f"updated box for user={self._user!r} name={matching_box['name']}")
             print(self._format_boxes([matching_box]), end="")
+
         return True
 
     @_command
@@ -907,13 +919,15 @@ class Client:
 
     @_command
     def ssh(self, known_args, unknown_args):
-        matching_box, ok = self._resolve_sshable_box(known_args.box)
+        matching_box, ok = self._resolve_sshable_box(known_args.box, known_args.ssm)
         if not ok:
             return False
         assert matching_box is not None
-        ssh_command = self._build_ssh_command(
+        ssh_command, ok = self._build_ssh_command(
             matching_box, known_args.ssm, unknown_args
         )
+        if not ok:
+            return False
         if not known_args.quiet:
             log.info(
                 f"sshing into matching_box={matching_box['name']!r} "
@@ -927,7 +941,7 @@ class Client:
 
     @_command
     def scp(self, known_args, unknown_args):
-        matching_box, ok = self._resolve_sshable_box(known_args.box)
+        matching_box, ok = self._resolve_sshable_box(known_args.box, known_args.ssm)
         if not ok:
             return False
         assert matching_box is not None
@@ -1250,19 +1264,21 @@ class Client:
         req.headers["Fuzzbucket-Secret"] = self._secret
         return req
 
-    def _resolve_sshable_box(self, box_name: str) -> tuple[typing.Optional[Box], bool]:
+    def _resolve_sshable_box(
+        self, box_name: str, ssm: bool
+    ) -> tuple[typing.Optional[Box], bool]:
         matching_box = self._find_box(box_name)
         if matching_box is None:
             log.error(f"no box found matching {box_name!r}")
             return None, False
-        if matching_box.get("public_dns_name") is None:
+        if not ssm and matching_box.get("public_dns_name") is None:
             log.error(f"no public dns name found for box={matching_box['name']}")
             return None, False
         return matching_box, True
 
     def _build_ssh_command(
         self, box: Box, ssm: bool, unknown_args: list[str]
-    ) -> list[str]:
+    ) -> tuple[list[str], bool]:
         if "-l" not in unknown_args:
             unknown_args = [
                 "-l",
@@ -1271,14 +1287,23 @@ class Client:
                     self.default_ssh_user,
                 ),
             ] + unknown_args
-        return typing.cast(
-            list[str],
-            ["ssh", box.get("public_dns_name")]
-            + self._with_ssh_opts(
-                box,
-                ssm,
-                unknown_args,
+        hostname = box.get("instance_id") if ssm else box.get("public_dns_name")
+        if hostname is None:
+            log.error(
+                f"ssm not in use and no public dns name found for box={box['name']}"
+            )
+            return [], False
+        return (
+            typing.cast(
+                list[str],
+                ["ssh", hostname]
+                + self._with_ssh_opts(
+                    box,
+                    ssm,
+                    unknown_args,
+                ),
             ),
+            True,
         )
 
     def _build_scp_command(

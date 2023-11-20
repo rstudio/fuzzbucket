@@ -29,23 +29,26 @@ version-file = "fuzzbucket/__version__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
-  "Flask",
-  "Flask-Dance",
   "black",
   "boto3",
   "boto3-stubs",
   "botocore-stubs",
   "coverage",
+  "flask",  # lambda dependency
+  "flask-dance",  # lambda dependency
   "ipython",
+  "isort",
   "moto[ec2,dynamodb]",
   "mypy",
   "pytest",
   "pytest-cover",
   "pytest-mypy",
+  "pyyaml",
   "sshpubkeys",
   "toml",
+  "types-pyyaml",
   "urllib3 <2",
-  "werkzeug"
+  "werkzeug",  # lambda dependency
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -62,27 +65,19 @@ rm -rf \
   ./htmlcov
 """
 lint = [
+  "isort --check --diff {root}",
   "black --check --diff {root}",
   "pytest -m mypy --no-cov"
 ]
 test = "pytest --cov-fail-under=95"
-fmt = "black {root}"
-is-releasable = '''\
-python -c '
-import sys
-import re
-if re.match(r"^\d+\.\d+\.\d+$", sys.argv[1]) is not None:
-    print("releasable=true")
-else:
-    print("releasable=false")
-' "$(hatch version)"
-'''
-release-artifact = '''\
-FUZZBUCKET_VERSION="$(hatch version)"
-printf 'tarball=dist/fuzzbucket_client-%s-py3-none-any.whl\n' "$FUZZBUCKET_VERSION"
-printf 'tarball_basename=fuzzbucket_client-%s-py3-none-any.whl\n' "$FUZZBUCKET_VERSION"
-'''
+fmt = [
+  "isort {root}",
+  "black {root}"
+]
+is-releasable = '{root}/scripts/is_releasable.py "$(hatch version)"'
+release-artifact = '{root}/scripts/release-artifact'
 serve-htmlcov = "cd ./htmlcov && python -m http.server"
+lint-config = '{root}/scripts/lint_config.py {args}'
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -108,6 +103,10 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
+
+[tool.isort]
+profile = "black"
+extend_skip = [".cache", ".serverless"]
 
 [tool.mypy]
 ignore_missing_imports = true
