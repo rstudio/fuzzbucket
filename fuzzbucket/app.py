@@ -825,7 +825,7 @@ def _find_subnet() -> str | None:
 
     candidate_subnets.sort(key=lambda s: s["AvailableIpAddressCount"])
 
-    return _resolve_subnet(candidate_subnets[-1]["SubnetId"])
+    return candidate_subnets[-1]["SubnetId"]
 
 
 def _find_matching_ec2_key_pair(user: str) -> typing.Optional[dict]:

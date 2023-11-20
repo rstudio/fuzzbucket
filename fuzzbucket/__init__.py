@@ -14,15 +14,25 @@ from .tags import Tags
 def deferred_app(
     environ: dict[str, str], start_response: typing.Callable
 ) -> typing.Iterable[str]:
+    preflight_check()
+
     from .app import app
 
     return app(environ, start_response)
 
 
 def deferred_reap_boxes(event, context):
+    preflight_check()
+
     from .reaper import reap_boxes
 
     return reap_boxes(event, context)
+
+
+def preflight_check():
+    assert (
+        get_vpc_id(get_ec2_client()) is not None
+    ), "Missing or invalid `FUZZBUCKET_DEFAULT_VPC`"
 
 
 @functools.cache
@@ -71,7 +81,7 @@ class AsJSONProvider(DefaultJSONProvider):
 
 
 @functools.cache
-def get_vpc_id(ec2_client) -> str:
+def get_vpc_id(ec2_client) -> str | None:
     value = cfg.vpc_id()
 
     if value.startswith("vpc-"):
@@ -84,7 +94,7 @@ def get_vpc_id(ec2_client) -> str:
     ).get("Vpcs", [])
 
     if len(candidate_vpcs) == 0:
-        return value
+        return None
 
     return candidate_vpcs[0]["VpcId"]
 

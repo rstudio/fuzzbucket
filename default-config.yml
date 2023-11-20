@@ -49,7 +49,7 @@ environment:
   FUZZBUCKET_DEFAULT_TTL: '14400'
 
   # `FUZZBUCKET_DEFAULT_VPC` is the value used server-side when creating
-  # instances. The defauult value is the VPC resource created as part of the
+  # instances. The default value is the VPC resource created as part of the
   # fuzzbucket CloudFormation stack. This value is *not* equivalent to the EC2
   # concept of a "default VPC" and should be explicitly defined.
   FUZZBUCKET_DEFAULT_VPC: fuzzbucket-${opt:stage, 'dev'}-vpc

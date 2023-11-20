@@ -15,7 +15,7 @@ resources:
       Properties:
         VpcId: !Ref VPC
         AvailabilityZone: ${aws:region, 'us-east-1'}a
-        CidrBlock: 172.98.0.0/19
+        CidrBlock: 172.98.0.0/18
         MapPublicIpOnLaunch: true
         Tags:
         - Key: Name
@@ -85,12 +85,6 @@ resources:
 
         SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
-          Description: allow ssh incoming
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
-
-        - CidrIp: 0.0.0.0/0
           Description: allow http incoming
           FromPort: 80
           IpProtocol: tcp
@@ -114,11 +108,24 @@ resources:
           IpProtocol: tcp
           ToPort: 8443
 
-        - CidrIp: 0.0.0.0/0
-          Description: allow vnc network traffic
-          FromPort: 5900
-          IpProtocol: tcp
-          ToPort: 5900
+        # NOTE: Allowing SSH or VNC directly on a public IP address is generally
+        # asking for trouble, which is why it is not allowed by default
+        # (anymore). If this behavior is required, a separate "resources" file
+        # must be supplied via the `FUZZBUCKET_RESOURCES_{stage}` environment
+        # variable to include one or both of these ingress rules
+        # (See [./README.md](./README.md#optional-cloudformation-resource-customization)).
+        #
+        # - CidrIp: 0.0.0.0/0
+        #   Description: allow ssh incoming
+        #   FromPort: 22
+        #   IpProtocol: tcp
+        #   ToPort: 22
+        #
+        # - CidrIp: 0.0.0.0/0
+        #   Description: allow vnc network traffic
+        #   FromPort: 5900
+        #   IpProtocol: tcp
+        #   ToPort: 5900
 
         Tags:
         - Key: Name
