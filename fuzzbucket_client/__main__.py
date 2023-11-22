@@ -36,6 +36,7 @@ import urllib.request
 import webbrowser
 
 from fuzzbucket_client.__version__ import version as __version__
+from fuzzbucket_client.datetime_ext import parse_timedelta
 
 MIN_TTL = datetime.timedelta(minutes=10)
 MAX_TTL = datetime.timedelta(weeks=12)
@@ -89,78 +90,6 @@ def _env_creds_log(msg: str):  # pragma: no cover
     log.debug(msg)
 
 
-def _reverse_map_float(el: tuple[str, str]) -> tuple[str, float]:
-    return (el[1].rstrip("s")) + "s", float(el[0])
-
-
-def _timedelta_kwargs_from_pairs(pairs: list[str]) -> dict[str, float]:
-    as_iter = iter(pairs)
-    return dict(map(_reverse_map_float, list(zip(as_iter, as_iter))))
-
-
-def _timedelta_kwargs_from_sexagesimal(
-    sexagesimal_string: str,
-) -> dict[str, float]:
-    return dict(
-        map(
-            _reverse_map_float,
-            list(
-                zip(
-                    reversed(
-                        [p.strip() for p in sexagesimal_string.strip().split(":")]
-                    ),
-                    ["seconds", "minutes", "hours"],
-                )
-            ),
-        )
-    )
-
-
-def parse_timedelta(as_string: str) -> datetime.timedelta:
-    pairs = as_string.strip().lower().replace(",", "").split()
-    sexagesimal_part = None
-
-    if len(pairs) == 1:
-        if ":" in pairs[0]:
-            sexagesimal_part = pairs[0]
-        else:
-            return datetime.timedelta(seconds=float(pairs[0]))
-
-    elif len(pairs) % 2 != 0:
-        if ":" in pairs[-1]:
-            sexagesimal_part = pairs[-1]
-        else:
-            raise ValueError(
-                f"timedelta string {as_string!r} is not in an understandable format"
-            )
-
-    kwargs = _timedelta_kwargs_from_pairs(pairs)
-    if sexagesimal_part is not None:
-        kwargs.update(_timedelta_kwargs_from_sexagesimal(sexagesimal_part))
-
-    unknown_keys = set(kwargs.keys()).difference(
-        set(
-            [
-                "days",
-                "hours",
-                "minutes",
-                "seconds",
-                "weeks",
-            ]
-        )
-    )
-    if len(unknown_keys) > 0:
-        raise ValueError(f"unknown timedelta keys {unknown_keys!r}")
-
-    return datetime.timedelta(
-        days=kwargs.get("days", 0),
-        hours=kwargs.get("hours", 0),
-        minutes=kwargs.get("minutes", 0),
-        seconds=kwargs.get("seconds", 0),
-        weeks=kwargs.get("weeks", 0),
-    )
-
-
 def _instance_tags_from_string(input_string: str) -> dict[str, str]:
     instance_tags = {}
     for pair in filter(
@@ -186,7 +115,7 @@ def _normalize_known_args(known_args: argparse.Namespace) -> argparse.Namespace:
         lower_username = username.lower()
         if lower_username != username:
             log.warning(
-                "mixed-case and upper-case GitHub usernames are known to contribute to"
+                "mixed-case and upper-case usernames are known to contribute to"
                 + "weirdness; the lower-case string will be used instead "
                 + f"(username={username!r}"
             )
@@ -243,9 +172,9 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
 
     parser_login = subparsers.add_parser(
-        "login", help="login via GitHub", formatter_class=CustomHelpFormatter
+        "login", help="login via auth provider", formatter_class=CustomHelpFormatter
     )
-    parser_login.add_argument("user", help="GitHub username")
+    parser_login.add_argument("user", help="username/email used with auth provider")
     parser_login.add_argument(
         "-n",
         "--name",
@@ -255,7 +184,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_login.set_defaults(func=client.login)
     parser_login.epilog = textwrap.dedent(
         """
-        NOTE: Use the exact letter casing expected by GitHub to
+        NOTE: Use the exact letter casing expected by the auth provider to
         avoid weirdness.
         """
     )
@@ -269,7 +198,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_create = subparsers.add_parser(
         "create",
-        aliases=["new"],
+        aliases=["c", "new"],
         help="create a box",
         description="\n\n".join(["Create a box.", TTL_HELP]),
         formatter_class=CustomHelpFormatter,
@@ -316,7 +245,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_list = subparsers.add_parser(
         "ls",
-        aliases=["list"],
+        aliases=["l", "list"],
         help="list your boxes",
         formatter_class=CustomHelpFormatter,
     )
@@ -324,7 +253,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_update = subparsers.add_parser(
         "update",
-        aliases=["up"],
+        aliases=["u", "up"],
         help="update matching boxes",
         description="\n\n".join(["Update matching boxes.", TTL_HELP]),
         formatter_class=CustomHelpFormatter,
@@ -348,7 +277,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_delete = subparsers.add_parser(
         "delete",
-        aliases=["rm"],
+        aliases=["d", "del", "rm", "remove"],
         help="delete matching boxes",
         formatter_class=CustomHelpFormatter,
     )
@@ -448,6 +377,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_create_alias = subparsers.add_parser(
         "create-alias",
+        aliases=["ca"],
         help="create an image alias",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -465,6 +395,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_delete_alias = subparsers.add_parser(
         "delete-alias",
+        aliases=["da"],
         help="delete an image alias",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -473,6 +404,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_get_key = subparsers.add_parser(
         "get-key",
+        aliases=["gk"],
         help="get an ssh public key id and fingerprint as stored in EC2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -487,6 +419,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_set_key = subparsers.add_parser(
         "set-key",
+        aliases=["sk"],
         help="set the local default key alias to use when creating boxes",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -501,6 +434,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_list_keys = subparsers.add_parser(
         "list-keys",
+        aliases=["lk"],
         help="list ssh public keys stored in EC2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -508,6 +442,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_add_key = subparsers.add_parser(
         "add-key",
+        aliases=["ak"],
         help="add an ssh public key to EC2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -529,6 +464,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
     parser_delete_key = subparsers.add_parser(
         "delete-key",
+        aliases=["dk"],
         help="delete an ssh public key stored in EC2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -565,20 +501,20 @@ def _print_auth_hint():
     print(
         textwrap.dedent(
             """
-        Please run the following command with your GitHub username
+        Please run the following command with your username/email
         to grant access to Fuzzbucket:
 
-            fuzzbucket-client login {github-username}
+            fuzzbucket-client login {username/email}
 
         If you believe you are already logged in, there is a chance
         that you logged in with different letter casing than what
-        GitHub expects. Please double check the letter casing of
-        your username and then retry login after removing your
-        existing login data:
+        the auth provider expects. Please double check the letter
+        casing of your username and then retry login after removing
+        your existing login data:
 
             fuzzbucket-client logout
 
-            fuzzbucket-client login {github-username}
+            fuzzbucket-client login {username/email}
         """
         )
     )

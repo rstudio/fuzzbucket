@@ -1,9 +1,12 @@
 import functools
 import json
 import random
+import secrets
 import typing
 import urllib.parse
+import warnings
 
+import flask_dance
 from botocore.exceptions import ClientError
 from flask import (
     Flask,
@@ -15,7 +18,7 @@ from flask import (
     session,
     url_for,
 )
-from flask_dance.contrib.github import github, make_github_blueprint
+from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from werkzeug.exceptions import InternalServerError
 
 import fuzzbucket.cfg as cfg
@@ -30,28 +33,10 @@ from . import (
 )
 from .__version__ import __version__
 from .box import Box
+from .datetime_ext import parse_timedelta
 from .flask_dance_storage import FlaskDanceStorage
 from .log import log
 from .tags import Tags
-
-app = Flask(__name__)
-app.secret_key = cfg.get("FUZZBUCKET_FLASK_SECRET_KEY")
-app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID")
-app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
-    "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
-)
-gh_storage = FlaskDanceStorage(
-    table_name=f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-users"
-)
-app.config["gh_storage"] = gh_storage
-gh_blueprint = make_github_blueprint(
-    scope="read:org,read:public_key",
-    redirect_to="auth_complete",
-    storage=gh_storage,
-)
-app.config["gh_blueprint"] = gh_blueprint
-app.register_blueprint(gh_blueprint, url_prefix="/login")
-app.json = AsJSONProvider(app)
 
 DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
     ("server", f"fuzzbucket/{__version__}"),
@@ -71,7 +56,74 @@ DEFAULT_INSTANCE_TAGS: tuple[dict[str, str], ...] = tuple(
         ]
     ]
 )
-ALLOWED_ORGS: tuple[str, ...] = tuple(cfg.getlist("FUZZBUCKET_ALLOWED_GITHUB_ORGS"))
+ALLOWED_GITHUB_ORGS: tuple[str, ...] = ()
+AUTH_PROVIDER: str = typing.cast(
+    str, cfg.get("FUZZBUCKET_AUTH_PROVIDER", default="github-oauth")
+)
+BRANDING: str = typing.cast(str, cfg.get("FUZZBUCKET_BRANDING"))
+OAUTH_MAX_AGE: float = 86400.0
+UNKNOWN_AUTH_PROVIDER: ValueError = ValueError(
+    f"unknown auth provider {AUTH_PROVIDER!r}"
+)
+
+app = Flask(__name__)
+app.secret_key = cfg.get("FUZZBUCKET_FLASK_SECRET_KEY")
+app.json = AsJSONProvider(app)
+
+session_storage = FlaskDanceStorage(
+    table_name=f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-users"
+)
+app.config["session_storage"] = session_storage
+
+github: typing.Any = None
+oauth_blueprint: typing.Optional["flask_dance.consumer.OAuth2ConsumerBlueprint"] = None
+
+if AUTH_PROVIDER == "github-oauth":
+    from flask_dance.contrib.github import github, make_github_blueprint  # type: ignore
+
+    app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID")
+    app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
+        "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
+    )
+    gh_blueprint = make_github_blueprint(
+        scope=["read:org", "read:public_key"],
+        redirect_to="github_auth_complete",
+        storage=session_storage,
+    )
+    app.config["gh_blueprint"] = gh_blueprint
+    app.register_blueprint(gh_blueprint, url_prefix="/login")
+
+    ALLOWED_GITHUB_ORGS = tuple(cfg.getlist("FUZZBUCKET_ALLOWED_GITHUB_ORGS"))
+
+elif AUTH_PROVIDER == "oauth":
+    from flask_dance.consumer import OAuth2ConsumerBlueprint
+
+    OAUTH_MAX_AGE = parse_timedelta(
+        typing.cast(
+            str,
+            cfg.get("FUZZBUCKET_OAUTH_MAX_AGE", default="1 day"),
+        )
+    ).total_seconds()
+
+    oauth_blueprint = OAuth2ConsumerBlueprint(
+        "oauth",
+        __name__,
+        base_url=cfg.get("FUZZBUCKET_OAUTH_BASE_URL"),
+        client_id=cfg.get("FUZZBUCKET_OAUTH_CLIENT_ID"),
+        client_secret=cfg.get("FUZZBUCKET_OAUTH_CLIENT_SECRET"),
+        authorization_url=cfg.get("FUZZBUCKET_OAUTH_AUTH_URL"),
+        authorization_url_params={"max_age": int(OAUTH_MAX_AGE)},
+        auto_refresh_url=cfg.get("FUZZBUCKET_OAUTH_TOKEN_URL"),
+        token_url=cfg.get("FUZZBUCKET_OAUTH_TOKEN_URL"),
+        redirect_to="oauth_complete",
+        scope=list(cfg.getlist("FUZZBUCKET_OAUTH_SCOPE")),
+        storage=session_storage,
+    )
+    app.config["oauth_blueprint"] = oauth_blueprint
+    app.register_blueprint(oauth_blueprint, url_prefix="/login")
+
+else:
+    warnings.warn(f"unknown auth provider {AUTH_PROVIDER!r}")
 
 
 @app.errorhandler(InternalServerError)
@@ -90,11 +142,28 @@ def handle_500(exc):
     return (
         render_template(
             "error.html",
-            branding=cfg.get("FUZZBUCKET_BRANDING"),
+            branding=BRANDING,
             error=f"NOPE={exc}",
         ),
         500,
     )
+
+
+def nullify_auth():
+    log.debug(f"nullifying auth for user={session.get('user')!r}")
+
+    if AUTH_PROVIDER == "github-oauth":
+        assert github is not None
+        github.token = None
+
+    elif AUTH_PROVIDER == "oauth":
+        assert oauth_blueprint is not None
+        oauth_blueprint.token = None
+
+    else:
+        raise UNKNOWN_AUTH_PROVIDER
+
+    del session["user"]
 
 
 @app.before_request
@@ -110,6 +179,7 @@ def set_user():
 
     if session.get("user") is not None:
         lower_user = str(session["user"]).lower()
+
         if session["user"] != lower_user:
             session["user"] = lower_user
             log.debug(
@@ -119,29 +189,79 @@ def set_user():
     log.debug(f"setting remote_user from user={session['user']!r} source={source!r}")
     request.environ["REMOTE_USER"] = session["user"]
 
-    if not github.authorized:
-        log.debug("not currently github authorized; assuming login flow")
-        return
+    if AUTH_PROVIDER == "github-oauth":
+        assert github is not None
 
-    user_response = github.get("/user").json()
-    github_login = user_response.get("login")
+        if not github.authorized:
+            log.debug("not currently github authorized; assuming login flow")
 
-    if github_login is None:
-        log.warning(f"no login available in github user response={user_response!r}")
-        github.token = None
-        del session["user"]
-        return
+            return
 
-    if str(github_login).lower() == str(session["user"]).lower():
-        log.debug(
-            f"github login={github_login!r} case-insensitive matches session"
-            f" user={session['user']!r}"
+        user_response = github.get("/user").json()
+        github_login = user_response.get("login")
+
+        if github_login is None:
+            log.warning(f"no login available in github user response={user_response!r}")
+
+            nullify_auth()
+
+            return
+
+        if str(github_login).lower() == str(session["user"]).lower():
+            log.debug(
+                f"github login={github_login!r} case-insensitive matches session"
+                f" user={session['user']!r}"
+            )
+            return
+
+        log.warning(
+            f"mismatched github_login={github_login!r} user={session['user']!r}"
         )
-        return
+        nullify_auth()
 
-    log.warning(f"mismatched github_login={github_login!r} user={session['user']!r}")
-    github.token = None
-    del session["user"]
+    elif AUTH_PROVIDER == "oauth":
+        assert oauth_blueprint is not None
+
+        if not oauth_blueprint.authorized or not oauth_blueprint.session.authorized:
+            log.debug("not currently authorized; assuming login flow")
+
+            return
+
+        assert oauth_blueprint.session is not None
+
+        userinfo_response = _fetch_oauth_userinfo(oauth_blueprint.session)
+        if userinfo_response is None:
+            nullify_auth()
+
+            return
+
+        log.debug(f"fetched userinfo={userinfo_response!r}")
+
+        user_email = userinfo_response.get("email")
+        if user_email is None:
+            log.warning(
+                f"no login available in oauth userinfo response={userinfo_response!r}"
+            )
+
+            nullify_auth()
+            return
+
+        if str(user_email).lower() == str(session["user"]).lower():
+            log.debug(
+                f"oauth login={user_email!r} case-insensitive matches session "
+                + f"user={session['user']!r}"
+            )
+            return
+
+        log.warning(
+            f"mismatched user_email={user_email!r} user={session['user']!r}; "
+            + "wiping session user and token"
+        )
+
+        nullify_auth()
+
+    else:
+        raise UNKNOWN_AUTH_PROVIDER
 
 
 @app.after_request
@@ -153,52 +273,90 @@ def set_default_headers(resp: Response) -> Response:
 
 
 def is_fully_authd():
-    if not github.authorized:
-        log.debug(f"github context not authorized for user={session['user']!r}")
-        return False
+    if AUTH_PROVIDER == "github-oauth":
+        assert github is not None
 
-    session_user_lower = str(session["user"]).lower()
-    github_login_lower = str(github.get("/user").json()["login"]).lower()
+        if not github.authorized:
+            log.debug(f"github context not authorized for user={session['user']!r}")
 
-    if session_user_lower != github_login_lower:
-        log.debug(
-            f"session user={session_user_lower!r} does not match github"
-            f" login={github_login_lower}"
-        )
-        return False
+            return False
+
+        session_user_lower = str(session["user"]).lower()
+        github_login_lower = str(github.get("/user").json()["login"]).lower()
+
+        if session_user_lower != github_login_lower:
+            log.debug(
+                f"session user={session_user_lower!r} does not match github"
+                f" login={github_login_lower}"
+            )
+
+            return False
+
+    elif AUTH_PROVIDER == "oauth":
+        assert oauth_blueprint is not None
+
+        if not oauth_blueprint.authorized or not oauth_blueprint.session.authorized:
+            log.debug(f"oauth context not authorized for user={session['user']!r}")
+
+            return False
+
+    else:
+        raise UNKNOWN_AUTH_PROVIDER
 
     header_secret = request.headers.get("Fuzzbucket-Secret")
-    storage_secret = app.config["gh_storage"].secret()
+    storage_secret = app.config["session_storage"].secret
 
     if header_secret != storage_secret:
         log.debug(
-            f"header secret={header_secret} does not match stored"
-            f" secret={storage_secret}"
+            f"header secret={header_secret!r} does not match stored "
+            f"secret={storage_secret!r}"
         )
+
         return False
 
     return True
 
 
-def auth_403_github():
-    login_url = url_for("github.login", _external=True)
-    return (
-        jsonify(
-            error=f"you must authorize first via {login_url!r}",
-            login_url=login_url,
-        ),
-        403,
-    )
+def auth_403():
+    if AUTH_PROVIDER == "github-oauth":
+        login_url = url_for("github.login", _external=True)
+        return (
+            jsonify(
+                error=f"you must authorize first via {login_url!r}",
+                login_url=login_url,
+            ),
+            403,
+        )
+
+    elif AUTH_PROVIDER == "oauth":
+        login_url = url_for("oauth.login", _external=True)
+        return (
+            jsonify(
+                error=f"you must authorize first via {login_url!r}",
+                login_url=login_url,
+            ),
+            403,
+        )
+
+    else:
+        raise UNKNOWN_AUTH_PROVIDER
 
 
 @app.route("/_login", methods=["GET"])
 def login():
-    return redirect(url_for("github.login"))
+    if AUTH_PROVIDER == "github-oauth":
+        return redirect(url_for("github.login"))
+    elif AUTH_PROVIDER == "oauth":
+        return redirect(url_for("oauth.login"))
+    else:
+        raise UNKNOWN_AUTH_PROVIDER
 
 
 @app.route("/auth-complete", methods=["GET"])
-def auth_complete():
-    log.debug(f"allowed_orgs={ALLOWED_ORGS!r}")
+def github_auth_complete():
+    assert github is not None
+
+    log.debug(f"allowed_orgs={ALLOWED_GITHUB_ORGS!r}")
 
     raw_user_orgs = github.get("/user/orgs").json()
     log.debug(f"raw_user_orgs={raw_user_orgs!r}")
@@ -207,7 +365,7 @@ def auth_complete():
         return (
             render_template(
                 "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
+                branding=BRANDING,
                 error=f"GitHub API error: {raw_user_orgs['message']}",
             ),
             503,
@@ -215,37 +373,52 @@ def auth_complete():
 
     user_orgs = {o["login"] for o in raw_user_orgs}
 
-    if len(set(ALLOWED_ORGS) & user_orgs) == 0:
-        github.token = None
-        del session["user"]
+    if len(set(ALLOWED_GITHUB_ORGS) & user_orgs) == 0:
+        nullify_auth()
+
         return (
             render_template(
                 "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
+                branding=BRANDING,
                 error="You are not a member of an allowed GitHub organization.",
             ),
             403,
         )
 
+    return _set_secret_auth_complete()
+
+
+@app.route("/oauth-complete", methods=["GET"])
+def oauth_complete():
+    assert oauth_blueprint is not None
+    assert oauth_blueprint.session is not None
+
+    return _set_secret_auth_complete()
+
+
+def _set_secret_auth_complete():
     try:
-        secret = app.config["gh_storage"].secret()
+        secret = secrets.token_urlsafe(31)
+        app.config["session_storage"].secret = secret
 
         return (
             render_template(
                 "auth_complete.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
+                branding=BRANDING,
                 secret=secret,
             ),
             200,
         )
     except ValueError:
+        log.exception(f"failed to set secret for user={session.get('user')!r}")
+
         return (
             render_template(
                 "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
-                error="There is no secret available for user={user!r}",
+                branding=BRANDING,
+                error=f"Failed to set secret for user={session.get('user')!r}",
             ),
-            404,
+            500,
         )
 
 
@@ -265,7 +438,7 @@ def logout():
     resp = table.delete_item(Key=dict(user=request.remote_user))
     log.debug(f"raw dynamodb response={resp!r}")
 
-    del session["user"]
+    nullify_auth()
 
     return "", 204
 
@@ -273,7 +446,7 @@ def logout():
 @app.route("/", methods=["GET"])
 def list_boxes():
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(f"handling list_boxes for user={request.remote_user!r}")
 
@@ -293,7 +466,7 @@ def list_boxes():
 @app.route("/box", methods=["POST"])
 def create_box():
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(f"handling create_box for user={session['user']!r}")
 
@@ -322,7 +495,7 @@ def create_box():
     username = session["user"]
     resolved_key_name = (matching_key or {}).get("KeyName")
 
-    if matching_key is None:
+    if matching_key is None and AUTH_PROVIDER == "github-oauth":
         if full_key_alias != session["user"]:
             return (
                 jsonify(
@@ -466,7 +639,7 @@ def create_box():
 @app.route("/box/<string:instance_id>", methods=["PUT"])
 def update_box(instance_id):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(
         f"handling update_box for user={request.remote_user!r} "
@@ -512,7 +685,7 @@ def update_box(instance_id):
 @app.route("/reboot/<string:instance_id>", methods=["POST"])
 def reboot_box(instance_id):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(
         f"handling reboot_box for user={request.remote_user!r} "
@@ -535,7 +708,7 @@ def reboot_box(instance_id):
 @app.route("/box/<string:instance_id>", methods=["DELETE"])
 def delete_box(instance_id):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(
         f"handling delete_box for user={request.remote_user!r} "
@@ -558,7 +731,7 @@ def delete_box(instance_id):
 @app.route("/image-alias", methods=["GET"])
 def list_image_aliases():
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(f"handling list_image_aliases for user={request.remote_user!r}")
 
@@ -576,7 +749,7 @@ def list_image_aliases():
 @app.route("/image-alias", methods=["POST"])
 def create_image_alias():
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(f"handling create_image_alias for user={request.remote_user!r}")
 
@@ -610,7 +783,7 @@ def create_image_alias():
 @app.route("/image-alias/<string:alias>", methods=["DELETE"])
 def delete_image_alias(alias):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     log.debug(
         f"handling delete_image_alias for user={request.remote_user!r} alias={alias!r}"
@@ -637,7 +810,7 @@ def delete_image_alias(alias):
 @app.route("/key/<string:alias>", methods=["GET"])
 def get_key(alias):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     full_key_alias = session["user"]
     if str(alias).lower() != "default":
@@ -665,7 +838,7 @@ def get_key(alias):
 @app.route("/keys", methods=["GET"])
 def list_keys():
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     matching_keys = _find_matching_ec2_key_pairs(session["user"])
 
@@ -696,7 +869,7 @@ def list_keys():
 @app.route("/key/<string:alias>", methods=["PUT"])
 def put_key(alias):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     if not request.is_json:
         return jsonify(error="request must be json", you=request.remote_user), 400
@@ -766,7 +939,7 @@ def put_key(alias):
 @app.route("/key/<string:alias>", methods=["DELETE"])
 def delete_key(alias):
     if not is_fully_authd():
-        return auth_403_github()
+        return auth_403()
 
     full_key_alias = session["user"]
     if str(alias).lower() != "default":
@@ -915,6 +1088,8 @@ def _resolve_subnet(subnet_id_or_name: str) -> str | None:
 
 
 def _fetch_first_compatible_github_key(user: str) -> str:
+    assert github is not None
+
     try:
         for key in github.get("/user/keys").json():
             stripped_key = key.get("key", "").strip()
@@ -934,3 +1109,17 @@ def _fetch_first_compatible_github_key(user: str) -> str:
 
 def _is_ec2_compatible_key(key_material: str) -> bool:
     return key_material.startswith("ssh-rsa") or key_material.startswith("ssh-ed25519")
+
+
+def _fetch_oauth_userinfo(
+    oauth_session: flask_dance.consumer.OAuth2Session,
+) -> dict[str, typing.Any] | None:
+    assert oauth_session is not None
+    assert oauth_session.token is not None
+
+    try:
+        return oauth_session.get("userinfo").json()
+    except OAuth2Error:
+        log.exception(f"failed to get oauth userinfo for user={session['user']!r}")
+
+        return None
