@@ -73,16 +73,9 @@ environment:
   FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID: ''
   FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET: ''
 
-  # `FUZZBUCKET_LOG_LEVEL` is used in the server-side logger specific to
-  # fuzzbucket.
-  FUZZBUCKET_LOG_LEVEL: ''
-
   # `FUZZBUCKET_LOG_LEVELS` may be used to define multiple named log levels as
-  # comma-delimited key=value pairs where "." means the root logger, e.g.:
-  # "fuzzbucket=info,requests_oauthlib=debug,.=info". If `FUZZBUCKET_LOG_LEVEL`
-  # is set, it will be used as the value for the "fuzzbucket" logger. If
-  # `FUZZBUCKET_ROOT_LOG_LEVEL` is set, it will be use as the value for the root
-  # (".") logger.
+  # comma-delimited key:value pairs where "." means the root logger, e.g.:
+  # "fuzzbucket:info,requests_oauthlib:debug,.:info".
   FUZZBUCKET_LOG_LEVELS: ''
 
   # `FUZZBUCKET_OAUTH_AUTH_URL`, `FUZZBUCKET_OAUTH_BASE_URL`,
@@ -103,10 +96,6 @@ environment:
   # `FUZZBUCKET_REGION` is the target deployment region and should match the
   # region of the AWS auth session.
   FUZZBUCKET_REGION: ${env:AWS_REGION, ${env:AWS_DEFAULT_REGION, 'us-east-1'}}
-
-  # `FUZZBUCKET_ROOT_LOG_LEVEL` is used in the server-side root logger from
-  # which all standard library loggers descend.
-  FUZZBUCKET_ROOT_LOG_LEVEL: info
 
   # `FUZZBUCKET_STAGE` is the value of the serverless deploy stage and is used
   # to construct values such as dynamodb table names.

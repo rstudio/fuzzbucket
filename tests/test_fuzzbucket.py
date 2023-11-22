@@ -41,11 +41,11 @@ def resetti():
     fuzzbucket.get_ec2_client.cache_clear()
     fuzzbucket.app.app.testing = True
     fuzzbucket.app.app.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
-    gh_storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(
+    session_storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(
         table_name=f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     )
-    fuzzbucket.app.app.config["gh_storage"] = gh_storage
-    fuzzbucket.app.app.config["gh_blueprint"].storage = gh_storage
+    fuzzbucket.app.app.config["session_storage"] = session_storage
+    fuzzbucket.app.app.config["gh_blueprint"].storage = session_storage
 
 
 @pytest.fixture
@@ -449,6 +449,7 @@ def test_set_user(
         ),
     ],
 )
+@mock_dynamodb
 def test_is_fully_authd(
     monkeypatch,
     fake_github,
@@ -459,18 +460,28 @@ def test_is_fully_authd(
     db_secret,
     expected,
 ):
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+
     monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
     fake_github.responses["/user"] = user_response
     fake_github.authorized = github_authd
     monkeypatch.setattr(fuzzbucket.app, "session", {"user": session_user})
+    monkeypatch.setattr(
+        fuzzbucket.flask_dance_storage, "session", {"user": session_user}
+    )
     monkeypatch.setattr(
         fuzzbucket.app,
         "request",
         FakeRequest({"Fuzzbucket-Secret": secret_header}, {}, None, {}),
     )
 
+    def fake_dump(*_):
+        return dict(user=session_user, secret=db_secret, token=None)
+
+    monkeypatch.setattr(app.config["session_storage"], "dump", fake_dump)
+
     with app.app_context():
-        monkeypatch.setattr(app.config["gh_storage"], "secret", lambda: db_secret)
         assert fuzzbucket.app.is_fully_authd() == expected
 
 
@@ -545,14 +556,18 @@ def test_logout(monkeypatch, authd, session_user, expected_status):
             {"blubs", "glubs"},
             [{"login": "blubs"}],
             True,
-            TemplateResponse("error.html", 404),
+            TemplateResponse("error.html", 500),
             id="no_secret_err",
         ),
     ],
 )
+@mock_dynamodb
 def test_auth_complete(
     monkeypatch, fake_github, allowed_orgs, orgs_response, raises, expected
 ):
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+
     state = {}
 
     def fake_render_template(template_name, **kwargs):
@@ -562,24 +577,21 @@ def test_auth_complete(
     monkeypatch.setattr(fuzzbucket.app, "render_template", fake_render_template)
     monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
     monkeypatch.setattr(fuzzbucket.app, "session", {"user": "pytest"})
+    monkeypatch.setattr(fuzzbucket.flask_dance_storage, "session", {"user": "pytest"})
     fake_github.responses["/user/orgs"] = orgs_response
     monkeypatch.setattr(fuzzbucket.app, "ALLOWED_GITHUB_ORGS", allowed_orgs)
 
-    if raises:
-
-        def fake_secret():
-            raise ValueError("no secret")
-
-        monkeypatch.setattr(app.config["gh_storage"], "secret", fake_secret)
-
-    response = None
     with app.test_client() as c:
+        if raises:
+            fuzzbucket.app.session["user"] = None
+            fuzzbucket.flask_dance_storage.session["user"] = None
+
         response = c.get("/auth-complete")
 
-    assert response is not None
-    assert not response.is_json
-    assert response.status_code == expected.status_code
-    assert state["template_name"] == expected.template_name
+        assert response is not None
+        assert not response.is_json
+        assert response.status_code == expected.status_code
+        assert state["template_name"] == expected.template_name
 
 
 @pytest.mark.parametrize(
@@ -1679,16 +1691,16 @@ def test_flask_dance_storage(monkeypatch, user, token, raises, expected):
     )
     monkeypatch.setattr(fuzzbucket.flask_dance_storage, "session", {"user": user})
 
-    storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(
-        f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
-    )
+    table_name = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
+    storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(table_name)
+
     if raises:
         with pytest.raises(ValueError):
             storage.set(None, token)
         with pytest.raises(ValueError):
             storage.delete(None)
         assert storage.get(None) is None
-        assert storage.secret() is None
+        assert storage.secret is None
     else:
         storage.set(None, token)
         actual = storage.dump()
@@ -1697,7 +1709,7 @@ def test_flask_dance_storage(monkeypatch, user, token, raises, expected):
             assert actual[key] == value
         storage.delete(None)
         assert storage.get(None) is None
-        assert storage.secret() is None
+        assert storage.secret is None
 
 
 @pytest.mark.parametrize(

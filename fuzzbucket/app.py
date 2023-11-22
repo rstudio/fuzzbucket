@@ -1,7 +1,7 @@
 import functools
 import json
 import random
-import time
+import secrets
 import typing
 import urllib.parse
 import warnings
@@ -60,6 +60,7 @@ ALLOWED_GITHUB_ORGS: tuple[str, ...] = ()
 AUTH_PROVIDER: str = typing.cast(
     str, cfg.get("FUZZBUCKET_AUTH_PROVIDER", default="github-oauth")
 )
+BRANDING: str = typing.cast(str, cfg.get("FUZZBUCKET_BRANDING"))
 OAUTH_MAX_AGE: float = 86400.0
 UNKNOWN_AUTH_PROVIDER: ValueError = ValueError(
     f"unknown auth provider {AUTH_PROVIDER!r}"
@@ -72,7 +73,7 @@ app.json = AsJSONProvider(app)
 session_storage = FlaskDanceStorage(
     table_name=f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-users"
 )
-app.config["gh_storage"] = app.config["session_storage"] = session_storage
+app.config["session_storage"] = session_storage
 
 github: typing.Any = None
 oauth_blueprint: typing.Optional["flask_dance.consumer.OAuth2ConsumerBlueprint"] = None
@@ -141,7 +142,7 @@ def handle_500(exc):
     return (
         render_template(
             "error.html",
-            branding=cfg.get("FUZZBUCKET_BRANDING"),
+            branding=BRANDING,
             error=f"NOPE={exc}",
         ),
         500,
@@ -193,6 +194,7 @@ def set_user():
 
         if not github.authorized:
             log.debug("not currently github authorized; assuming login flow")
+
             return
 
         user_response = github.get("/user").json()
@@ -276,6 +278,7 @@ def is_fully_authd():
 
         if not github.authorized:
             log.debug(f"github context not authorized for user={session['user']!r}")
+
             return False
 
         session_user_lower = str(session["user"]).lower()
@@ -286,64 +289,32 @@ def is_fully_authd():
                 f"session user={session_user_lower!r} does not match github"
                 f" login={github_login_lower}"
             )
+
             return False
-
-        header_secret = request.headers.get("Fuzzbucket-Secret")
-        storage_secret = app.config["gh_storage"].secret()
-
-        if header_secret != storage_secret:
-            log.debug(
-                f"header secret={header_secret} does not match stored"
-                f" secret={storage_secret}"
-            )
-            return False
-
-        return True
 
     elif AUTH_PROVIDER == "oauth":
         assert oauth_blueprint is not None
 
         if not oauth_blueprint.authorized or not oauth_blueprint.session.authorized:
             log.debug(f"oauth context not authorized for user={session['user']!r}")
+
             return False
-
-        #       userinfo_response = _fetch_oauth_userinfo(oauth_blueprint.session)
-        #       if userinfo_response is None:
-        #           return False
-
-        #       log.debug(f"fetched userinfo={userinfo_response!r}")
-
-        #       user_email = userinfo_response.get("email")
-        #       if user_email is None:
-        #           log.warning(
-        #               f"no login available in oauth userinfo response={userinfo_response!r}"
-        #           )
-        #           return False
-
-        #       session_user_lower = str(session["user"]).lower()
-        #       user_email_lower = str(user_email)
-
-        #       if session_user_lower != user_email_lower:
-        #           log.debug(
-        #               f"session user={session_user_lower!r} does not match oauth "
-        #               f"login={user_email_lower!r}"
-        #           )
-        #           return False
-
-        header_secret = request.headers.get("Fuzzbucket-Secret")
-        session_secret = app.config["session_storage"].secret()
-
-        if header_secret != session_secret:
-            log.debug(
-                f"header secret={header_secret!r} does not match stored "
-                f"secret={session_secret!r}"
-            )
-            return False
-
-        return True
 
     else:
         raise UNKNOWN_AUTH_PROVIDER
+
+    header_secret = request.headers.get("Fuzzbucket-Secret")
+    storage_secret = app.config["session_storage"].secret
+
+    if header_secret != storage_secret:
+        log.debug(
+            f"header secret={header_secret!r} does not match stored "
+            f"secret={storage_secret!r}"
+        )
+
+        return False
+
+    return True
 
 
 def auth_403():
@@ -394,7 +365,7 @@ def github_auth_complete():
         return (
             render_template(
                 "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
+                branding=BRANDING,
                 error=f"GitHub API error: {raw_user_orgs['message']}",
             ),
             503,
@@ -408,55 +379,46 @@ def github_auth_complete():
         return (
             render_template(
                 "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
+                branding=BRANDING,
                 error="You are not a member of an allowed GitHub organization.",
             ),
             403,
         )
 
-    try:
-        secret = app.config["gh_storage"].secret()
-
-        return (
-            render_template(
-                "auth_complete.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
-                secret=secret,
-            ),
-            200,
-        )
-    except ValueError:
-        return (
-            render_template(
-                "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
-                error=f"There is no secret available for user={session['user']!r}",
-            ),
-            404,
-        )
+    return _set_secret_auth_complete()
 
 
 @app.route("/oauth-complete", methods=["GET"])
 def oauth_complete():
+    assert oauth_blueprint is not None
+    assert oauth_blueprint.session is not None
+
+    return _set_secret_auth_complete()
+
+
+def _set_secret_auth_complete():
     try:
-        secret = app.config["session_storage"].secret()
+        secret = secrets.token_urlsafe(31)
+        app.config["session_storage"].secret = secret
 
         return (
             render_template(
                 "auth_complete.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
+                branding=BRANDING,
                 secret=secret,
             ),
             200,
         )
     except ValueError:
+        log.exception(f"failed to set secret for user={session.get('user')!r}")
+
         return (
             render_template(
                 "error.html",
-                branding=cfg.get("FUZZBUCKET_BRANDING"),
-                error=f"There is no secret available for user={session['user']!r}",
+                branding=BRANDING,
+                error=f"Failed to set secret for user={session.get('user')!r}",
             ),
-            404,
+            500,
         )
 
 

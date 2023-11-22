@@ -8,14 +8,6 @@ def setup_logging() -> logging.Logger:
     log_levels.setdefault(".", "info")
     log_levels.setdefault("fuzzbucket", "info")
 
-    log_level = (cfg.get("FUZZBUCKET_LOG_LEVEL") or "").strip()
-    if log_level != "":
-        log_levels["fuzzbucket"] = log_level
-
-    root_log_level = (cfg.get("FUZZBUCKET_ROOT_LOG_LEVEL") or "").strip()
-    if root_log_level != "":
-        log_levels["."] = root_log_level
-
     root_log = logging.getLogger()
     log = root_log.getChild("fuzzbucket")
 

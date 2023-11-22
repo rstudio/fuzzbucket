@@ -54,7 +54,7 @@ def getdict(
         return default or {}
 
     return dict(
-        [(k.strip(), v.strip()) for k, v in [pair.split("=", 1) for pair in as_list]]
+        [(k.strip(), v.strip()) for k, v in [pair.split(":", 1) for pair in as_list]]
     )
 
 
