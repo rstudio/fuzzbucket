@@ -1,4 +1,5 @@
 import os
+import re
 import typing
 
 
@@ -34,13 +35,27 @@ def getlist(
     *keys: str, default: tuple[str, ...] = (), env: dict[str, str] | None = None
 ) -> list[str]:
     value = [
-        s.strip() for s in (get(*keys, env=env) or "").split(" ") if s.strip() != ""
+        s.strip()
+        for s in re.split("[ ,]", (get(*keys, env=env) or ""))
+        if s.strip() != ""
     ]
 
     if len(value) != 0:
         return value
 
     return list(default)
+
+
+def getdict(
+    *keys: str, default: dict[str, str] | None = None, env: dict[str, str] | None = None
+) -> dict[str, str]:
+    as_list = getlist(*keys, env=env)
+    if len(as_list) == 0:
+        return default or {}
+
+    return dict(
+        [(k.strip(), v.strip()) for k, v in [pair.split("=", 1) for pair in as_list]]
+    )
 
 
 def vpc_id(env: dict[str, str] | None = None) -> str:

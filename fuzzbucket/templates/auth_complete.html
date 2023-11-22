@@ -9,8 +9,15 @@
     <code>fuzzbucket-client</code> login flow:
     </p>
     <textarea
-      id="fuzzbucket_secret" cols="42" rows="1" readonly
+      id="fuzzbucket_secret"
+      cols="42"
+      rows="1"
       style="padding:.5em;"
+      readonly
+      autofocus
     >{{ secret }}</textarea>
+    <script>
+      document.getElementById("fuzzbucket_secret").select();
+    </script>
   </body>
 </html>

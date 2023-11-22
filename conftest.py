@@ -8,6 +8,7 @@ import pytest
 def env_setup():
     for key, value in (
         ("FUZZBUCKET_FLASK_SECRET_KEY", "shhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"),
+        ("FUZZBUCKET_AUTH_PROVIDER", "github-oauth"),
         ("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID", "abc123"),
         ("FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET", "xyz456"),
         ("FUZZBUCKET_STAGE", "test"),
