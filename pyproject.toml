@@ -116,8 +116,7 @@ norecursedirs = ".venv node_modules .serverless build"
 addopts = '''
   --cov fuzzbucket
   --cov fuzzbucket_client
-  --cov test_fuzzbucket
-  --cov test_fuzzbucket_client
+  --cov tests
   --cov-report term
   --cov-report html
   --cov-report xml

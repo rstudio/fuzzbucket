@@ -38,6 +38,13 @@ jobs:
     - run: just deps
     - run: hatch run lint
     - run: hatch run test
+      env:
+        FUZZBUCKET_AUTH_PROVIDER: github-oauth
+    - run: hatch run test
+      env:
+        FUZZBUCKET_AUTH_PROVIDER: oauth
+        PYTEST_ADDOPTS: --cov-append
+    - run: hatch run coverage report
     - run: hatch run is-releasable | tee -a "${GITHUB_OUTPUT}"
       id: check_releasable
     - run: hatch build
