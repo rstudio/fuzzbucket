@@ -1,6 +1,5 @@
 import os
 import re
-import typing
 
 
 def get(
@@ -25,7 +24,7 @@ def getbool(
 ) -> bool:
     value = get(*keys, env=env)
 
-    if value is not None:
+    if value is not None and str(value).strip() != "":
         return str(value).lower() in ("true", "ok", "yes", "on", "1")
 
     return default
@@ -55,15 +54,4 @@ def getdict(
 
     return dict(
         [(k.strip(), v.strip()) for k, v in [pair.split(":", 1) for pair in as_list]]
-    )
-
-
-def vpc_id(env: dict[str, str] | None = None) -> str:
-    return typing.cast(
-        str,
-        get(
-            "FUZZBUCKET_DEFAULT_VPC",
-            default="NOTSET",
-            env=env,
-        ),
     )
