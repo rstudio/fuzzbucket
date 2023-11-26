@@ -3,12 +3,12 @@ import os
 import random
 import typing
 
+import flask
 import pytest
-from flask import Flask
 
 os.environ["FUZZBUCKET_STAGE"] = "test"
 
-from fuzzbucket.app import create_app
+import fuzzbucket.app
 
 
 class TemplateResponse(typing.NamedTuple):
@@ -31,8 +31,8 @@ AnyDict = dict[str, typing.Any]
 
 
 @pytest.fixture
-def app() -> Flask:
-    return create_app()
+def app() -> flask.Flask:
+    return fuzzbucket.app.create_app()
 
 
 @pytest.fixture(autouse=True)

@@ -35,8 +35,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-from fuzzbucket_client.__version__ import version as __version__
-from fuzzbucket_client.datetime_ext import parse_timedelta
+from . import __version__, datetime_ext
 
 MIN_TTL = datetime.timedelta(minutes=10)
 MAX_TTL = datetime.timedelta(weeks=12)
@@ -148,7 +147,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
     parser.add_argument(
         "--check-ttl",
-        type=parse_timedelta,
+        type=datetime_ext.parse_timedelta,
         default=None,
         help="check a ttl value and exit, presumably before using it with a command "
         + "that supports ttl",
@@ -218,7 +217,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_create.add_argument(
         "-T",
         "--ttl",
-        type=parse_timedelta,
+        type=datetime_ext.parse_timedelta,
         default=datetime.timedelta(hours=4),
         help="set the TTL for the box, after which it will be reaped ",
     )
@@ -261,7 +260,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_update.add_argument(
         "-T",
         "--ttl",
-        type=parse_timedelta,
+        type=datetime_ext.parse_timedelta,
         default=None,
         help="set the new TTL for the matching boxes relative to the current time, "
         + "after which they will be reaped",
@@ -486,7 +485,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     known_args = _normalize_known_args(known_args)
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
-        print(f"fuzzbucket-client {__version__}")
+        print(f"fuzzbucket-client {__version__.__version__}")
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON
@@ -801,7 +800,7 @@ class Client:
             box_payload = payload.copy()
 
             if known_args.ttl:
-                box_age = parse_timedelta(matching_box["age"])
+                box_age = datetime_ext.parse_timedelta(matching_box["age"])
                 box_payload["ttl"] = str(
                     int(box_age.total_seconds() + known_args.ttl.total_seconds())
                 )

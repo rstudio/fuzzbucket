@@ -2,26 +2,26 @@ import datetime
 
 import pytest
 
-from fuzzbucket.app import create_app
-from fuzzbucket.box import Box
-from fuzzbucket.datetime_ext import utcnow
+from fuzzbucket import box, datetime_ext
 
 
-def test_box():
-    box = Box(instance_id="i-fafafafafafafaf")
-    assert box.age is None
+def test_box(app):
+    boxy = box.Box(instance_id="i-fafafafafafafaf")
+    assert boxy.age is None
 
-    box.created_at = str((utcnow() - datetime.timedelta(days=1, minutes=1)).timestamp())
-    assert box.age is not None
-    assert box.age.startswith("1 day,")
+    boxy.created_at = str(
+        (datetime_ext.utcnow() - datetime.timedelta(days=1, minutes=1)).timestamp()
+    )
+    assert boxy.age is not None
+    assert boxy.age.startswith("1 day,")
 
-    assert "instance_id" in box.as_json()
-    assert "age" in box.as_json()
-    assert "max_age" in box.as_json()
+    assert "instance_id" in boxy.as_json()
+    assert "age" in boxy.as_json()
+    assert "max_age" in boxy.as_json()
 
     with pytest.raises(TypeError):
-        Box(instance_id="i-fafafafbabacaca", frobs=9001)  # type: ignore
+        box.Box(instance_id="i-fafafafbabacaca", frobs=9001)  # type: ignore
 
-    dumped = create_app().json.dumps(box)
+    dumped = app.json.dumps(boxy)
     assert '"age":' in dumped
     assert '"max_age":' in dumped

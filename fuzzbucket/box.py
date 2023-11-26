@@ -1,6 +1,5 @@
 import dataclasses
 import datetime
-import typing
 
 from . import datetime_ext, tags
 

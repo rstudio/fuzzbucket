@@ -1,16 +1,7 @@
-import typing
-
 from botocore.exceptions import ClientError
 
 from . import aws, cfg, datetime_ext
 from .log import log
-
-DEFAULT_TTL = float(
-    typing.cast(
-        str,
-        cfg.get("FUZZBUCKET_DEFAULT_TTL", default=str(3600 * 4)),
-    )
-)
 
 
 def reap_boxes(_, __, ec2_client=None) -> dict[str, list[str]]:
@@ -24,7 +15,7 @@ def reap_boxes(_, __, ec2_client=None) -> dict[str, list[str]]:
 
         ttl = box.ttl
         if ttl is None:
-            ttl = DEFAULT_TTL
+            ttl = cfg.DEFAULT_TTL
 
         expires_at = box.created_at + ttl
         now = datetime_ext.utcnow().timestamp()

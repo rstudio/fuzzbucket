@@ -2,11 +2,11 @@ import os
 
 import boto3
 import botocore.exceptions
+import moto
 import pytest
-from moto import mock_dynamodb, mock_ec2
 
-import fuzzbucket.aws as aws
-from conftest import setup_dynamodb_tables
+import conftest
+from fuzzbucket import aws
 
 
 def test_get_ec2_client(monkeypatch):
@@ -45,7 +45,7 @@ def test_get_dynamodb(monkeypatch, offline):
         assert state["kwargs"]["endpoint_url"] == "http://localhost:8000"
 
 
-@mock_ec2
+@moto.mock_ec2
 def test_list_vpc_boxes(monkeypatch):
     state = {}
 
@@ -65,7 +65,7 @@ def test_list_vpc_boxes(monkeypatch):
     assert {"Name": "vpc-id", "Values": [vpc_id]} in state["filters"]
 
 
-@mock_dynamodb
+@moto.mock_dynamodb
 @pytest.mark.parametrize(
     ("image_alias", "raises", "expected"),
     [
@@ -79,7 +79,7 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
 
     dynamodb = boto3.resource("dynamodb")
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    setup_dynamodb_tables(dynamodb)
+    conftest.setup_dynamodb_tables(dynamodb)
 
     if raises:
 

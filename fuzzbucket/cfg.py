@@ -84,6 +84,12 @@ DEFAULT_INSTANCE_TAGS: tuple[dict[str, str], ...] = tuple(
         ]
     ]
 )
+DEFAULT_TTL = float(
+    typing.cast(
+        str,
+        get("FUZZBUCKET_DEFAULT_TTL", default=str(3600 * 4)),
+    )
+)
 OAUTH_MAX_AGE = datetime_ext.parse_timedelta(
     typing.cast(
         str,
