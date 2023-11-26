@@ -85,13 +85,13 @@ if AUTH_PROVIDER == "github-oauth":
     app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
         "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
     )
-    gh_blueprint = make_github_blueprint(
+    oauth_blueprint = make_github_blueprint(
         scope=["read:org", "read:public_key"],
         redirect_to="github_auth_complete",
         storage=session_storage,
     )
-    app.config["gh_blueprint"] = gh_blueprint
-    app.register_blueprint(gh_blueprint, url_prefix="/login")
+    app.config["oauth_blueprint"] = oauth_blueprint
+    app.register_blueprint(oauth_blueprint, url_prefix="/login")
 
     ALLOWED_GITHUB_ORGS = tuple(cfg.getlist("FUZZBUCKET_ALLOWED_GITHUB_ORGS"))
 
@@ -158,7 +158,7 @@ def nullify_auth():
 
     elif AUTH_PROVIDER == "oauth":
         assert oauth_blueprint is not None
-        oauth_blueprint.token = None
+        oauth_blueprint.session.token = None
 
     else:
         raise UNKNOWN_AUTH_PROVIDER
@@ -221,13 +221,12 @@ def set_user():
 
     elif AUTH_PROVIDER == "oauth":
         assert oauth_blueprint is not None
+        assert oauth_blueprint.session is not None
 
-        if not oauth_blueprint.authorized or not oauth_blueprint.session.authorized:
+        if not oauth_blueprint.session.authorized:
             log.debug("not currently authorized; assuming login flow")
 
             return
-
-        assert oauth_blueprint.session is not None
 
         userinfo_response = _fetch_oauth_userinfo(oauth_blueprint.session)
         if userinfo_response is None:
@@ -295,7 +294,7 @@ def is_fully_authd():
     elif AUTH_PROVIDER == "oauth":
         assert oauth_blueprint is not None
 
-        if not oauth_blueprint.authorized or not oauth_blueprint.session.authorized:
+        if not oauth_blueprint.session.authorized:
             log.debug(f"oauth context not authorized for user={session['user']!r}")
 
             return False
@@ -340,6 +339,14 @@ def auth_403():
 
     else:
         raise UNKNOWN_AUTH_PROVIDER
+
+
+@app.route("/whoami", methods=("GET",))
+def whoami():
+    if not is_fully_authd():
+        return jsonify(error="not logged in"), 400
+
+    return jsonify(you=session.get("user")), 200
 
 
 @app.route("/_login", methods=["GET"])

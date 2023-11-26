@@ -477,6 +477,11 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
     parser_delete_key.set_defaults(func=client.delete_key)
 
+    parser_whoami = subparsers.add_parser(
+        "whoami", aliases=["who", "w"], help="who are you (logged in as)?"
+    )
+    parser_whoami.set_defaults(func=client.whoami)
+
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
     known_args = _normalize_known_args(known_args)
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
@@ -1037,6 +1042,25 @@ class Client:
         log.info(f"deleted key with alias={key_alias!r} for user={self._user!r}")
         print(self._format_keys([raw_response["key"]]), end="")
         return True
+
+    @_command
+    def whoami(self, *_):
+        req = self._build_request(_pjoin(self._url, "whoami"))
+
+        with self._urlopen(req) as response:
+            raw_response = json.load(response)
+
+            if "you" in raw_response and raw_response["you"] is not None:
+                if self.data_format == _DataFormats.JSON:
+                    print(json.dumps(raw_response))
+
+                    return True
+
+                print(raw_response["you"])
+                return True
+
+        print("you are not currently logged in")
+        return False
 
     def _find_box(self, box_search):
         results = self._find_boxes(box_search)

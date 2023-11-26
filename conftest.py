@@ -13,6 +13,13 @@ def env_setup():
         ("FUZZBUCKET_AUTH_PROVIDER", "github-oauth"),
         ("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID", "abc123"),
         ("FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET", "xyz456"),
+        ("FUZZBUCKET_OAUTH_AUTH_URL", ""),
+        ("FUZZBUCKET_OAUTH_BASE_URL", ""),
+        ("FUZZBUCKET_OAUTH_CLIENT_ID", "abc123"),
+        ("FUZZBUCKET_OAUTH_CLIENT_SECRET", "xyz456"),
+        ("FUZZBUCKET_OAUTH_TOKEN_URL", ""),
+        ("FUZZBUCKET_OAUTH_MAX_AGE", "90 days"),
+        ("FUZZBUCKET_OAUTH_SCOPE", "openid"),
     ):
         os.environ.setdefault(key, value)
 

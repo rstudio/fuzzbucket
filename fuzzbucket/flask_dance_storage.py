@@ -78,21 +78,13 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         if user is None:
             return {}
 
-        item: dict[str, typing.Any] = dict(user=user)
-
-        try:
-            item = self.table.get_item(
-                Key=dict(user=user),
-            ).get(
-                "Item",
-                dict(user=user),
-            )
-        except botocore.errorfactory.ClientError as exc:
-            if log.isEnabledFor(logging.DEBUG):
-                log.exception(f"failed to get item for user={user!r}")
-
-            else:
-                log.warning(f"no existing record found for user={user!r}: {exc}")
+        item: dict[str, typing.Any] = self.table.get_item(
+            Key=dict(user=user),
+            ConsistentRead=True,
+        ).get(
+            "Item",
+            dict(user=user),
+        )
 
         # NOTE: datetime is very upset about Decimal arguments to
         # utcfromtimestamp, so make sure a Decimal "expires_at" is an integer.

@@ -81,8 +81,15 @@ class AsJSONProvider(DefaultJSONProvider):
 
 
 @functools.cache
-def get_vpc_id(ec2_client) -> str | None:
-    value = cfg.vpc_id()
+def get_vpc_id(ec2_client, env: dict[str, str] | None = None) -> str | None:
+    value = typing.cast(
+        str,
+        cfg.get(
+            "FUZZBUCKET_DEFAULT_VPC",
+            default="NOTSET",
+            env=env,
+        ),
+    )
 
     if value.startswith("vpc-"):
         return value

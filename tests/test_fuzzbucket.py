@@ -1,6 +1,7 @@
 import base64
 import collections
 import datetime
+import decimal
 import json
 import os
 import random
@@ -16,6 +17,7 @@ from werkzeug.exceptions import InternalServerError
 
 import fuzzbucket
 import fuzzbucket.app
+import fuzzbucket.cfg as cfg
 import fuzzbucket.datetime_ext
 import fuzzbucket.flask_dance_storage
 import fuzzbucket.reaper
@@ -45,7 +47,7 @@ def resetti():
         table_name=f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     )
     fuzzbucket.app.app.config["session_storage"] = session_storage
-    fuzzbucket.app.app.config["gh_blueprint"].storage = session_storage
+    fuzzbucket.app.app.config["oauth_blueprint"].storage = session_storage
 
 
 @pytest.fixture
@@ -54,13 +56,14 @@ def authd_headers() -> typing.List[typing.Tuple[str, str]]:
 
 
 @pytest.fixture
-def fake_github():
-    class FakeGithub:
+def fake_oauth_session():
+    class FakeOAuthSession:
         def __init__(self):
             self.authorized = True
             self.responses = {
                 "/user": {"login": "pytest"},
                 "/user/orgs": [{"login": "frob"}],
+                "userinfo": {"email": "pytest@example.org"},
             }
             self.next_json = None
             self._token = None
@@ -86,7 +89,7 @@ def fake_github():
             self.next_json = None
             return response
 
-    return FakeGithub()
+    return FakeOAuthSession()
 
 
 @pytest.fixture
@@ -288,9 +291,9 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
         "session_user",
         "header_user",
         "arg_user",
-        "github_authd",
+        "authd",
         "user_response",
-        "expected_token",
+        "userinfo_response",
         "expected_user",
     ),
     [
@@ -300,7 +303,7 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             None,
             True,
             {"login": "session-pytest"},
-            "unchanged",
+            {"email": "session-pytest"},
             "session-pytest",
             id="happy_session",
         ),
@@ -310,7 +313,7 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             None,
             True,
             {"login": "header-pytest"},
-            "unchanged",
+            {"email": "header-pytest"},
             "header-pytest",
             id="happy_header",
         ),
@@ -320,7 +323,7 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             "arg-pytest",
             True,
             {"login": "arg-pytest"},
-            "unchanged",
+            {"email": "arg-pytest"},
             "arg-pytest",
             id="happy_arg",
         ),
@@ -330,7 +333,7 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             None,
             False,
             {},
-            "unchanged",
+            {},
             None,
             id="happy_nothing",
         ),
@@ -338,9 +341,9 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             "session-pytest",
             "session-pytest",
             "session-pytest",
-            True,
+            False,
             {},
-            None,
+            {},
             None,
             id="expired_token",
         ),
@@ -348,9 +351,9 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
             "elmer",
             None,
             None,
-            True,
+            False,
             {"login": "bugs"},
-            None,
+            {"email": "bugs"},
             None,
             id="mismatched",
         ),
@@ -358,36 +361,50 @@ def test_handle_500(monkeypatch, exc, check_html, err_match):
 )
 def test_set_user(
     monkeypatch,
-    fake_github,
+    fake_oauth_session,
     session_user,
     header_user,
     arg_user,
-    github_authd,
+    authd,
     user_response,
-    expected_token,
+    userinfo_response,
     expected_user,
 ):
-    monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
-    fake_github.responses["/user"] = user_response
-    fake_github.authorized = github_authd
-    fake_github.token = "unchanged"
+    monkeypatch.setattr(fuzzbucket.app, "github", fake_oauth_session)
+    monkeypatch.setattr(fuzzbucket.app.oauth_blueprint, "session", fake_oauth_session)
+
+    fake_oauth_session.responses["/user"] = user_response
+    fake_oauth_session.responses["userinfo"] = userinfo_response
+    fake_oauth_session.authorized = authd
+    fake_oauth_session.token = "unchanged"
+
+    def fake_is_fully_authd():
+        return authd
+
+    monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", fake_is_fully_authd)
+
     fake_session = {"user": session_user}
+
     monkeypatch.setattr(fuzzbucket.app, "session", fake_session)
     monkeypatch.setattr(
         fuzzbucket.app,
         "request",
         FakeRequest({"Fuzzbucket-User": header_user}, {"user": arg_user}, None, {}),
     )
-    fuzzbucket.app.set_user()
-    assert fake_github.token == expected_token
-    assert fake_session.get("user") == expected_user
+
+    with app.test_client() as c:
+        response = c.get("/whoami")
+        assert response is not None
+        assert response.json is not None
+        assert response.json.get("you") == expected_user
 
 
 @pytest.mark.parametrize(
     (
-        "github_authd",
+        "authd",
         "session_user",
         "user_response",
+        "userinfo_response",
         "secret_header",
         "db_secret",
         "expected",
@@ -397,6 +414,7 @@ def test_set_user(
             True,
             "pytest",
             {"login": "pytest"},
+            {"email": "pytest@example.org"},
             "verysecret",
             "verysecret",
             True,
@@ -406,6 +424,7 @@ def test_set_user(
             True,
             "pytest",
             {"login": "pytest"},
+            {"email": "pytest@example.org"},
             "verysecret",
             "oh no",
             False,
@@ -415,47 +434,58 @@ def test_set_user(
             True,
             "pytest",
             {"login": "pytest"},
+            {"email": "pytest@example.org"},
             "well then",
             "verysecret",
             False,
             id="mismatched_header_secret",
         ),
         pytest.param(
-            True,
-            "pytest",
-            {"login": "founderman"},
-            "verysecret",
-            "verysecret",
-            False,
-            id="mismatched_github_user",
-        ),
-        pytest.param(
-            True,
-            "superperson",
-            {"login": "pytest"},
-            "verysecret",
-            "verysecret",
-            False,
-            id="mismatched_session_user",
-        ),
-        pytest.param(
             False,
             "pytest",
             {"login": "pytest"},
+            {"email": "pytest@example.org"},
             "verysecret",
             "verysecret",
             False,
-            id="github_unauthorized",
+            id="unauthorized",
         ),
-    ],
+    ]
+    + (
+        [
+            pytest.param(
+                True,
+                "pytest",
+                {"login": "founderman"},
+                {"email": "pytest@example.org"},
+                "verysecret",
+                "verysecret",
+                False,
+                id="mismatched_user",
+            ),
+            pytest.param(
+                True,
+                "superperson",
+                {"login": "pytest"},
+                {"email": "pytest@example.org"},
+                "verysecret",
+                "verysecret",
+                False,
+                id="mismatched_session_user",
+            ),
+        ]
+        if fuzzbucket.app.AUTH_PROVIDER == "github-oauth"
+        else []
+    ),
 )
 @mock_dynamodb
 def test_is_fully_authd(
     monkeypatch,
-    fake_github,
-    github_authd,
+    fake_oauth_session,
+    authd,
     session_user,
     user_response,
+    userinfo_response,
     secret_header,
     db_secret,
     expected,
@@ -463,9 +493,18 @@ def test_is_fully_authd(
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
 
-    monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
-    fake_github.responses["/user"] = user_response
-    fake_github.authorized = github_authd
+    fake_oauth_session.responses["/user"] = user_response
+    fake_oauth_session.responses["userinfo"] = userinfo_response
+    fake_oauth_session.authorized = authd
+
+    if fuzzbucket.app.AUTH_PROVIDER == "github-oauth":
+        monkeypatch.setattr(fuzzbucket.app, "github", fake_oauth_session)
+
+    elif fuzzbucket.app.AUTH_PROVIDER == "oauth":
+        monkeypatch.setattr(
+            fuzzbucket.app.oauth_blueprint, "session", fake_oauth_session
+        )
+
     monkeypatch.setattr(fuzzbucket.app, "session", {"user": session_user})
     monkeypatch.setattr(
         fuzzbucket.flask_dance_storage, "session", {"user": session_user}
@@ -563,7 +602,7 @@ def test_logout(monkeypatch, authd, session_user, expected_status):
 )
 @mock_dynamodb
 def test_auth_complete(
-    monkeypatch, fake_github, allowed_orgs, orgs_response, raises, expected
+    monkeypatch, fake_oauth_session, allowed_orgs, orgs_response, raises, expected
 ):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
@@ -575,10 +614,10 @@ def test_auth_complete(
         return "RENDERED"
 
     monkeypatch.setattr(fuzzbucket.app, "render_template", fake_render_template)
-    monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
+    monkeypatch.setattr(fuzzbucket.app, "github", fake_oauth_session)
     monkeypatch.setattr(fuzzbucket.app, "session", {"user": "pytest"})
     monkeypatch.setattr(fuzzbucket.flask_dance_storage, "session", {"user": "pytest"})
-    fake_github.responses["/user/orgs"] = orgs_response
+    fake_oauth_session.responses["/user/orgs"] = orgs_response
     monkeypatch.setattr(fuzzbucket.app, "ALLOWED_GITHUB_ORGS", allowed_orgs)
 
     with app.test_client() as c:
@@ -663,6 +702,22 @@ def test_create_box(authd_headers, monkeypatch, pubkey, authd, payload, expected
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: authd)
 
+    if fuzzbucket.app.AUTH_PROVIDER == "oauth":
+        monkeypatch.setattr(fuzzbucket.app, "session", {"user": "lordtestingham"})
+
+        def fake_describe_key_pairs():
+            return {
+                "KeyPairs": [
+                    {
+                        "KeyName": "lordTestingham",
+                        "KeyPairId": "key-fafafafafafafafaf",
+                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
     def fake_describe_images(ImageIds=(), *_, **__):
         return {
             "ami-fafafafafaf": {
@@ -745,6 +800,19 @@ def test_update_box(authd_headers, monkeypatch, pubkey, authd, update_body, expe
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
 
+    def fake_describe_key_pairs():
+        return {
+            "KeyPairs": [
+                {
+                    "KeyName": "pytest",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
     def fake_describe_images(*_, **__):
         return {
             "Images": [
@@ -820,6 +888,19 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
 
+    def fake_describe_key_pairs():
+        return {
+            "KeyPairs": [
+                {
+                    "KeyName": "pytest",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
     def fake_describe_images(*_, **__):
         return {
             "Images": [
@@ -843,6 +924,7 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
+
     assert response is not None
     assert "boxes" in typing.cast(AnyDict, response.json)
 
@@ -866,13 +948,18 @@ def test_delete_box(authd_headers, monkeypatch, pubkey, authd, expected):
 
 
 @mock_ec2
-def test_delete_box_not_yours(monkeypatch, authd_headers, fake_github):
+@mock_dynamodb
+def test_delete_box_not_yours(monkeypatch, authd_headers, fake_oauth_session):
+    dynamodb = boto3.resource("dynamodb")
+    setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(fuzzbucket.app, "get_dynamodb", lambda: dynamodb)
+
     def fake_list_user_boxes(*_):
         return []
 
     monkeypatch.setattr(fuzzbucket.app, "list_user_boxes", fake_list_user_boxes)
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
-    monkeypatch.setattr(fuzzbucket.app, "github", fake_github)
+    monkeypatch.setattr(fuzzbucket.app, "github", fake_oauth_session)
 
     response = None
 
@@ -909,6 +996,19 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
 
+    def fake_describe_key_pairs():
+        return {
+            "KeyPairs": [
+                {
+                    "KeyName": "pytest",
+                    "KeyPairId": "key-fafafafafafafafaf",
+                    "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+
     def fake_describe_images(*_, **__):
         return {
             "Images": [
@@ -932,6 +1032,7 @@ def test_reboot_box(authd_headers, monkeypatch, pubkey, authd, expected):
             response = c.post(
                 "/box", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
+
     assert response is not None
     assert "boxes" in typing.cast(AnyDict, response.json)
 
@@ -1507,7 +1608,7 @@ def test_resolve_ami_alias(monkeypatch, image_alias, raises, expected):
 def test_fetch_first_compatible_github_key(
     monkeypatch, raises, api_response, expected_key
 ):
-    class FakeGithub:
+    class FakeOAuthSession:
         def get(self, *_):
             if raises:
                 raise ValueError("oh no")
@@ -1516,7 +1617,7 @@ def test_fetch_first_compatible_github_key(
         def json(self):
             return api_response
 
-    monkeypatch.setattr(fuzzbucket.app, "github", FakeGithub())
+    monkeypatch.setattr(fuzzbucket.app, "github", FakeOAuthSession())
     assert fuzzbucket.app._fetch_first_compatible_github_key("user") == expected_key
 
 
@@ -1535,6 +1636,22 @@ def test_reap_boxes(authd_headers, monkeypatch, pubkey):
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
     monkeypatch.setattr(fuzzbucket.app, "is_fully_authd", lambda: True)
+
+    if fuzzbucket.app.AUTH_PROVIDER == "oauth":
+        monkeypatch.setattr(fuzzbucket.app, "session", {"user": "lordtestingham"})
+
+        def fake_describe_key_pairs():
+            return {
+                "KeyPairs": [
+                    {
+                        "KeyName": "lordTestingham",
+                        "KeyPairId": "key-fafafafafafafafaf",
+                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
 
     def fake_describe_images(*_, **__):
         return {
@@ -1669,45 +1786,73 @@ def test_box():
     assert '"max_age":' in dumped
 
 
-@pytest.mark.parametrize(
-    ("user", "token", "raises", "expected"),
-    [
-        pytest.param(
-            "nonaps",
-            "jagwagon9000",
-            False,
-            {"user": "nonaps", "token": "jagwagon9000"},
-            id="happy",
-        ),
-        pytest.param(None, "busytown1999", True, {}, id="no_user"),
-    ],
-)
 @mock_dynamodb
-def test_flask_dance_storage(monkeypatch, user, token, raises, expected):
+def test_flask_dance_storage(monkeypatch):
     dynamodb = boto3.resource("dynamodb")
     setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(
         fuzzbucket.flask_dance_storage, "get_dynamodb", lambda: dynamodb
     )
-    monkeypatch.setattr(fuzzbucket.flask_dance_storage, "session", {"user": user})
+    fake_session = {"user": "pytest"}
+    monkeypatch.setattr(fuzzbucket.flask_dance_storage, "session", fake_session)
 
     table_name = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     storage = fuzzbucket.flask_dance_storage.FlaskDanceStorage(table_name)
 
-    if raises:
+    storage.set(None, {"token": "jagwagon8999"})
+    storage.secret = "rotini"
+
+    actual = storage.dump()
+
+    for key, value in (
+        ("user", "pytest"),
+        ("token", {"token": "jagwagon8999"}),
+        ("secret", "rotini"),
+    ):
+        assert key in actual
+        assert actual[key] == value
+
+    storage.set(None, {"token": "jagwagon9000", "expires_at": decimal.Decimal(14)})
+    storage.secret = "farfalla"
+
+    actual = storage.dump()
+
+    for key, value in (
+        ("user", "pytest"),
+        ("token", {"token": "jagwagon9000", "expires_at": 14}),
+        ("secret", "farfalla"),
+    ):
+        assert key in actual
+        assert actual[key] == value
+
+    storage.delete(None)
+
+    assert storage.get(None) is None
+    assert storage.secret is None
+
+    with monkeypatch.context() as mp:
+        mp.setattr(
+            fuzzbucket.flask_dance_storage,
+            "session",
+            {"user": "Carbunkle"},
+        )
+
+        assert storage.dump() == {"user": "carbunkle"}
+
+        def fake_load_user():
+            return None
+
+        mp.setattr(storage, "_load_user", fake_load_user)
+
         with pytest.raises(ValueError):
-            storage.set(None, token)
+            storage.set(None, "busytown321")
+
+        with pytest.raises(ValueError):
+            storage.secret = "crungus"
+
         with pytest.raises(ValueError):
             storage.delete(None)
-        assert storage.get(None) is None
-        assert storage.secret is None
-    else:
-        storage.set(None, token)
-        actual = storage.dump()
-        for key, value in expected.items():
-            assert key in actual
-            assert actual[key] == value
-        storage.delete(None)
+
         assert storage.get(None) is None
         assert storage.secret is None
 
@@ -1753,3 +1898,219 @@ def test_parse_timedelta(input_string, expected, expect_error):
         return
 
     assert expected == fuzzbucket.datetime_ext.parse_timedelta(input_string)
+
+
+@pytest.mark.parametrize(
+    ("env", "keys", "default", "expected"),
+    [
+        pytest.param(
+            {"OK_BUD": "giraffe"},
+            ("OK_BUD",),
+            None,
+            "giraffe",
+            id="simple",
+        ),
+        pytest.param(
+            {"OK_BUD": "giraffe"},
+            ("OH_NO_BUD",),
+            None,
+            None,
+            id="missing",
+        ),
+        pytest.param(
+            {"ALLIES": "bison", "OK_BUD": "giraffe"},
+            ("ALLIES", "OK_BUD"),
+            None,
+            "bison",
+            id="first_wins",
+        ),
+        pytest.param(
+            {"ALLIES": "", "OK_BUD": "giraffe"},
+            ("ALLIES", "OK_BUD"),
+            None,
+            "giraffe",
+            id="skip_empty_values",
+        ),
+        pytest.param(
+            {"ALLIES": "gibbon", "OK_BUD": "giraffe"},
+            ("", "", "", "OK_BUD"),
+            None,
+            "giraffe",
+            id="skip_empty_keys",
+        ),
+        pytest.param(
+            {"OK_BUD": "giraffe"},
+            ("", "", "", "OPE"),
+            8_001,
+            8_001,
+            id="default",
+        ),
+    ],
+)
+def test_cfg_get(
+    env: dict[str, str],
+    keys: tuple[str, ...],
+    default: str | None,
+    expected: str | None,
+    monkeypatch,
+):
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    assert cfg.get(*keys, default=default) == expected
+
+
+@pytest.mark.parametrize(
+    ("env", "keys", "default", "expected"),
+    [
+        pytest.param(
+            {"FIDDLES": "ok"},
+            ("FIDDLES",),
+            False,
+            True,
+            id="simple",
+        ),
+        pytest.param(
+            {"FIDDLES": "ok"},
+            ("FADDLES",),
+            False,
+            False,
+            id="missing",
+        ),
+        pytest.param(
+            {"FIDDLES": "ok", "FADDLES": "no"},
+            ("FIDDLES", "FADDLES"),
+            False,
+            True,
+            id="first_wins",
+        ),
+        pytest.param(
+            {"FIDDLES": "", "FADDLES": "no"},
+            ("FIDDLES", "FADDLES"),
+            True,
+            False,
+            id="skip_empty_values",
+        ),
+        pytest.param(
+            {"FIDDLES": "1", "FADDLES": "arr"},
+            ("", "FIDDLES", "FADDLES"),
+            False,
+            True,
+            id="skip_empty_keys",
+        ),
+    ],
+)
+def test_cfg_getbool(
+    env: dict[str, str],
+    keys: tuple[str, ...],
+    default: bool,
+    expected: str | None,
+):
+    assert cfg.getbool(*keys, default=default, env=env) == expected
+
+
+@pytest.mark.parametrize(
+    ("env", "keys", "default", "expected"),
+    [
+        pytest.param(
+            {"FURBY_NAMES": "George, Ringo"},
+            ("FURBY_NAMES",),
+            ("Walrus", "EGGMAN"),
+            ["George", "Ringo"],
+            id="simple",
+        ),
+        pytest.param(
+            {"FURBY_NAMES": "George, Ringo"},
+            ("FORBY_NAMES",),
+            ("Walrus", "EGGMAN"),
+            ["Walrus", "EGGMAN"],
+            id="missing",
+        ),
+        pytest.param(
+            {"ELEPHANTS": "Nacho Jack Cheddar", "FURBY_NAMES": "George, Ringo"},
+            ("FORBY_NAMES", "ELEPHANTS"),
+            ("Walrus", "EGGMAN"),
+            ["Nacho", "Jack", "Cheddar"],
+            id="first_wins",
+        ),
+        pytest.param(
+            {"ELEPHANTS": "", "FURBY_NAMES": "George Ringo"},
+            ("ELEPHANTS", "FURBY_NAMES"),
+            ("Walrus", "EGGMAN"),
+            ["George", "Ringo"],
+            id="skip_empty_values",
+        ),
+        pytest.param(
+            {"ELEPHANTS": "Nachorb,Jack%20Cheddar", "FURBY_NAMES": "George, Ringo"},
+            ("", "ELEPHANTS", "FURBY_NAMES"),
+            ("Walrus", "EGGMAN"),
+            ["Nachorb", "Jack%20Cheddar"],
+            id="skip_empty_keys",
+        ),
+    ],
+)
+def test_cfg_getlist(
+    env: dict[str, str],
+    keys: tuple[str, ...],
+    default: tuple[str, ...],
+    expected: list[str],
+):
+    assert cfg.getlist(*keys, default=default, env=env) == expected
+
+
+@pytest.mark.parametrize(
+    ("env", "keys", "default", "expected"),
+    [
+        pytest.param(
+            {"CEREAL_MASCOTS": "corn_flakes:Rooster, fruit_balls:Rabbit"},
+            ("CEREAL_MASCOTS",),
+            {},
+            {"corn_flakes": "Rooster", "fruit_balls": "Rabbit"},
+            id="simple",
+        ),
+        pytest.param(
+            {"CEREAL_MASCOTS": "corn_flakes:Rooster, fruit_balls:Rabbit"},
+            ("FURNISHINGS",),
+            {"frog": "true", "egg": "1"},
+            {"frog": "true", "egg": "1"},
+            id="missing",
+        ),
+        pytest.param(
+            {
+                "WEASELS": "Nacho:Jack Cheddar:fella",
+                "CEREAL_MASCOTS": "corn_flakes:Rooster, fruit_balls:Rabbit",
+            },
+            ("FORBY_NAMES", "WEASELS"),
+            {"frog": "true", "egg": "1"},
+            {"Nacho": "Jack", "Cheddar": "fella"},
+            id="first_wins",
+        ),
+        pytest.param(
+            {
+                "WEASELS": "",
+                "CEREAL_MASCOTS": "corn_flakes:Rooster, fruit_balls:Rabbit",
+            },
+            ("WEASELS", "CEREAL_MASCOTS"),
+            {"frog": "true", "egg": "1"},
+            {"corn_flakes": "Rooster", "fruit_balls": "Rabbit"},
+            id="skip_empty_values",
+        ),
+        pytest.param(
+            {
+                "WEASELS": "Nachorb:CHEZ,Jack%20Cheddar:boi",
+                "CEREAL_MASCOTS": "corn_flakes:Rooster, fruit_balls:Rabbit",
+            },
+            ("", "WEASELS", "CEREAL_MASCOTS"),
+            {"frog": "true", "egg": "1"},
+            {"Nachorb": "CHEZ", "Jack%20Cheddar": "boi"},
+            id="skip_empty_keys",
+        ),
+    ],
+)
+def test_cfg_getdict(
+    env: dict[str, str],
+    keys: tuple[str, ...],
+    default: dict[str, str],
+    expected: dict[str, str],
+):
+    assert cfg.getdict(*keys, default=default, env=env) == expected
