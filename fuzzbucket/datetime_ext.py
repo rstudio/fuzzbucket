@@ -71,3 +71,7 @@ def _timedelta_kwargs_from_sexagesimal(
             ),
         )
     )
+
+
+def utcnow() -> datetime.datetime:
+    return datetime.datetime.utcnow()

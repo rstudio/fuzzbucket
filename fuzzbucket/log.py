@@ -1,6 +1,6 @@
 import logging
 
-import fuzzbucket.cfg as cfg
+from . import cfg
 
 
 def setup_logging() -> logging.Logger:

@@ -1,8 +1,7 @@
 import dataclasses
 import datetime
 
-from . import utcnow
-from .tags import Tags
+from . import datetime_ext, tags
 
 
 @dataclasses.dataclass
@@ -29,7 +28,10 @@ class Box:
         if self.created_at is None:
             return None
 
-        return str(utcnow() - datetime.datetime.fromtimestamp(float(self.created_at)))
+        return str(
+            datetime_ext.utcnow()
+            - datetime.datetime.fromtimestamp(float(self.created_at))
+        )
 
     @property
     def max_age(self) -> str | None:
@@ -57,10 +59,10 @@ class Box:
 
         for tag in instance.get("Tags", []):
             attr, cast = {
-                "Name": ["name", str],
-                Tags.created_at.value: ["created_at", float],
-                Tags.image_alias.value: ["image_alias", str],
-                Tags.user.value: ["user", str],
+                "Name": ("name", str),
+                tags.Tags.created_at.value: ("created_at", float),
+                tags.Tags.image_alias.value: ("image_alias", str),
+                tags.Tags.user.value: ("user", str),
                 # NOTE: the `ttl` at this point is expected to be a
                 # `str(int)`, but the string coercion of `float`
                 # will safely handle both `int` and `float` values,
@@ -69,7 +71,7 @@ class Box:
                 # a `ttl` value can be safely discarded given that
                 # the reaping process is typically run on a
                 # multiple-minute interval. {{
-                Tags.ttl.value: ["ttl", lambda s: int(float(s))],
+                tags.Tags.ttl.value: ("ttl", lambda s: int(float(s))),
                 # }}
             }.get(tag["Key"], (None, str))
 

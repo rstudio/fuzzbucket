@@ -1,35 +1,24 @@
-import typing
-
 from botocore.exceptions import ClientError
 
-import fuzzbucket.cfg as cfg
-
-from . import get_ec2_client, get_vpc_id, list_vpc_boxes, utcnow
+from . import aws, cfg, datetime_ext
 from .log import log
-
-DEFAULT_TTL = float(
-    typing.cast(
-        str,
-        cfg.get("FUZZBUCKET_DEFAULT_TTL", default=str(3600 * 4)),
-    )
-)
 
 
 def reap_boxes(_, __, ec2_client=None) -> dict[str, list[str]]:
-    ec2_client = ec2_client if ec2_client is not None else get_ec2_client()
+    ec2_client = ec2_client if ec2_client is not None else aws.get_ec2_client()
 
     reaped_instance_ids = []
-    for box in list_vpc_boxes(ec2_client, get_vpc_id(ec2_client)):
+    for box in aws.list_vpc_boxes(ec2_client, aws.get_vpc_id(ec2_client)):
         if box.created_at is None:
             log.warning("skipping box without created_at")
             continue
 
         ttl = box.ttl
         if ttl is None:
-            ttl = DEFAULT_TTL
+            ttl = cfg.DEFAULT_TTL
 
         expires_at = box.created_at + ttl
-        now = utcnow().timestamp()
+        now = datetime_ext.utcnow().timestamp()
 
         log_desc = (
             f"instance_id={box.instance_id!r} "

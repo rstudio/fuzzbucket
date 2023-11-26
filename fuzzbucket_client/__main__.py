@@ -35,8 +35,7 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-from fuzzbucket_client.__version__ import version as __version__
-from fuzzbucket_client.datetime_ext import parse_timedelta
+from . import __version__, datetime_ext
 
 MIN_TTL = datetime.timedelta(minutes=10)
 MAX_TTL = datetime.timedelta(weeks=12)
@@ -148,7 +147,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
     parser.add_argument(
         "--check-ttl",
-        type=parse_timedelta,
+        type=datetime_ext.parse_timedelta,
         default=None,
         help="check a ttl value and exit, presumably before using it with a command "
         + "that supports ttl",
@@ -218,7 +217,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_create.add_argument(
         "-T",
         "--ttl",
-        type=parse_timedelta,
+        type=datetime_ext.parse_timedelta,
         default=datetime.timedelta(hours=4),
         help="set the TTL for the box, after which it will be reaped ",
     )
@@ -261,7 +260,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_update.add_argument(
         "-T",
         "--ttl",
-        type=parse_timedelta,
+        type=datetime_ext.parse_timedelta,
         default=None,
         help="set the new TTL for the matching boxes relative to the current time, "
         + "after which they will be reaped",
@@ -486,7 +485,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     known_args = _normalize_known_args(known_args)
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
     if known_args.version:
-        print(f"fuzzbucket-client {__version__}")
+        print(f"fuzzbucket-client {__version__.__version__}")
         return 0
     if known_args.output_json:
         client.data_format = _DataFormats.JSON
@@ -749,7 +748,7 @@ class Client:
             return False
         payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         req = self._build_request(
-            _pjoin(self._url, "box"),
+            _pjoin(self._url, "box/"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -801,7 +800,7 @@ class Client:
             box_payload = payload.copy()
 
             if known_args.ttl:
-                box_age = parse_timedelta(matching_box["age"])
+                box_age = datetime_ext.parse_timedelta(matching_box["age"])
                 box_payload["ttl"] = str(
                     int(box_age.total_seconds() + known_args.ttl.total_seconds())
                 )
@@ -849,7 +848,7 @@ class Client:
             log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
-            _pjoin(self._url, "reboot", matching_box["instance_id"]),
+            _pjoin(self._url, "box", matching_box["instance_id"], "reboot"),
             method="POST",
         )
         with self._urlopen(req) as response:
@@ -901,7 +900,7 @@ class Client:
 
     @_command
     def list_aliases(self, *_):
-        req = self._build_request(_pjoin(self._url, "image-alias"))
+        req = self._build_request(_pjoin(self._url, "image-alias/"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -915,7 +914,7 @@ class Client:
     def create_alias(self, known_args, _):
         payload = {"alias": known_args.alias, "ami": known_args.ami}
         req = self._build_request(
-            _pjoin(self._url, "image-alias"),
+            _pjoin(self._url, "image-alias/"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -953,11 +952,7 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(self._url, "key")
-        if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
-
-        req = self._build_request(req_url, method="GET")
+        req = self._build_request(_pjoin(self._url, "key", key_alias), method="GET")
 
         raw_response = {}
         with self._urlopen(req) as response:
@@ -978,7 +973,7 @@ class Client:
 
     @_command
     def list_keys(self, *_):
-        req = self._build_request(_pjoin(self._url, "keys"), method="GET")
+        req = self._build_request(_pjoin(self._url, "key/"), method="GET")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -1001,12 +996,8 @@ class Client:
 
         payload = {"key_material": known_args.filename.read_text().strip()}
 
-        req_url = _pjoin(self._url, "key")
-        if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
-
         req = self._build_request(
-            req_url,
+            _pjoin(self._url, "key", key_alias),
             method="PUT",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
@@ -1031,11 +1022,7 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(self._url, "key")
-        if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
-
-        req = self._build_request(req_url, method="DELETE")
+        req = self._build_request(_pjoin(self._url, "key", key_alias), method="DELETE")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -1088,7 +1075,7 @@ class Client:
         return results
 
     def _list_boxes(self):
-        req = self._build_request(self._url)
+        req = self._build_request(_pjoin(self._url, "box/"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)

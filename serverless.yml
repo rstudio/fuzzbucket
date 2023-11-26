@@ -32,6 +32,7 @@ package:
   # additional files.
   include:
   - fuzzbucket/*.py
+  - fuzzbucket/blueprints/*.py
   - fuzzbucket/templates/*.html
   exclude:
   - '**'
