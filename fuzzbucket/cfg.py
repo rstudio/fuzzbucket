@@ -1,5 +1,9 @@
 import os
 import re
+import typing
+import urllib.parse
+
+from . import __version__, datetime_ext
 
 
 def get(
@@ -55,3 +59,38 @@ def getdict(
     return dict(
         [(k.strip(), v.strip()) for k, v in [pair.split(":", 1) for pair in as_list]]
     )
+
+
+ALLOWED_GITHUB_ORGS = tuple(getlist("FUZZBUCKET_ALLOWED_GITHUB_ORGS"))
+AUTH_PROVIDER: str = typing.cast(
+    str, get("FUZZBUCKET_AUTH_PROVIDER", default="github-oauth")
+)
+BRANDING: str = typing.cast(str, get("FUZZBUCKET_BRANDING"))
+DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
+    ("server", f"fuzzbucket/{__version__}"),
+    ("fuzzbucket-region", str(get("FUZZBUCKET_REGION"))),
+    ("fuzzbucket-version", __version__.__version__),
+)
+DEFAULT_INSTANCE_TAGS: tuple[dict[str, str], ...] = tuple(
+    [
+        dict(
+            Key=urllib.parse.unquote(k.strip()),
+            Value=urllib.parse.unquote(v.strip()),
+        )
+        for k, v in [
+            pair.split(":", maxsplit=1)
+            for pair in (get("FUZZBUCKET_DEFAULT_INSTANCE_TAGS") or "").split(",")
+            if ":" in pair
+        ]
+    ]
+)
+OAUTH_MAX_AGE = datetime_ext.parse_timedelta(
+    typing.cast(
+        str,
+        get("FUZZBUCKET_OAUTH_MAX_AGE", default="1 day"),
+    )
+).total_seconds()
+STAGE: str = typing.cast(str, get("FUZZBUCKET_STAGE"))
+UNKNOWN_AUTH_PROVIDER: ValueError = ValueError(
+    f"unknown auth provider {AUTH_PROVIDER!r}"
+)

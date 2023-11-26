@@ -1,12 +1,10 @@
 import functools
-import logging
 import typing
 
-import botocore.errorfactory
+import flask
 import flask_dance.consumer.storage
-from flask import session
 
-from . import get_dynamodb
+from . import aws
 from .log import log
 
 
@@ -53,7 +51,7 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
 
     @functools.cached_property
     def table(self):
-        return get_dynamodb().Table(self.table_name)
+        return aws.get_dynamodb().Table(self.table_name)
 
     @property
     def secret(self) -> str | None:
@@ -100,7 +98,7 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         return item
 
     def _load_user(self) -> str | None:
-        value = session.get("user")
+        value = flask.session.get("user")
 
         if value is not None and value != str(value).lower():
             value = str(value).lower()

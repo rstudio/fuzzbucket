@@ -78,6 +78,7 @@ is-releasable = '{root}/scripts/is_releasable.py "$(hatch version)"'
 release-artifact = '{root}/scripts/release-artifact'
 serve-htmlcov = "cd ./htmlcov && python -m http.server"
 lint-config = '{root}/scripts/lint_config.py {args}'
+routes = 'FLASK_APP=fuzzbucket.app flask routes {args}'
 
 [tool.hatch.build.targets.sdist]
 include = [

@@ -749,7 +749,7 @@ class Client:
             return False
         payload["ttl"] = str(int(known_args.ttl.total_seconds()))
         req = self._build_request(
-            _pjoin(self._url, "box"),
+            _pjoin(self._url, "box/"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -849,7 +849,7 @@ class Client:
             log.error(f"no box found matching {known_args.box!r}")
             return False
         req = self._build_request(
-            _pjoin(self._url, "reboot", matching_box["instance_id"]),
+            _pjoin(self._url, "box", matching_box["instance_id"], "reboot"),
             method="POST",
         )
         with self._urlopen(req) as response:
@@ -901,7 +901,7 @@ class Client:
 
     @_command
     def list_aliases(self, *_):
-        req = self._build_request(_pjoin(self._url, "image-alias"))
+        req = self._build_request(_pjoin(self._url, "image-alias/"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -915,7 +915,7 @@ class Client:
     def create_alias(self, known_args, _):
         payload = {"alias": known_args.alias, "ami": known_args.ami}
         req = self._build_request(
-            _pjoin(self._url, "image-alias"),
+            _pjoin(self._url, "image-alias/"),
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -953,11 +953,7 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(self._url, "key")
-        if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
-
-        req = self._build_request(req_url, method="GET")
+        req = self._build_request(_pjoin(self._url, "key", key_alias), method="GET")
 
         raw_response = {}
         with self._urlopen(req) as response:
@@ -978,7 +974,7 @@ class Client:
 
     @_command
     def list_keys(self, *_):
-        req = self._build_request(_pjoin(self._url, "keys"), method="GET")
+        req = self._build_request(_pjoin(self._url, "key/"), method="GET")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -1001,12 +997,8 @@ class Client:
 
         payload = {"key_material": known_args.filename.read_text().strip()}
 
-        req_url = _pjoin(self._url, "key")
-        if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
-
         req = self._build_request(
-            req_url,
+            _pjoin(self._url, "key", key_alias),
             method="PUT",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
@@ -1031,11 +1023,7 @@ class Client:
 
         self._preferences[_Preferences.DEFAULT_KEY_ALIAS.value] = key_alias
 
-        req_url = _pjoin(self._url, "key")
-        if key_alias != self.default_key_alias:
-            req_url = _pjoin(self._url, "key", key_alias)
-
-        req = self._build_request(req_url, method="DELETE")
+        req = self._build_request(_pjoin(self._url, "key", key_alias), method="DELETE")
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
@@ -1088,7 +1076,7 @@ class Client:
         return results
 
     def _list_boxes(self):
-        req = self._build_request(self._url)
+        req = self._build_request(_pjoin(self._url, "box/"))
         raw_response = {}
         with self._urlopen(req) as response:
             raw_response = json.load(response)
