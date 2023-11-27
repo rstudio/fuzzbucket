@@ -104,8 +104,6 @@ def _ensure_migrated(config: dict[str, typing.Any]) -> dict[str, typing.Any]:
         ("defaultSubnet", "FUZZBUCKET_DEFAULT_SUBNETS"),
         ("defaultTtl", "FUZZBUCKET_DEFAULT_TTL"),
         ("flaskSecretKey", "FUZZBUCKET_FLASK_SECRET_KEY"),
-        ("logLevel", "FUZZBUCKET_LOG_LEVEL"),
-        ("rootLogLevel", "FUZZBUCKET_ROOT_LOG_LEVEL"),
     ):
         if key in config:
             new_config["environment"][env_var] = str(config[key])
@@ -117,6 +115,17 @@ def _ensure_migrated(config: dict[str, typing.Any]) -> dict[str, typing.Any]:
         ):
             if key in config["oauth"]:
                 new_config["environment"][env_var] = str(config["oauth"][key])
+
+    log_levels: dict[str, str] = {}
+    if "logLevel" in config:
+        log_levels["fuzzbucket"] = config["logLevel"]
+
+    if "rootLogLevel" in config:
+        log_levels["."] = config["rootLogLevel"]
+
+    new_config["environment"]["FUZZBUCKET_LOG_LEVELS"] = ",".join(
+        [f"{k}:{v}" for k, v in sorted(log_levels.items())]
+    )
 
     return new_config
 
