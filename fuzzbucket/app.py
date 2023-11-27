@@ -58,7 +58,7 @@ def create_app() -> flask.Flask:
             authorization_url_params={"max_age": int(cfg.OAUTH_MAX_AGE)},
             auto_refresh_url=cfg.get("FUZZBUCKET_OAUTH_TOKEN_URL"),
             token_url=cfg.get("FUZZBUCKET_OAUTH_TOKEN_URL"),
-            redirect_to="oauth_complete",
+            redirect_to="guts.oauth_complete",
             scope=list(cfg.getlist("FUZZBUCKET_OAUTH_SCOPE")),
             storage=session_storage,
         )
