@@ -8,7 +8,7 @@ import pytest
 import werkzeug.exceptions
 
 import conftest
-from fuzzbucket import auth, blueprints, cfg
+from fuzzbucket import auth, blueprints, cfg, user
 
 
 @moto.mock_dynamodb
@@ -54,9 +54,7 @@ def test_logout(
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
     monkeypatch.setattr(auth, "github", fake_oauth_session)
 
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
-
-    with app.test_client() as c:
+    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
         response = c.post("/_logout")
 
         assert response is not None
@@ -119,7 +117,7 @@ def test_auth_complete(
     fake_oauth_session.responses["/user/orgs"] = orgs_response
     monkeypatch.setattr(cfg, "ALLOWED_GITHUB_ORGS", allowed_orgs)
 
-    with app.test_client() as c:
+    with app.test_client(user=user.User(user_id="pytest")) as c:
         if raises:
             flask.session["user"] = None
 
@@ -267,11 +265,6 @@ def test_set_user(
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
     monkeypatch.setattr(app.config["oauth_blueprint"], "session", fake_oauth_session)
 
-    def fake_is_fully_authd():
-        return authd
-
-    monkeypatch.setattr(auth, "is_fully_authd", fake_is_fully_authd)
-
     fake_session = {"user": session_user}
 
     monkeypatch.setattr(flask, "session", fake_session)
@@ -281,7 +274,7 @@ def test_set_user(
         conftest.FakeRequest({"Fuzzbucket-User": header_user}, {"user": arg_user}, {}),
     )
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
         response = c.get("/whoami")
         assert response is not None
         assert response.json is not None

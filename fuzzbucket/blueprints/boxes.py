@@ -1,39 +1,46 @@
 import typing
 
 import flask
+import flask_login
 
-from .. import auth, aws, box, cfg, datetime_ext, tags
+from .. import aws, box, cfg, datetime_ext, tags
 from ..log import log
 
 bp = flask.Blueprint("boxes", __name__)
 
 
 @bp.route("/", methods=("GET",), strict_slashes=False)
+@flask_login.login_required
 def list_boxes():
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str | None = flask_login.current_user.get_id()
 
-    log.debug(f"handling list_boxes for user={flask.request.remote_user!r}")
+    if user_id is None:
+        flask.abort(403)
+
+    log.debug(f"handling list_boxes for user={user_id!r}")
 
     return (
         flask.jsonify(
             boxes=aws.list_user_boxes(
                 aws.get_ec2_client(),
-                flask.request.remote_user,
+                user_id,
                 aws.get_vpc_id(aws.get_ec2_client()),
             ),
-            you=flask.request.remote_user,
+            you=user_id,
         ),
         200,
     )
 
 
 @bp.route("/", methods=("POST",), strict_slashes=False)
+@flask_login.login_required
 def create_box():
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str | None = flask_login.current_user.get_id()
 
-    log.debug(f"handling create_box for user={flask.session['user']!r}")
+    if user_id is None:
+        flask.abort(403)
+
+    log.debug(f"handling create_box for user={user_id!r}")
 
     if not flask.request.is_json:
         return flask.jsonify(error="request is not json"), 400
@@ -52,44 +59,42 @@ def create_box():
 
     key_alias = flask.request.json.get("key_alias", "default")
 
-    full_key_alias = flask.session["user"]
+    full_key_alias: str = user_id
     if str(key_alias).lower() != "default":
-        full_key_alias = f"{flask.session['user']}-{key_alias}"
+        full_key_alias = f"{user_id}-{key_alias}"
 
     matching_key = aws.find_matching_ec2_key_pair(full_key_alias)
-    username = flask.session["user"]
     resolved_key_name = (matching_key or {}).get("KeyName")
 
     if matching_key is None and cfg.AUTH_PROVIDER == "github-oauth":
-        if full_key_alias != flask.session["user"]:
+        if full_key_alias != user_id:
             return (
                 flask.jsonify(
                     error=f"key with alias {key_alias} does not exist",
-                    you=flask.request.remote_user,
+                    you=user_id,
                 ),
                 400,
             )
 
-        key_material = aws.fetch_first_compatible_github_key(flask.session["user"])
-        username = flask.session["user"]
+        key_material = aws.fetch_first_compatible_github_key(user_id)
 
         if key_material == "":
             return (
                 flask.jsonify(
-                    error=f"could not fetch compatible public key for user={username!r}"
+                    error=f"could not fetch compatible public key for user={user_id!r}"
                 ),
                 400,
             )
 
         aws.get_ec2_client().import_key_pair(
-            KeyName=username, PublicKeyMaterial=key_material.encode("utf-8")
+            KeyName=user_id, PublicKeyMaterial=key_material.encode("utf-8")
         )
-        resolved_key_name = username
-        log.debug(f"imported compatible public key for user={username!r}")
+        resolved_key_name = user_id
+        log.debug(f"imported compatible public key for user={user_id!r}")
 
     name = flask.request.json.get("name")
     if str(name or "").strip() == "":
-        name = f"fuzzbucket-{username}-{image_alias}"
+        name = f"fuzzbucket-{user_id}-{image_alias}"
 
     ttl = flask.request.json.get("ttl")
     if str(ttl or "").strip() == "":
@@ -101,10 +106,10 @@ def create_box():
     ttl = str(int(ttl))
 
     for instance in aws.list_user_boxes(
-        aws.get_ec2_client(), username, aws.get_vpc_id(aws.get_ec2_client())
+        aws.get_ec2_client(), user_id, aws.get_vpc_id(aws.get_ec2_client())
     ):
         if instance.name == name:
-            return flask.jsonify(boxes=[instance], you=username), 409
+            return flask.jsonify(boxes=[instance], you=user_id), 409
 
     network_interface: dict[str, int | bool | str | list[str]] = dict(
         DeviceIndex=0,
@@ -117,7 +122,7 @@ def create_box():
     if subnet_id is not None:
         log.debug(
             f"setting subnet_id={subnet_id!r} on network interface "
-            + f"for user={username!r}"
+            + f"for user={user_id!r}"
         )
 
         network_interface["SubnetId"] = subnet_id
@@ -167,7 +172,7 @@ def create_box():
         ),
         dict(Key=tags.Tags.image_alias.value, Value=image_alias),
         dict(Key=tags.Tags.ttl.value, Value=ttl),
-        dict(Key=tags.Tags.user.value, Value=username),
+        dict(Key=tags.Tags.user.value, Value=user_id),
     ] + [tag_spec.copy() for tag_spec in cfg.DEFAULT_INSTANCE_TAGS]
 
     for key, value in flask.request.json.get("instance_tags", {}).items():
@@ -201,27 +206,29 @@ def create_box():
             boxes=[
                 box.Box.from_ec2_dict(inst) for inst in response.get("Instances", [])
             ],
-            you=username,
+            you=user_id,
         ),
         201,
     )
 
 
 @bp.route("/<string:instance_id>", methods=("PUT",))
+@flask_login.login_required
 def update_box(instance_id):
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str | None = flask_login.current_user.get_id()
+
+    if user_id is None:
+        flask.abort(403)
 
     log.debug(
-        f"handling update_box for user={flask.request.remote_user!r} "
-        + f"instance_id={instance_id!r}"
+        f"handling update_box for user={user_id!r} " + f"instance_id={instance_id!r}"
     )
 
     if instance_id not in [
         b.instance_id
         for b in aws.list_user_boxes(
             aws.get_ec2_client(),
-            flask.request.remote_user,
+            user_id,
             aws.get_vpc_id(aws.get_ec2_client()),
         )
     ]:
@@ -251,27 +258,29 @@ def update_box(instance_id):
     return (
         flask.jsonify(
             raw_response=response.get("ResponseMetadata", {}),
-            you=flask.request.remote_user,
+            you=user_id,
         ),
         200,
     )
 
 
 @bp.route("/<string:instance_id>/reboot", methods=("POST",))
+@flask_login.login_required
 def reboot_box(instance_id):
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str | None = flask_login.current_user.get_id()
+
+    if user_id is None:
+        flask.abort(403)
 
     log.debug(
-        f"handling reboot_box for user={flask.request.remote_user!r} "
-        + f"instance_id={instance_id!r}"
+        f"handling reboot_box for user={user_id!r} " + f"instance_id={instance_id!r}"
     )
 
     if instance_id not in [
         b.instance_id
         for b in aws.list_user_boxes(
             aws.get_ec2_client(),
-            flask.request.remote_user,
+            user_id,
             aws.get_vpc_id(aws.get_ec2_client()),
         )
     ]:
@@ -283,20 +292,22 @@ def reboot_box(instance_id):
 
 
 @bp.route("/<string:instance_id>", methods=("DELETE",))
+@flask_login.login_required
 def delete_box(instance_id):
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str | None = flask_login.current_user.get_id()
+
+    if user_id is None:
+        flask.abort(403)
 
     log.debug(
-        f"handling delete_box for user={flask.request.remote_user!r} "
-        + f"instance_id={instance_id!r}"
+        f"handling delete_box for user={user_id!r} " + f"instance_id={instance_id!r}"
     )
 
     if instance_id not in [
         b.instance_id
         for b in aws.list_user_boxes(
             aws.get_ec2_client(),
-            flask.request.remote_user,
+            user_id,
             aws.get_vpc_id(aws.get_ec2_client()),
         )
     ]:

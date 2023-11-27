@@ -4,7 +4,7 @@ import moto
 import pytest
 
 import conftest
-from fuzzbucket import auth, aws, blueprints
+from fuzzbucket import auth, aws, blueprints, user
 
 
 @pytest.mark.parametrize(
@@ -44,7 +44,6 @@ def test_get_key(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
     monkeypatch.setattr(auth, "github", fake_oauth_session)
@@ -66,7 +65,7 @@ def test_get_key(
 
     monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
         response = c.get(f"/key/{key_alias}", headers=authd_headers)
 
         assert response is not None
@@ -115,7 +114,6 @@ def test_list_keys(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
     monkeypatch.setattr(auth, "github", fake_oauth_session)
@@ -142,7 +140,7 @@ def test_list_keys(
 
     monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
         response = c.get("/key/", headers=authd_headers)
         assert response is not None
         assert response.status_code == expected
@@ -256,7 +254,6 @@ def test_put_key(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
     monkeypatch.setattr(auth, "github", fake_oauth_session)
@@ -302,7 +299,7 @@ def test_put_key(
     monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
 
     response = None
-    with app.test_client() as c:
+    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
         response = c.put(f"/key/{key_alias}", headers=authd_headers, **request_kwargs)
 
     assert response is not None
@@ -350,7 +347,6 @@ def test_delete_key(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
     monkeypatch.setattr(auth, "github", fake_oauth_session)
@@ -372,7 +368,7 @@ def test_delete_key(
 
     monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
         response = c.delete(f"/key/{key_alias}", headers=authd_headers)
 
         assert response is not None

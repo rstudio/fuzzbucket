@@ -68,8 +68,8 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
 
         self.table.put_item(Item=item)
 
-    def dump(self) -> dict:
-        user = self._load_user()
+    def dump(self, user: str | None = None) -> dict[str, typing.Any]:
+        user = user if user is not None else self._load_user()
 
         log.debug(f"dumping record user={user!r}")
 

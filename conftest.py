@@ -4,6 +4,7 @@ import random
 import typing
 
 import flask
+import flask_login
 import pytest
 
 os.environ["FUZZBUCKET_STAGE"] = "test"
@@ -44,6 +45,7 @@ def resetti(app):
     aws.get_dynamodb.cache_clear()
     aws.get_ec2_client.cache_clear()
     app.testing = True
+    app.test_client_class = flask_login.FlaskLoginClient
     app.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
     session_storage = flask_dance_storage.FlaskDanceStorage(
         table_name=f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"

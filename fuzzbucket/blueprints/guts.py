@@ -1,13 +1,11 @@
 import json
 import secrets
-import typing
 
 import flask
-import flask_dance.consumer
-import oauthlib.oauth2.rfc6749.errors
+import flask_login
 from flask_dance.contrib.github import github
 
-from .. import auth, aws, cfg
+from .. import aws, cfg
 from ..log import log
 
 bp = flask.Blueprint("guts", __name__)
@@ -36,106 +34,6 @@ def handle_500(exc):
     )
 
 
-@bp.before_app_request
-def set_user():
-    source = "session"
-
-    if flask.session.get("user") is None:
-        user, source = flask.request.headers.get("Fuzzbucket-User"), "header"
-        if user is None:
-            user, source = flask.request.args.get("user"), "qs"
-
-        flask.session["user"] = user
-
-    if flask.session.get("user") is not None:
-        lower_user = str(flask.session["user"]).lower()
-
-        if flask.session["user"] != lower_user:
-            flask.session["user"] = lower_user
-
-            log.debug(
-                f"migrated session user to lowercase session user={flask.session['user']!r}"
-            )
-
-    log.debug(
-        f"setting remote_user from user={flask.session['user']!r} source={source!r}"
-    )
-    flask.request.environ["REMOTE_USER"] = flask.session["user"]
-
-    if cfg.AUTH_PROVIDER == "github-oauth":
-        if not github.authorized:
-            log.debug("not currently github authorized; assuming login flow")
-
-            return
-
-        user_response = github.get("/user").json()
-        github_login = user_response.get("login")
-
-        if github_login is None:
-            log.warning(f"no login available in github user response={user_response!r}")
-
-            auth.nullify_auth()
-
-            return
-
-        if str(github_login).lower() == str(flask.session["user"]).lower():
-            log.debug(
-                f"github login={github_login!r} case-insensitive matches session"
-                f" user={flask.session['user']!r}"
-            )
-            return
-
-        log.warning(
-            f"mismatched github_login={github_login!r} user={flask.session['user']!r}"
-        )
-        auth.nullify_auth()
-
-    elif cfg.AUTH_PROVIDER == "oauth":
-        assert flask.current_app.config["oauth_blueprint"] is not None
-        assert flask.current_app.config["oauth_blueprint"].session is not None
-
-        if not flask.current_app.config["oauth_blueprint"].session.authorized:
-            log.debug("not currently authorized; assuming login flow")
-
-            return
-
-        userinfo_response = _fetch_oauth_userinfo(
-            flask.current_app.config["oauth_blueprint"].session
-        )
-        if userinfo_response is None:
-            auth.nullify_auth()
-
-            return
-
-        log.debug(f"fetched userinfo={userinfo_response!r}")
-
-        user_email = userinfo_response.get("email")
-        if user_email is None:
-            log.warning(
-                f"no login available in oauth userinfo response={userinfo_response!r}"
-            )
-
-            auth.nullify_auth()
-            return
-
-        if str(user_email).lower() == str(flask.session["user"]).lower():
-            log.debug(
-                f"oauth login={user_email!r} case-insensitive matches session "
-                + f"user={flask.session['user']!r}"
-            )
-            return
-
-        log.warning(
-            f"mismatched user_email={user_email!r} user={flask.session['user']!r}; "
-            + "wiping session user and token"
-        )
-
-        auth.nullify_auth()
-
-    else:
-        raise cfg.UNKNOWN_AUTH_PROVIDER
-
-
 @bp.after_app_request
 def set_default_headers(resp: flask.Response) -> flask.Response:
     for key, value in cfg.DEFAULT_HEADERS:
@@ -144,41 +42,32 @@ def set_default_headers(resp: flask.Response) -> flask.Response:
     return resp
 
 
-def _fetch_oauth_userinfo(
-    oauth_session: flask_dance.consumer.OAuth2Session,
-) -> dict[str, typing.Any] | None:
-    assert oauth_session is not None
-    assert oauth_session.token is not None
-
-    try:
-        return oauth_session.get("userinfo").json()
-    except oauthlib.oauth2.rfc6749.errors.OAuth2Error:
-        log.exception(
-            f"failed to get oauth userinfo for user={flask.session['user']!r}"
-        )
-
-        return None
-
-
 @bp.route("/whoami", methods=("GET",))
+@flask_login.login_required
 def whoami():
-    if not auth.is_fully_authd():
-        return flask.jsonify(error="not logged in"), 400
-
     return flask.jsonify(you=flask.session.get("user")), 200
 
 
 @bp.route("/_login", methods=("GET",))
 def login():
+    redirect_to: str = ""
+
     if cfg.AUTH_PROVIDER == "github-oauth":
-        return flask.redirect(flask.url_for("github.login"))
+        redirect_to = flask.url_for("github.login")
     elif cfg.AUTH_PROVIDER == "oauth":
-        return flask.redirect(flask.url_for("oauth.login"))
+        redirect_to = flask.url_for("oauth.login")
     else:
         raise cfg.UNKNOWN_AUTH_PROVIDER
 
+    log.debug(
+        f"handling login via redirect to {redirect_to!r}; session={flask.session!r}"
+    )
+
+    return flask.redirect(redirect_to)
+
 
 @bp.route("/auth-complete", methods=("GET",))
+@flask_login.login_required
 def github_auth_complete():
     log.debug(f"allowed_orgs={cfg.ALLOWED_GITHUB_ORGS!r}")
 
@@ -198,7 +87,7 @@ def github_auth_complete():
     user_orgs = {o["login"] for o in raw_user_orgs}
 
     if len(set(cfg.ALLOWED_GITHUB_ORGS) & user_orgs) == 0:
-        auth.nullify_auth()
+        flask_login.logout_user()
 
         return (
             flask.render_template(
@@ -213,6 +102,7 @@ def github_auth_complete():
 
 
 @bp.route("/oauth-complete", methods=("GET",))
+@flask_login.login_required
 def oauth_complete():
     assert flask.current_app.config["oauth_blueprint"] is not None
     assert flask.current_app.config["oauth_blueprint"].session is not None
@@ -247,21 +137,28 @@ def _set_secret_auth_complete():
 
 
 @bp.route("/_logout", methods=("POST",))
+@flask_login.login_required
 def logout():
-    if not auth.is_fully_authd():
-        return flask.jsonify(error="not logged in"), 400
+    user_id: str | None = flask_login.current_user.get_id()
 
-    log.debug(f"handling _logout for user={flask.request.remote_user!r}")
+    if user_id is None:
+        flask_login.logout_user()
 
-    table = aws.get_dynamodb().Table(f"fuzzbucket-{cfg.STAGE}-users")
-    existing_user = table.get_item(Key=dict(user=flask.request.remote_user))
+        flask.abort(403)
+
+    log.debug(f"handling _logout for user={user_id!r}")
+
+    table = aws.get_dynamodb().Table(cfg.USERS_TABLE)
+    existing_user = table.get_item(Key=dict(user=user_id))
 
     if existing_user.get("Item") in (None, {}):
+        flask_login.logout_user()
+
         return flask.jsonify(error=f"no user {existing_user!r}"), 404
 
-    resp = table.delete_item(Key=dict(user=flask.request.remote_user))
+    resp = table.delete_item(Key=dict(user=user_id))
     log.debug(f"raw dynamodb response={resp!r}")
 
-    auth.nullify_auth()
+    flask_login.logout_user()
 
     return "", 204

@@ -36,6 +36,7 @@ dependencies = [
   "coverage",
   "flask",  # lambda dependency
   "flask-dance",  # lambda dependency
+  "flask-login",  # lambda dependency
   "ipython",
   "isort",
   "moto[ec2,dynamodb]",

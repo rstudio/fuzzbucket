@@ -6,7 +6,7 @@ import flask
 import moto
 
 import conftest
-from fuzzbucket import auth, aws, blueprints, box, cfg, datetime_ext, reaper
+from fuzzbucket import aws, blueprints, box, cfg, datetime_ext, reaper, user
 
 
 @moto.mock_ec2
@@ -17,7 +17,6 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
     dynamodb = boto3.resource("dynamodb")
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
     if cfg.AUTH_PROVIDER == "oauth":
@@ -54,7 +53,7 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
     with monkeypatch.context() as mp:
         mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
 
-        with app.test_client() as c:
+        with app.test_client(user=user.User(user_id="lordtestingham")) as c:
             response = c.post(
                 "/box/",
                 json={"ttl": "-1", "ami": "ami-fafafafafaf"},

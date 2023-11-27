@@ -6,7 +6,7 @@ import moto
 import pytest
 
 import conftest
-from fuzzbucket import auth, aws, blueprints, cfg
+from fuzzbucket import auth, aws, blueprints, cfg, user
 
 
 @pytest.mark.parametrize(
@@ -29,11 +29,10 @@ def test_list_boxes(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_ec2_client", lambda: boto3.client("ec2"))
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
         response = c.get("/box/", headers=authd_headers)
         assert response is not None
         assert response.status_code == expected
@@ -89,7 +88,6 @@ def test_create_box(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
@@ -131,7 +129,7 @@ def test_create_box(
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
-        with app.test_client() as c:
+        with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
             response = c.post(
                 "/box/",
                 json=payload,
@@ -194,7 +192,6 @@ def test_update_box(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
     def fake_describe_key_pairs():
@@ -227,14 +224,14 @@ def test_update_box(
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
-        with app.test_client() as c:
+        with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
             response = c.post(
                 "/box/", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
     assert response is not None
     assert "boxes" in typing.cast(conftest.AnyDict, response.json)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
         with monkeypatch.context() as mp:
             all_instances = ec2_client.describe_instances()
 
@@ -246,7 +243,6 @@ def test_update_box(
                 "describe_instances",
                 fake_describe_instances,
             )
-            mp.setattr(auth, "is_fully_authd", lambda: authd)
             response = c.put(
                 f'/box/{typing.cast(conftest.AnyDict, response.json)["boxes"][0]["instance_id"]}',
                 json=update_body,
@@ -281,7 +277,6 @@ def test_delete_box(
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
     def fake_describe_key_pairs():
@@ -314,7 +309,7 @@ def test_delete_box(
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
-        with app.test_client() as c:
+        with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
             response = c.post(
                 "/box/", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
@@ -322,7 +317,7 @@ def test_delete_box(
     assert response is not None
     assert "boxes" in typing.cast(conftest.AnyDict, response.json)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
         all_instances = ec2_client.describe_instances()
 
         def fake_describe_instances(*_, **__):
@@ -333,7 +328,6 @@ def test_delete_box(
             "describe_instances",
             fake_describe_instances,
         )
-        monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
         response = c.delete(
             f'/box/{typing.cast(conftest.AnyDict, response.json)["boxes"][0]["instance_id"]}',
             headers=authd_headers,
@@ -352,12 +346,11 @@ def test_delete_box_not_yours(app, monkeypatch, authd_headers, fake_oauth_sessio
         return []
 
     monkeypatch.setattr(aws, "list_user_boxes", fake_list_user_boxes)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
     response = None
 
-    with app.test_client() as c:
+    with app.test_client(user=user.User.load("pytest")) as c:
         response = c.delete("/box/i-fafababacaca", headers=authd_headers)
 
     assert response is not None
@@ -387,8 +380,6 @@ def test_reboot_box(
     dynamodb = boto3.resource("dynamodb")
     conftest.setup_dynamodb_tables(dynamodb)
     monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
     def fake_describe_key_pairs():
@@ -421,7 +412,7 @@ def test_reboot_box(
     response = None
     with monkeypatch.context() as mp:
         mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
-        with app.test_client() as c:
+        with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
             response = c.post(
                 "/box/", json={"ami": "ami-fafafafafaf"}, headers=authd_headers
             )
@@ -429,7 +420,7 @@ def test_reboot_box(
     assert response is not None
     assert "boxes" in typing.cast(conftest.AnyDict, response.json)
 
-    with app.test_client() as c:
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
         all_instances = ec2_client.describe_instances()
         with monkeypatch.context() as mp:
 
@@ -441,7 +432,6 @@ def test_reboot_box(
                 "describe_instances",
                 fake_describe_instances,
             )
-            mp.setattr(auth, "is_fully_authd", lambda: authd)
             instance_id = typing.cast(conftest.AnyDict, response.json)["boxes"][0][
                 "instance_id"
             ]
@@ -453,16 +443,20 @@ def test_reboot_box(
 
 
 @moto.mock_ec2
+@moto.mock_dynamodb
 def test_reboot_box_not_yours(app, fake_oauth_session, monkeypatch):
+    dynamodb = boto3.resource("dynamodb")
+    conftest.setup_dynamodb_tables(dynamodb)
+    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
+
     def fake_list_user_boxes(*_):
         return []
 
     monkeypatch.setattr(aws, "list_user_boxes", fake_list_user_boxes)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
     monkeypatch.setattr(auth, "github", fake_oauth_session)
     monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
-    with app.test_client() as c:
+    with app.test_client(user=user.User.load("pytest")) as c:
         response = c.post("/box/i-fafafafaf/reboot")
         assert response is not None
         assert response.status_code == 403

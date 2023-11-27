@@ -3,11 +3,14 @@ import warnings
 import flask
 import flask.json.provider
 
-from . import cfg, flask_dance_storage, json_provider
+from . import auth, cfg, flask_dance_storage, json_provider
 from .blueprints import boxes, guts, image_aliases, keys
+from .log import log
 
 
 def create_app() -> flask.Flask:
+    log.debug("creating app")
+
     app = flask.Flask(__name__)
 
     app.register_blueprint(guts.bp)
@@ -67,5 +70,7 @@ def create_app() -> flask.Flask:
 
     else:
         warnings.warn(f"unknown auth provider {cfg.AUTH_PROVIDER!r}")
+
+    auth.login_manager.init_app(app)
 
     return app
