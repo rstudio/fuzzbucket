@@ -35,13 +35,8 @@ def test_get_key(
     key_alias,
     expected,
 ):
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2)
-
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-
-    monkeypatch.setattr(user, "github", fake_oauth_session)
 
     def fake_describe_key_pairs():
         return {
@@ -106,13 +101,8 @@ def test_list_keys(
     n_keys,
     expected,
 ):
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2)
-
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-
-    monkeypatch.setattr(user, "github", fake_oauth_session)
 
     def fake_describe_key_pairs():
         return {
@@ -247,13 +237,8 @@ def test_put_key(
     request_kwargs,
     expected,
 ):
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2)
-
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-
-    monkeypatch.setattr(user, "github", fake_oauth_session)
 
     state = {"describe_key_pairs_call": 0}
 
@@ -343,13 +328,8 @@ def test_delete_key(
     key_alias,
     expected,
 ):
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2)
-
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-
-    monkeypatch.setattr(user, "github", fake_oauth_session)
 
     def fake_describe_key_pairs():
         return {

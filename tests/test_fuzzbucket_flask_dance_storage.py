@@ -8,9 +8,7 @@ from fuzzbucket import aws, flask_dance_storage
 
 
 def test_flask_dance_storage(dynamodb, monkeypatch):
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    fake_session = {"user": "pytest"}
-    monkeypatch.setattr(flask, "session", fake_session)
+    monkeypatch.setattr(flask, "session", {"user": "pytest"})
 
     table_name = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     storage = flask_dance_storage.FlaskDanceStorage(table_name)

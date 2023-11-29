@@ -1,9 +1,8 @@
 import flask
-import flask_dance.contrib.github
 import pytest
 
 import conftest
-from fuzzbucket import aws, cfg, user
+from fuzzbucket import cfg, user
 
 
 @pytest.mark.parametrize(
@@ -42,8 +41,6 @@ def test_auth_complete(
     orgs_response,
     expected,
 ):
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-
     state = {}
 
     def fake_render_template(template_name, **kwargs):
@@ -54,8 +51,6 @@ def test_auth_complete(
     monkeypatch.setattr(flask, "session", {"user": "pytest"})
 
     fake_oauth_session.responses["/user/orgs"] = orgs_response
-    monkeypatch.setattr(user, "github", fake_oauth_session)
-    monkeypatch.setattr(flask_dance.contrib.github, "github", fake_oauth_session)
 
     monkeypatch.setattr(cfg, "ALLOWED_GITHUB_ORGS", allowed_orgs)
 

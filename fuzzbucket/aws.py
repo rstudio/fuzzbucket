@@ -4,7 +4,6 @@ import random
 import typing
 
 import boto3
-import botocore.exceptions
 from flask_dance.contrib.github import github
 
 from . import box, cfg, tags

@@ -46,7 +46,6 @@ def test_get_dynamodb(monkeypatch, offline):
 
 
 def test_list_vpc_boxes(ec2, monkeypatch):
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2)
     state = {}
 
     def fake_list_boxes_filtered(ec2_client, filters):

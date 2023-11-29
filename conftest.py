@@ -210,13 +210,17 @@ def authd_headers() -> typing.List[typing.Tuple[str, str]]:
 def fake_oauth_session(monkeypatch):
     sess = FakeOAuthSession()
 
-    from fuzzbucket import user
+    import flask_dance.contrib.github
+
+    from fuzzbucket import aws, user
     from fuzzbucket.blueprints import oauth
 
     with monkeypatch.context() as mp:
-        mp.setattr(user, "github", sess)
-        mp.setattr(user, "_session", sess)
+        mp.setattr(aws, "github", sess)
+        mp.setattr(flask_dance.contrib.github, "github", sess)
         mp.setattr(oauth.bp, "session", sess)
+        mp.setattr(user, "_session", sess)
+        mp.setattr(user, "github", sess)
 
         yield sess
 
