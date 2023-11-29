@@ -1,9 +1,7 @@
 import json
-import secrets
 
 import flask
 import flask_login
-from flask_dance.contrib.github import github
 
 from .. import aws, cfg
 from ..log import log
@@ -66,76 +64,6 @@ def login():
     return flask.redirect(redirect_to)
 
 
-@bp.route("/auth-complete", methods=("GET",))
-@flask_login.login_required
-def github_auth_complete():
-    log.debug(f"allowed_orgs={cfg.ALLOWED_GITHUB_ORGS!r}")
-
-    raw_user_orgs = github.get("/user/orgs").json()
-    log.debug(f"raw_user_orgs={raw_user_orgs!r}")
-
-    if "message" in raw_user_orgs:
-        return (
-            flask.render_template(
-                "error.html",
-                branding=cfg.BRANDING,
-                error=f"GitHub API error: {raw_user_orgs['message']}",
-            ),
-            503,
-        )
-
-    user_orgs = {o["login"] for o in raw_user_orgs}
-
-    if len(set(cfg.ALLOWED_GITHUB_ORGS) & user_orgs) == 0:
-        flask_login.logout_user()
-
-        return (
-            flask.render_template(
-                "error.html",
-                branding=cfg.BRANDING,
-                error="You are not a member of an allowed GitHub organization.",
-            ),
-            403,
-        )
-
-    return _set_secret_auth_complete()
-
-
-@bp.route("/oauth-complete", methods=("GET",))
-@flask_login.login_required
-def oauth_complete():
-    assert flask.current_app.config["oauth_blueprint"] is not None
-    assert flask.current_app.config["oauth_blueprint"].session is not None
-
-    return _set_secret_auth_complete()
-
-
-def _set_secret_auth_complete():
-    try:
-        secret = secrets.token_urlsafe(31)
-        flask.current_app.config["session_storage"].secret = secret
-
-        return (
-            flask.render_template(
-                "auth_complete.html",
-                branding=cfg.BRANDING,
-                secret=secret,
-            ),
-            200,
-        )
-    except ValueError:
-        log.exception(f"failed to set secret for user={flask.session.get('user')!r}")
-
-        return (
-            flask.render_template(
-                "error.html",
-                branding=cfg.BRANDING,
-                error=f"Failed to set secret for user={flask.session.get('user')!r}",
-            ),
-            500,
-        )
-
-
 @bp.route("/_logout", methods=("POST",))
 @flask_login.login_required
 def logout():
@@ -143,6 +71,8 @@ def logout():
 
     if user_id is None:
         flask_login.logout_user()
+
+        log.warning("cannot logout; no user found")
 
         flask.abort(403)
 

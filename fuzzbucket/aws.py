@@ -99,16 +99,14 @@ def list_user_boxes(ec2_client, user, vpc_id):
     )
 
 
-def resolve_ami_alias(image_alias: str) -> str | None:
-    try:
-        resp = (
-            get_dynamodb()
-            .Table(f"fuzzbucket-{cfg.get('FUZZBUCKET_STAGE')}-image-aliases")
-            .get_item(Key=dict(alias=image_alias))
-        )
+def resolve_ami_alias(image_alias: str, ddb: typing.Any = None) -> str | None:
+    ddb = ddb if ddb is not None else get_dynamodb()
 
-        return resp.get("Item", {}).get("ami")
-    except botocore.exceptions.ClientError:
+    try:
+        resp = ddb.Table(cfg.IMAGE_ALIASES_TABLE).get_item(Key=dict(alias=image_alias))
+
+        return typing.cast(dict, resp.get("Item", {})).get("ami")
+    except Exception:
         log.exception("oh no boto3")
 
         return None
@@ -135,7 +133,7 @@ def resolve_security_group(security_group: str) -> str:
         get_ec2_client()
         .describe_security_groups(
             Filters=[
-                dict(Name="group-name", Values=[security_group]),
+                dict(Name="group-name", Values=[security_group]),  # type: ignore
             ],
         )
         .get("SecurityGroups")
@@ -158,7 +156,7 @@ def find_subnet() -> str | None:
     candidate_subnets = (
         get_ec2_client()
         .describe_subnets(
-            Filters=[
+            Filters=[  # type: ignore
                 dict(
                     Name="vpc-id",
                     Values=[
@@ -179,9 +177,9 @@ def find_subnet() -> str | None:
             resolve_subnet(random.choice(default_subnets)) if default_subnets else None
         )
 
-    candidate_subnets.sort(key=lambda s: s["AvailableIpAddressCount"])
+    candidate_subnets.sort(key=lambda s: s["AvailableIpAddressCount"])  # type: ignore
 
-    return candidate_subnets[-1]["SubnetId"]
+    return typing.cast(dict, candidate_subnets[-1])["SubnetId"]
 
 
 @functools.cache
@@ -192,7 +190,7 @@ def resolve_subnet(subnet_id_or_name: str) -> str | None:
         get_ec2_client()
         .describe_security_groups(
             Filters=[
-                dict(Name="tag:Name", Values=[subnet_id_or_name]),
+                dict(Name="tag:Name", Values=[subnet_id_or_name]),  # type: ignore
             ],
         )
         .get("Subnets", [{"SubnetId": subnet_id_or_name}])[0]
@@ -204,6 +202,8 @@ def find_matching_ec2_key_pair(user: str) -> typing.Optional[dict]:
     low_user = str(user).lower()
 
     for key_pair in get_ec2_client().describe_key_pairs().get("KeyPairs", []):
+        key_pair = typing.cast(dict, key_pair)
+
         if key_pair["KeyName"].lower() == low_user:
             return key_pair
 
@@ -215,6 +215,8 @@ def find_matching_ec2_key_pairs(prefix: str) -> typing.List[dict]:
     ret = []
 
     for key_pair in get_ec2_client().describe_key_pairs().get("KeyPairs", []):
+        key_pair = typing.cast(dict, key_pair)
+
         key_name = key_pair["KeyName"].lower()
         if key_name == low_prefix or key_name.startswith(low_prefix + "-"):
             ret.append(key_pair)

@@ -1,12 +1,9 @@
-import base64
 import typing
 
-import boto3
-import moto
 import pytest
 
 import conftest
-from fuzzbucket import auth, aws, blueprints, user
+from fuzzbucket import user
 
 
 @pytest.mark.parametrize(
@@ -20,19 +17,24 @@ from fuzzbucket import auth, aws, blueprints, user
         pytest.param(False, 403, id="forbidden"),
     ],
 )
-@moto.mock_dynamodb
 def test_list_image_aliases(
-    app, authd_headers, fake_oauth_session, monkeypatch, authd, expected
+    app,
+    dynamodb,
+    fake_users,
+    fake_oauth_session,
+    authd,
+    expected,
 ):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     fake_oauth_session.authorized = authd
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
-    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
-        response = c.get("/image-alias/", headers=authd_headers)
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
+        response = c.get(
+            "/image-alias/",
+            headers={
+                "fuzzbucket-user": "pytest",
+                "fuzzbucket-secret": fake_users.get("pytest", ""),
+            },
+        )
         assert response is not None
         assert response.status_code == expected
 
@@ -48,42 +50,43 @@ def test_list_image_aliases(
         pytest.param(False, 403, id="forbidden"),
     ],
 )
-@moto.mock_dynamodb
 def test_create_image_alias(
-    app, authd_headers, fake_oauth_session, monkeypatch, authd, expected
+    app,
+    dynamodb,
+    fake_users,
+    fake_oauth_session,
+    authd,
+    expected,
 ):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     fake_oauth_session.authorized = authd
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
-    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
         response = c.post(
             "/image-alias/",
             json={"alias": "yikes", "ami": "ami-fafababacaca"},
-            headers=authd_headers,
+            headers={
+                "fuzzbucket-user": "pytest",
+                "fuzzbucket-secret": fake_users.get("pytest", ""),
+            },
         )
         assert response is not None
         assert response.status_code == expected
 
 
-@moto.mock_dynamodb
 def test_create_image_alias_not_json(
-    app, authd_headers, fake_oauth_session, monkeypatch
+    app,
+    dynamodb,
+    fake_users,
+    fake_oauth_session,
 ):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
-    with app.test_client(user=user.User(user_id="pytest")) as c:
+    with app.test_client(user=user.User.load("pytest")) as c:
         response = c.post(
             "/image-alias/",
             data="HAY",
-            headers=authd_headers,
+            headers={
+                "fuzzbucket-user": "pytest",
+                "fuzzbucket-secret": fake_users.get("pytest", ""),
+            },
         )
         assert response is not None
         assert response.status_code == 400
@@ -93,51 +96,61 @@ def test_create_image_alias_not_json(
     ("authd", "expected"),
     [pytest.param(True, 204, id="happy"), pytest.param(False, 403, id="forbidden")],
 )
-@moto.mock_dynamodb
 def test_delete_image_alias(
-    app, authd_headers, fake_oauth_session, monkeypatch, authd, expected
+    app,
+    dynamodb,
+    fake_users,
+    fake_oauth_session,
+    authd,
+    expected,
 ):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
     fake_oauth_session.authorized = authd
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
 
-    with app.test_client(user=(user.User(user_id="pytest") if authd else None)) as c:
-        response = c.delete("/image-alias/ubuntu18", headers=authd_headers)
+    with app.test_client(user=(user.User.load("pytest") if authd else None)) as c:
+        response = c.delete(
+            "/image-alias/ubuntu18",
+            headers={
+                "fuzzbucket-user": "pytest",
+                "fuzzbucket-secret": fake_users.get("pytest", ""),
+            },
+        )
         assert response is not None
         assert response.status_code == expected
 
 
-@moto.mock_dynamodb
 def test_delete_image_alias_no_alias(
-    app, fake_oauth_session, authd_headers, monkeypatch
+    app,
+    dynamodb,
+    fake_users,
+    fake_oauth_session,
 ):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
-    with app.test_client(user=user.User(user_id="pytest")) as c:
-        response = c.delete("/image-alias/nah", headers=authd_headers)
+    with app.test_client(user=user.User.load("pytest")) as c:
+        response = c.delete(
+            "/image-alias/nah",
+            headers={
+                "fuzzbucket-user": "pytest",
+                "fuzzbucket-secret": fake_users.get("pytest", ""),
+            },
+        )
         assert response is not None
         assert response.status_code == 404
 
 
-@moto.mock_dynamodb
-def test_delete_image_alias_not_yours(app, fake_oauth_session, monkeypatch):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
+def test_delete_image_alias_not_yours(
+    app,
+    dynamodb,
+    fake_users,
+    fake_oauth_session,
+):
+    fake_oauth_session.responses["/user"]["login"] = "charizard"
 
-    with app.test_client(user=user.User(user_id="pytest")) as c:
+    with app.test_client(user=user.User.load("charizard")) as c:
         response = c.delete(
             "/image-alias/ubuntu18",
-            headers=[("Authorization", base64.b64encode(b"jag:wagon").decode("utf-8"))],
+            headers={
+                "fuzzbucket-user": "charizard",
+                "fuzzbucket-secret": fake_users.get("charizard", ""),
+            },
         )
         assert response is not None
         assert response.status_code == 403

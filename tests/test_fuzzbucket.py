@@ -1,14 +1,10 @@
 import typing
 
 import fuzzbucket
-from fuzzbucket import auth, blueprints, reaper
+from fuzzbucket import reaper
 
 
-def test_deferred_app(fake_oauth_session, monkeypatch):
-    fake_oauth_session.authorized = False
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
+def test_deferred_app():
     state = {}
 
     def fake_start_response(status, headers):

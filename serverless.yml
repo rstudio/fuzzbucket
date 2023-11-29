@@ -55,6 +55,7 @@ functions:
 
     layers:
     - Ref: PythonRequirementsLambdaLayer
+    - arn:aws:lambda:${self:provider.environment.FUZZBUCKET_REGION}:017000801446:layer:AWSLambdaPowertoolsPythonV2:51
 
     events:
     - http: { method: ANY, path: / }

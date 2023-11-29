@@ -13,6 +13,11 @@ def get_key(alias):
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning(
+            "cannot get key; no user found",
+            extra=dict(alias=alias),
+        )
+
         flask.abort(403)
 
     full_key_alias = user_id
@@ -47,6 +52,8 @@ def list_keys():
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning("cannot list keys; no user found")
+
         flask.abort(403)
 
     matching_keys = aws.find_matching_ec2_key_pairs(user_id)
@@ -80,6 +87,11 @@ def put_key(alias):
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning(
+            "cannot update key; no user found",
+            extra=dict(alias=alias),
+        )
+
         flask.abort(403)
 
     if not flask.request.is_json:
@@ -159,6 +171,11 @@ def delete_key(alias):
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning(
+            "cannot delete key; no user found",
+            extra=dict(alias=alias),
+        )
+
         flask.abort(403)
 
     full_key_alias = user_id

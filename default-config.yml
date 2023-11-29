@@ -1,4 +1,12 @@
 environment:
+  # `AWS_LAMBDA_LOG_LEVEL` is used by lambda internals.
+  AWS_LAMBDA_LOG_LEVEL: INFO
+
+  # `POWERTOOLS_*` variables are used by the AWS powertools library which is
+  # responsible for the fuzzbucket logger.
+  POWERTOOLS_LOG_LEVEL: INFO
+  POWERTOOLS_SERVICE_NAME: fuzzbucket
+
   # `FUZZBUCKET_ALLOWED_GITHUB_ORGS` is a space-delimited string of GitHub
   # organizations, to at least one of which any authenticating user *must*
   # belong.

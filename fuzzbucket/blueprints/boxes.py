@@ -15,6 +15,8 @@ def list_boxes():
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning("cannot list boxes; no user found")
+
         flask.abort(403)
 
     log.debug(f"handling list_boxes for user={user_id!r}")
@@ -38,6 +40,8 @@ def create_box():
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning("cannot create box; no user found")
+
         flask.abort(403)
 
     log.debug(f"handling create_box for user={user_id!r}")
@@ -218,6 +222,10 @@ def update_box(instance_id):
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning(
+            "cannot update box; no user found", extra=dict(instance_id=instance_id)
+        )
+
         flask.abort(403)
 
     log.debug(
@@ -270,6 +278,10 @@ def reboot_box(instance_id):
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning(
+            "cannot reboot box; no user found", extra=dict(instance_id=instance_id)
+        )
+
         flask.abort(403)
 
     log.debug(
@@ -297,6 +309,10 @@ def delete_box(instance_id):
     user_id: str | None = flask_login.current_user.get_id()
 
     if user_id is None:
+        log.warning(
+            "cannot delete box; no user found", extra=dict(instance_id=instance_id)
+        )
+
         flask.abort(403)
 
     log.debug(

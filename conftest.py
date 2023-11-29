@@ -1,15 +1,30 @@
 import datetime
 import os
 import random
+import secrets
 import typing
 
+import boto3
+import boto3.exceptions
 import flask
 import flask_login
+import moto
 import pytest
 
-os.environ["FUZZBUCKET_STAGE"] = "test"
+os.environ.update(
+    FUZZBUCKET_STAGE="test",
+    POWERTOOLS_LOG_LEVEL="DEBUG",
+    POWERTOOLS_DEV="true",
+    POWERTOOLS_DEBUG="true",
+    AWS_ACCESS_KEY_ID="testing",
+    AWS_SECRET_ACCESS_KEY="testing",
+    AWS_SECURITY_TOKEN="testing",
+    AWS_SESSION_TOKEN="testing",
+    AWS_DEFAULT_REGION="us-east-1",
+)
 
 import fuzzbucket.app
+from fuzzbucket import cfg
 
 
 class TemplateResponse(typing.NamedTuple):
@@ -36,20 +51,27 @@ def app() -> flask.Flask:
     return fuzzbucket.app.create_app()
 
 
+class TestClient(flask_login.FlaskLoginClient):
+    def __init__(self, *args, **kwargs):
+        user = kwargs.get("user")
+
+        super().__init__(*args, **kwargs)
+
+        if user is not None:
+            with self.session_transaction() as sess:
+                sess["user"] = user.user_id
+
+
 @pytest.fixture(autouse=True)
 def resetti(app):
-    from fuzzbucket import aws, flask_dance_storage
+    from fuzzbucket import flask_dance_storage
 
     os.environ.setdefault("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafaf")
     os.environ.setdefault("FUZZBUCKET_STAGE", "test")
-    aws.get_dynamodb.cache_clear()
-    aws.get_ec2_client.cache_clear()
     app.testing = True
-    app.test_client_class = flask_login.FlaskLoginClient
+    app.test_client_class = TestClient
     app.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
-    session_storage = flask_dance_storage.FlaskDanceStorage(
-        table_name=f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
-    )
+    session_storage = flask_dance_storage.FlaskDanceStorage(table_name=cfg.USERS_TABLE)
     app.config["session_storage"] = session_storage
     app.config["oauth_blueprint"].storage = session_storage
 
@@ -77,33 +99,92 @@ def nowish() -> datetime.datetime:
     return datetime.datetime(2020, 3, 15, 11, 22, 4, 655788)
 
 
-def setup_dynamodb_tables(dynamodb):
-    image_aliases_table = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-image-aliases"
-    table = dynamodb.create_table(
-        AttributeDefinitions=[dict(AttributeName="alias", AttributeType="S")],
-        KeySchema=[dict(AttributeName="alias", KeyType="HASH")],
-        TableName=image_aliases_table,
-        BillingMode="PAY_PER_REQUEST",
+@pytest.fixture(scope="function")
+def dynamodb(fake_users, monkeypatch):
+    from fuzzbucket import aws
+
+    with moto.mock_dynamodb():
+        ddb = boto3.resource("dynamodb", region_name="us-east-1")
+        setup_dynamodb_tables(ddb, fake_users)
+
+        with monkeypatch.context() as mp:
+            mp.setattr(aws, "get_dynamodb", lambda: ddb)
+
+            yield ddb
+
+
+@pytest.fixture(scope="function")
+def ec2(monkeypatch):
+    from fuzzbucket import aws
+
+    with moto.mock_ec2():
+        ec2c = boto3.client("ec2", region_name="us-east-1")
+
+        with monkeypatch.context() as mp:
+            mp.setattr(aws, "get_ec2_client", lambda: ec2c)
+
+            yield ec2c
+
+
+def setup_dynamodb_tables(ddb, fake_users):
+    def ensure_image_aliases_table():
+        try:
+            return ddb.create_table(
+                AttributeDefinitions=[dict(AttributeName="alias", AttributeType="S")],
+                KeySchema=[dict(AttributeName="alias", KeyType="HASH")],
+                TableName=cfg.IMAGE_ALIASES_TABLE,
+                BillingMode="PAY_PER_REQUEST",
+            )
+        except Exception:
+            return ddb.Table(cfg.IMAGE_ALIASES_TABLE)
+
+    image_aliases_table = ensure_image_aliases_table()
+    image_aliases_table.meta.client.get_waiter("table_exists").wait(
+        TableName=cfg.IMAGE_ALIASES_TABLE
     )
-    table.meta.client.get_waiter("table_exists").wait(TableName=image_aliases_table)
 
     for alias, ami in {
         "ubuntu18": "ami-fafafafafaf",
         "rhel8": "ami-fafafafafaa",
     }.items():
-        table.put_item(Item=dict(user="pytest", alias=alias, ami=ami))
+        image_aliases_table.put_item(Item=dict(user="pytest", alias=alias, ami=ami))
 
-    users_table = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
-    table = dynamodb.create_table(
-        AttributeDefinitions=[dict(AttributeName="user", AttributeType="S")],
-        KeySchema=[dict(AttributeName="user", KeyType="HASH")],
-        TableName=users_table,
-        BillingMode="PAY_PER_REQUEST",
-    )
-    table.meta.client.get_waiter("table_exists").wait(TableName=users_table)
+    def ensure_users_table():
+        try:
+            return ddb.create_table(
+                AttributeDefinitions=[dict(AttributeName="user", AttributeType="S")],
+                KeySchema=[dict(AttributeName="user", KeyType="HASH")],
+                TableName=cfg.USERS_TABLE,
+                BillingMode="PAY_PER_REQUEST",
+            )
+        except Exception:
+            return ddb.Table(cfg.USERS_TABLE)
 
-    for user, secret in {"pytest": "zzz", "nerf": "herder"}.items():
-        table.put_item(Item=dict(user=user, secret=secret))
+    users_table = ensure_users_table()
+    users_table.meta.client.get_waiter("table_exists").wait(TableName=cfg.USERS_TABLE)
+
+    for user, secret in fake_users.items():
+        users_table.put_item(
+            Item=dict(user=user, secret=secret, token=dict(token="OK"))
+        )
+
+
+@pytest.fixture
+def fake_users():
+    suffix = secrets.token_urlsafe(11)
+
+    return {
+        k: k + suffix
+        for k in (
+            "pytest",
+            "nerf",
+            "lordtestingham",
+            "rumples",
+            "philobuster",
+            "slimer",
+            "charizard",
+        )
+    }
 
 
 @pytest.fixture
@@ -126,8 +207,18 @@ def authd_headers() -> typing.List[typing.Tuple[str, str]]:
 
 
 @pytest.fixture
-def fake_oauth_session():
-    return FakeOAuthSession()
+def fake_oauth_session(monkeypatch):
+    sess = FakeOAuthSession()
+
+    from fuzzbucket import user
+    from fuzzbucket.blueprints import oauth
+
+    with monkeypatch.context() as mp:
+        mp.setattr(user, "github", sess)
+        mp.setattr(user, "_session", sess)
+        mp.setattr(oauth.bp, "session", sess)
+
+        yield sess
 
 
 class FakeOAuthSession:

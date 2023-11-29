@@ -9,9 +9,9 @@
 # from fuzzbucket import auth, cfg
 
 
-def test_load_user_from_request(app):
-    ...
+# def test_load_user_from_request(app):
+#     ...
 
 
-def test_auth_403(app):
-    ...
+# def test_auth_403(app):
+#     ...
