@@ -67,14 +67,7 @@ def login():
 @bp.route("/_logout", methods=("POST",))
 @flask_login.login_required
 def logout():
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        flask_login.logout_user()
-
-        log.warning("cannot logout; no user found")
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(f"handling _logout for user={user_id!r}")
 

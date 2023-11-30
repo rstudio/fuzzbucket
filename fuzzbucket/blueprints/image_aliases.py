@@ -10,12 +10,7 @@ bp = flask.Blueprint("image_aliases", __name__)
 @bp.route("/", methods=("GET",), strict_slashes=False)
 @flask_login.login_required
 def list_image_aliases():
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning("cannot list image aliases; no user found")
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(f"handling list_image_aliases for user={user_id!r}")
 
@@ -34,12 +29,7 @@ def list_image_aliases():
 @bp.route("/", methods=("POST",), strict_slashes=False)
 @flask_login.login_required
 def create_image_alias():
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning("cannot create image alias; no user found")
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(f"handling create_image_alias for user={user_id!r}")
 
@@ -71,15 +61,7 @@ def create_image_alias():
 @bp.route("/<string:alias>", methods=("DELETE",))
 @flask_login.login_required
 def delete_image_alias(alias):
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning(
-            "cannot delete image alias; no user found",
-            extra=dict(alias=alias),
-        )
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(f"handling delete_image_alias for user={user_id!r} alias={alias!r}")
 

@@ -12,12 +12,7 @@ bp = flask.Blueprint("boxes", __name__)
 @bp.route("/", methods=("GET",), strict_slashes=False)
 @flask_login.login_required
 def list_boxes():
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning("cannot list boxes; no user found")
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(f"handling list_boxes for user={user_id!r}")
 
@@ -37,12 +32,7 @@ def list_boxes():
 @bp.route("/", methods=("POST",), strict_slashes=False)
 @flask_login.login_required
 def create_box():
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning("cannot create box; no user found")
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(f"handling create_box for user={user_id!r}")
 
@@ -68,7 +58,7 @@ def create_box():
         full_key_alias = f"{user_id}-{key_alias}"
 
     matching_key = aws.find_matching_ec2_key_pair(full_key_alias)
-    resolved_key_name = (matching_key or {}).get("KeyName")
+    resolved_key_name: str | None = (matching_key or {}).get("KeyName")
 
     if matching_key is None and cfg.AUTH_PROVIDER == "github-oauth":
         if full_key_alias != user_id:
@@ -153,13 +143,13 @@ def create_box():
         )
 
     root_block_device_mapping: dict[str, typing.Any] = dict(
-        DeviceName=ami_desc["Images"][0]["RootDeviceName"],
+        DeviceName=ami_desc["Images"][0].get("RootDeviceName"),
         Ebs=dict(
             DeleteOnTermination=True,
             VolumeSize=[
-                bdm["Ebs"]["VolumeSize"]
-                for bdm in ami_desc["Images"][0]["BlockDeviceMappings"]
-                if bdm["DeviceName"] == ami_desc["Images"][0]["RootDeviceName"]
+                bdm.get("Ebs", {}).get("VolumeSize")
+                for bdm in ami_desc["Images"][0].get("BlockDeviceMappings", [])
+                if bdm.get("DeviceName") == ami_desc["Images"][0].get("RootDeviceName")
             ][0],
         ),
     )
@@ -187,18 +177,18 @@ def create_box():
         instance_tags.append(tag_spec)
 
     response = aws.get_ec2_client().run_instances(
-        BlockDeviceMappings=[root_block_device_mapping],
+        BlockDeviceMappings=[root_block_device_mapping],  # type: ignore
         ImageId=ami,
         InstanceType=flask.request.json.get(
             "instance_type",
             cfg.get("FUZZBUCKET_DEFAULT_INSTANCE_TYPE", default="t3.small"),
         ),
-        KeyName=resolved_key_name,
+        KeyName=typing.cast(str, resolved_key_name),
         MinCount=1,
         MaxCount=1,
-        NetworkInterfaces=[network_interface],
+        NetworkInterfaces=[network_interface],  # type: ignore
         TagSpecifications=[
-            dict(
+            dict(  # type: ignore
                 ResourceType="instance",
                 Tags=instance_tags,
             )
@@ -208,7 +198,8 @@ def create_box():
     return (
         flask.jsonify(
             boxes=[
-                box.Box.from_ec2_dict(inst) for inst in response.get("Instances", [])
+                box.Box.from_ec2_dict(inst)  # type: ignore
+                for inst in response.get("Instances", [])
             ],
             you=user_id,
         ),
@@ -219,14 +210,7 @@ def create_box():
 @bp.route("/<string:instance_id>", methods=("PUT",))
 @flask_login.login_required
 def update_box(instance_id):
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning(
-            "cannot update box; no user found", extra=dict(instance_id=instance_id)
-        )
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(
         f"handling update_box for user={user_id!r} " + f"instance_id={instance_id!r}"
@@ -265,7 +249,7 @@ def update_box(instance_id):
 
     return (
         flask.jsonify(
-            raw_response=response.get("ResponseMetadata", {}),
+            raw_response=response.get("ResponseMetadata", {}),  # type: ignore
             you=user_id,
         ),
         200,
@@ -275,14 +259,7 @@ def update_box(instance_id):
 @bp.route("/<string:instance_id>/reboot", methods=("POST",))
 @flask_login.login_required
 def reboot_box(instance_id):
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning(
-            "cannot reboot box; no user found", extra=dict(instance_id=instance_id)
-        )
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(
         f"handling reboot_box for user={user_id!r} " + f"instance_id={instance_id!r}"
@@ -306,14 +283,7 @@ def reboot_box(instance_id):
 @bp.route("/<string:instance_id>", methods=("DELETE",))
 @flask_login.login_required
 def delete_box(instance_id):
-    user_id: str | None = flask_login.current_user.get_id()
-
-    if user_id is None:
-        log.warning(
-            "cannot delete box; no user found", extra=dict(instance_id=instance_id)
-        )
-
-        flask.abort(403)
+    user_id: str = flask_login.current_user.get_id()
 
     log.debug(
         f"handling delete_box for user={user_id!r} " + f"instance_id={instance_id!r}"
