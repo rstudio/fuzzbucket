@@ -47,8 +47,10 @@ AnyDict = dict[str, typing.Any]
 
 
 @pytest.fixture
-def app() -> flask.Flask:
-    return fuzzbucket.app.create_app()
+def app():
+    inst = fuzzbucket.app.create_app()
+    with inst.app_context():
+        yield inst
 
 
 class TestClient(flask_login.FlaskLoginClient):
@@ -64,16 +66,11 @@ class TestClient(flask_login.FlaskLoginClient):
 
 @pytest.fixture(autouse=True)
 def resetti(app):
-    from fuzzbucket import flask_dance_storage
-
     os.environ.setdefault("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafaf")
     os.environ.setdefault("FUZZBUCKET_STAGE", "test")
     app.testing = True
     app.test_client_class = TestClient
     app.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
-    session_storage = flask_dance_storage.FlaskDanceStorage(table_name=cfg.USERS_TABLE)
-    app.config["session_storage"] = session_storage
-    app.config["oauth_blueprint"].storage = session_storage
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -212,15 +209,13 @@ def fake_oauth_session(monkeypatch):
 
     import flask_dance.contrib.github
 
-    from fuzzbucket import aws, user
+    from fuzzbucket import g
     from fuzzbucket.blueprints import oauth
 
     with monkeypatch.context() as mp:
-        mp.setattr(aws, "github", sess)
         mp.setattr(flask_dance.contrib.github, "github", sess)
         mp.setattr(oauth.bp, "session", sess)
-        mp.setattr(user, "_session", sess)
-        mp.setattr(user, "github", sess)
+        mp.setattr(g, "oauth_session", sess)
 
         yield sess
 

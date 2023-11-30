@@ -16,13 +16,13 @@ def setup_logging() -> aws_lambda_powertools.Logger:
         log_level = getattr(logging, level_name.upper())
 
         if log_name == ".":
-            log.debug(f"setting root logger level={log_level!r}")
+            log.debug("setting root logger level", extra=dict(level=log_level))
 
             root_log.setLevel(log_level)
 
             continue
 
-        log.debug(f"setting logger={log_name!r} level={log_level!r}")
+        log.debug("setting logger", extra=dict(log_name=log_name, level=log_level))
 
         logging.getLogger(log_name).setLevel(log_level)
 

@@ -4,7 +4,7 @@ import boto3
 import botocore.exceptions
 import pytest
 
-from fuzzbucket import aws
+from fuzzbucket import aws, g
 
 
 def test_get_ec2_client(monkeypatch):
@@ -135,5 +135,5 @@ def test_fetch_first_compatible_github_key(
         def json(self):
             return api_response
 
-    monkeypatch.setattr(aws, "github", FakeOAuthSession())
+    monkeypatch.setattr(g, "oauth_session", FakeOAuthSession())
     assert aws.fetch_first_compatible_github_key("user") == expected_key

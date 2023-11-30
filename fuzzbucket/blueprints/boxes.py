@@ -14,7 +14,7 @@ bp = flask.Blueprint("boxes", __name__)
 def list_boxes():
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling list_boxes for user={user_id!r}")
+    log.debug("in list_boxes", extra=dict(user=user_id))
 
     return (
         flask.jsonify(
@@ -34,7 +34,7 @@ def list_boxes():
 def create_box():
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling create_box for user={user_id!r}")
+    log.debug("in create_box", extra=dict(user=user_id))
 
     if not flask.request.is_json:
         return flask.jsonify(error="request is not json"), 400
@@ -84,7 +84,7 @@ def create_box():
             KeyName=user_id, PublicKeyMaterial=key_material.encode("utf-8")
         )
         resolved_key_name = user_id
-        log.debug(f"imported compatible public key for user={user_id!r}")
+        log.debug("imported compatible public key", extra=dict(user=user_id))
 
     name = flask.request.json.get("name")
     if str(name or "").strip() == "":
@@ -115,8 +115,8 @@ def create_box():
 
     if subnet_id is not None:
         log.debug(
-            f"setting subnet_id={subnet_id!r} on network interface "
-            + f"for user={user_id!r}"
+            "setting subnet_id on network interface",
+            extra=dict(subnet_id=subnet_id, user=user_id),
         )
 
         network_interface["SubnetId"] = subnet_id
@@ -172,7 +172,9 @@ def create_box():
     for key, value in flask.request.json.get("instance_tags", {}).items():
         tag_spec = dict(Key=str(key), Value=str(value))
 
-        log.debug(f"adding tags from request json 'instance_tags' spec={tag_spec!r}")
+        log.debug(
+            "adding tags from request json instance_tags", extra=dict(spec=tag_spec)
+        )
 
         instance_tags.append(tag_spec)
 
@@ -212,7 +214,7 @@ def create_box():
 def update_box(instance_id):
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling update_box for user={user_id!r} instance_id={instance_id!r}")
+    log.debug("in update_box", extra=dict(user=user_id, instance_id=instance_id))
 
     if instance_id not in [
         b.instance_id
@@ -233,7 +235,9 @@ def update_box(instance_id):
     for key, value in flask.request.json.get("instance_tags", {}).items():
         tag_spec = dict(Key=str(key), Value=str(value))
 
-        log.debug(f"adding tags from request json 'instance_tags' spec={tag_spec!r}")
+        log.debug(
+            "adding tags from request json instance_tags", extra=dict(spec=tag_spec)
+        )
 
         instance_tags.append(tag_spec)
 
@@ -259,7 +263,7 @@ def update_box(instance_id):
 def reboot_box(instance_id):
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling reboot_box for user={user_id!r} instance_id={instance_id!r}")
+    log.debug("in reboot_box", extra=dict(user=user_id, instance_id=instance_id))
 
     if instance_id not in [
         b.instance_id
@@ -281,7 +285,7 @@ def reboot_box(instance_id):
 def delete_box(instance_id):
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling delete_box for user={user_id!r} instance_id={instance_id!r}")
+    log.debug("in delete_box", extra=dict(user=user_id, instance_id=instance_id))
 
     if instance_id not in [
         b.instance_id

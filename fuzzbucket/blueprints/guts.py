@@ -3,7 +3,7 @@ import json
 import flask
 import flask_login
 
-from .. import aws, cfg
+from .. import aws, cfg, g
 from ..log import log
 
 bp = flask.Blueprint("guts", __name__)
@@ -11,7 +11,7 @@ bp = flask.Blueprint("guts", __name__)
 
 @bp.app_errorhandler(500)
 def handle_500(exc):
-    log.debug(f"handling internal server error={exc!r}")
+    log.debug("in handle_500", extra=dict(error=exc))
 
     if getattr(exc, "original_exception", None) is not None:
         exc = exc.original_exception
@@ -48,17 +48,14 @@ def whoami():
 
 @bp.route("/_login", methods=("GET",))
 def login():
-    redirect_to: str = ""
-
-    if cfg.AUTH_PROVIDER == "github-oauth":
-        redirect_to = flask.url_for("github.login")
-    elif cfg.AUTH_PROVIDER == "oauth":
-        redirect_to = flask.url_for("oauth.login")
-    else:
-        raise cfg.UNKNOWN_AUTH_PROVIDER
+    redirect_to = flask.url_for(f"{g.oauth_blueprint.name}.login")
 
     log.debug(
-        f"handling login via redirect to {redirect_to!r}; session={flask.session!r}"
+        "handling login via redirect",
+        extra=dict(
+            redirect_to=redirect_to,
+            session=flask.session,
+        ),
     )
 
     return flask.redirect(redirect_to)
@@ -69,7 +66,7 @@ def login():
 def logout():
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling _logout for user={user_id!r}")
+    log.debug("in logout", extra=dict(user=user_id))
 
     table = aws.get_dynamodb().Table(cfg.USERS_TABLE)
     existing_user = table.get_item(Key=dict(user=user_id))
@@ -80,7 +77,7 @@ def logout():
         return flask.jsonify(error=f"no user {existing_user!r}"), 404
 
     resp = table.delete_item(Key=dict(user=user_id))
-    log.debug(f"raw dynamodb response={resp!r}")
+    log.debug("raw dynamodb response", extra=dict(resp=resp))
 
     flask_login.logout_user()
 

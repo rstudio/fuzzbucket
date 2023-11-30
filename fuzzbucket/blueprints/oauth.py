@@ -43,7 +43,7 @@ def oauth_logged_in(
 
         return False
 
-    log.debug(f"fetched user info={userinfo_response!r}")
+    log.debug("fetched user", extra=dict(info=userinfo_response))
 
     user_email = userinfo_response.get("email")
 
@@ -52,7 +52,7 @@ def oauth_logged_in(
 
         return False
 
-    log.debug(f"using user email={user_email!r}")
+    log.debug("using user email", extra=dict(user_email=user_email))
 
     fb_user = user.User.load(user_email)
     fb_user.token = token
@@ -61,7 +61,7 @@ def oauth_logged_in(
     storage.save(fb_user.as_item())
 
     flask_login.login_user(fb_user)
-    log.info(f"successfully signed in with user={fb_user.user_id!r}")
+    log.info("successfully signed in", extra=dict(user=fb_user.user_id))
 
     return False
 

@@ -1,4 +1,5 @@
 import flask
+import flask_dance.consumer
 import flask_login
 
 from . import cfg, user
@@ -23,9 +24,9 @@ def load_user_from_request(request: flask.Request) -> user.User | None:
     if user_id != lower_user:
         user_id = lower_user
 
-        log.debug(f"normalized user to lowercase user_id={user_id!r}")
+        log.debug("normalized user to lowercase", extra=dict(user_id=user_id))
 
-    log.info(f"loading user with user_id={user_id!r} from source={source!r}")
+    log.info("loading user", extra=dict(user_id=user_id, source=source))
 
     flask.session["user"] = user_id
 
@@ -34,9 +35,13 @@ def load_user_from_request(request: flask.Request) -> user.User | None:
 
 def _load_user_id_from_request(request: flask.Request) -> tuple[str | None, str]:
     log.debug(
-        f"loading user from session={flask.session!r} and request "
-        + f"headers={request.headers!r} args={request.args!r} "
-        + f"cookies={request.cookies!r}"
+        "loading user from session and request",
+        extra=dict(
+            session=flask.session,
+            headers=request.headers,
+            request_args=request.args,
+            cookies=request.cookies,
+        ),
     )
 
     for source_name, source, key in (
@@ -53,26 +58,33 @@ def _load_user_id_from_request(request: flask.Request) -> tuple[str | None, str]
 
 @login_manager.unauthorized_handler
 def auth_403():
-    # TODO: get oauth blueprint redirect URL directly from app.config
-    if cfg.AUTH_PROVIDER == "github-oauth":
-        login_url = flask.url_for("github.login", _external=True)
-        return (
-            flask.jsonify(
-                error=f"you must authorize first via {login_url!r}",
-                login_url=login_url,
-            ),
-            403,
-        )
+    login_url = ""
 
-    elif cfg.AUTH_PROVIDER == "oauth":
-        login_url = flask.url_for("oauth.login", _external=True)
-        return (
-            flask.jsonify(
-                error=f"you must authorize first via {login_url!r}",
-                login_url=login_url,
-            ),
-            403,
-        )
+    with flask.current_app.app_context():
+        login_url = flask.url_for(f"{get_oauth_blueprint().name}.login", _external=True)
 
-    else:
-        raise cfg.UNKNOWN_AUTH_PROVIDER
+    return (
+        flask.jsonify(
+            error=f"you must authorize first via {login_url!r}",
+            login_url=login_url,
+        ),
+        403,
+    )
+
+
+def get_oauth_blueprint() -> flask_dance.consumer.OAuth2ConsumerBlueprint:
+    if "oauth_blueprint" not in flask.g:
+        oauth_bp: flask_dance.consumer.OAuth2ConsumerBlueprint | None = None
+
+        if cfg.AUTH_PROVIDER == "github-oauth":
+            from .blueprints.github_oauth import bp as oauth_bp
+        elif cfg.AUTH_PROVIDER == "oauth":
+            from .blueprints.oauth import bp as oauth_bp
+        else:
+            raise cfg.UNKNOWN_AUTH_PROVIDER
+
+        assert oauth_bp is not None
+
+        flask.g.oauth_blueprint = oauth_bp
+
+    return flask.g.oauth_blueprint

@@ -12,7 +12,7 @@ bp = flask.Blueprint("image_aliases", __name__)
 def list_image_aliases():
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling list_image_aliases for user={user_id!r}")
+    log.debug("in list_image_aliases", extra=dict(user=user_id))
 
     table = aws.get_dynamodb().Table(cfg.IMAGE_ALIASES_TABLE)
 
@@ -31,7 +31,7 @@ def list_image_aliases():
 def create_image_alias():
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling create_image_alias for user={user_id!r}")
+    log.debug("in create_image_alias", extra=dict(user=user_id))
 
     if not flask.request.is_json:
         return flask.jsonify(error="request is not json"), 400
@@ -47,7 +47,7 @@ def create_image_alias():
         ),
     )
 
-    log.debug(f"raw dynamodb response={resp!r}")
+    log.debug("raw dynamodb response", extra=dict(resp=resp))
 
     return (
         flask.jsonify(
@@ -63,7 +63,7 @@ def create_image_alias():
 def delete_image_alias(alias):
     user_id: str = flask_login.current_user.get_id()
 
-    log.debug(f"handling delete_image_alias for user={user_id!r} alias={alias!r}")
+    log.debug("in delete_image_alias", extra=dict(user=user_id, alias=alias))
 
     table = aws.get_dynamodb().Table(cfg.IMAGE_ALIASES_TABLE)
 
@@ -75,6 +75,6 @@ def delete_image_alias(alias):
         return flask.jsonify(error="no touching"), 403
 
     resp = table.delete_item(Key=dict(alias=alias))
-    log.debug(f"raw dynamodb response={resp!r}")
+    log.debug("raw dynamodb response", extra=dict(resp=resp))
 
     return "", 204
