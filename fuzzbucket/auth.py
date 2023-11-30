@@ -53,6 +53,7 @@ def _load_user_id_from_request(request: flask.Request) -> tuple[str | None, str]
 
 @login_manager.unauthorized_handler
 def auth_403():
+    # TODO: get oauth blueprint redirect URL directly from app.config
     if cfg.AUTH_PROVIDER == "github-oauth":
         login_url = flask.url_for("github.login", _external=True)
         return (
