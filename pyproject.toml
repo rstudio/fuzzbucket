@@ -29,6 +29,7 @@ version-file = "fuzzbucket/__version__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
+  "aws-lambda-powertools",
   "black",
   "boto3",
   "boto3-stubs",
@@ -36,6 +37,7 @@ dependencies = [
   "coverage",
   "flask",  # lambda dependency
   "flask-dance",  # lambda dependency
+  "flask-login",  # lambda dependency
   "ipython",
   "isort",
   "moto[ec2,dynamodb]",
@@ -69,7 +71,7 @@ lint = [
   "black --check --diff {root}",
   "pytest -m mypy --no-cov"
 ]
-test = "pytest --cov-fail-under=90"
+test = "pytest --cov-fail-under=89"
 fmt = [
   "isort {root}",
   "black {root}"

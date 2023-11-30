@@ -1,74 +1,59 @@
 import flask
-from flask_dance.contrib.github import github
+import flask_login
 
-from . import cfg
+from . import cfg, user
 from .log import log
 
-
-def nullify_auth():
-    log.debug(f"nullifying auth for user={flask.session.get('user')!r}")
-
-    if cfg.AUTH_PROVIDER == "github-oauth":
-        github.token = None
-
-    elif cfg.AUTH_PROVIDER == "oauth":
-        assert flask.current_app.config["oauth_blueprint"] is not None
-        flask.current_app.config["oauth_blueprint"].session.token = None
-
-    else:
-        raise cfg.UNKNOWN_AUTH_PROVIDER
-
-    del flask.session["user"]
+login_manager = flask_login.LoginManager()
+login_manager.anonymous_user = user.User  # type: ignore
+login_manager.login_view = "guts.login"  # type: ignore
 
 
-def is_fully_authd():
-    if cfg.AUTH_PROVIDER == "github-oauth":
-        if not github.authorized:
-            log.debug(
-                f"github context not authorized for user={flask.session['user']!r}"
-            )
+@login_manager.request_loader
+def load_user_from_request(request: flask.Request) -> user.User | None:
+    user_id, source = _load_user_id_from_request(request)
 
-            return False
+    if user_id is None:
+        log.warning("no user_id available in any source")
 
-        session_user_lower = str(flask.session["user"]).lower()
-        github_login_lower = str(github.get("/user").json()["login"]).lower()
+        return None
 
-        if session_user_lower != github_login_lower:
-            log.debug(
-                f"session user={session_user_lower!r} does not match github"
-                f" login={github_login_lower}"
-            )
+    lower_user = str(user_id).lower()
 
-            return False
+    if user_id != lower_user:
+        user_id = lower_user
 
-    elif cfg.AUTH_PROVIDER == "oauth":
-        assert flask.current_app.config["oauth_blueprint"] is not None
+        log.debug(f"normalized user to lowercase user_id={user_id!r}")
 
-        if not flask.current_app.config["oauth_blueprint"].session.authorized:
-            log.debug(
-                f"oauth context not authorized for user={flask.session['user']!r}"
-            )
+    log.info(f"loading user with user_id={user_id!r} from source={source!r}")
 
-            return False
+    flask.session["user"] = user_id
 
-    else:
-        raise cfg.UNKNOWN_AUTH_PROVIDER
-
-    header_secret = flask.request.headers.get("Fuzzbucket-Secret")
-    storage_secret = flask.current_app.config["session_storage"].secret
-
-    if header_secret != storage_secret:
-        log.debug(
-            f"header secret={header_secret!r} does not match stored "
-            f"secret={storage_secret!r}"
-        )
-
-        return False
-
-    return True
+    return user.User.load(user_id)
 
 
+def _load_user_id_from_request(request: flask.Request) -> tuple[str | None, str]:
+    log.debug(
+        f"loading user from session={flask.session!r} and request "
+        + f"headers={request.headers!r} args={request.args!r} "
+        + f"cookies={request.cookies!r}"
+    )
+
+    for source_name, source, key in (
+        ("session", flask.session, "user"),
+        ("headers", request.headers, "fuzzbucket-user"),
+        ("args", request.args, "user"),
+    ):
+        user_id: str | None = source.get(key)
+        if user_id is not None:
+            return user_id, source_name
+
+    return None, ""
+
+
+@login_manager.unauthorized_handler
 def auth_403():
+    # TODO: get oauth blueprint redirect URL directly from app.config
     if cfg.AUTH_PROVIDER == "github-oauth":
         login_url = flask.url_for("github.login", _external=True)
         return (

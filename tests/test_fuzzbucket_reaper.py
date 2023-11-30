@@ -3,22 +3,26 @@ import typing
 
 import boto3
 import flask
-import moto
 
 import conftest
-from fuzzbucket import auth, aws, blueprints, box, cfg, datetime_ext, reaper
+from fuzzbucket import aws, box, cfg, datetime_ext, reaper, user
 
 
-@moto.mock_ec2
-@moto.mock_dynamodb
-def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey):
-    ec2_client = boto3.client("ec2")
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: True)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
+def test_reap_boxes(
+    app,
+    dynamodb,
+    ec2,
+    fake_oauth_session,
+    monkeypatch,
+    pubkey,
+):
+    test_user = user.User(
+        user_id="lordtestingham", secret="nonempty", token={"token": "wow"}
+    )
+    dynamodb.Table(cfg.USERS_TABLE).put_item(Item=test_user.as_item())
+
+    fake_oauth_session.authorized = True
+    fake_oauth_session.responses["/user"]["login"] = test_user.user_id
 
     if cfg.AUTH_PROVIDER == "oauth":
         monkeypatch.setattr(flask, "session", {"user": "lordtestingham"})
@@ -34,7 +38,7 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
                 ]
             }
 
-        monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+        monkeypatch.setattr(ec2, "describe_key_pairs", fake_describe_key_pairs)
 
     def fake_describe_images(*_, **__):
         return {
@@ -48,24 +52,33 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
             ]
         }
 
-    monkeypatch.setattr(ec2_client, "describe_images", fake_describe_images)
+    monkeypatch.setattr(ec2, "describe_images", fake_describe_images)
 
-    response = None
+    boxes: list[conftest.AnyDict]
+    instance_id: str
+
     with monkeypatch.context() as mp:
         mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
 
-        with app.test_client() as c:
+        with app.test_client(user=test_user) as c:
             response = c.post(
                 "/box/",
                 json={"ttl": "-1", "ami": "ami-fafafafafaf"},
-                headers=authd_headers,
+                headers={
+                    "fuzzbucket-secret": test_user.secret,
+                    "fuzzbucket-user": test_user.user_id,
+                },
             )
 
-    assert response is not None
-    assert "boxes" in typing.cast(conftest.AnyDict, response.json)
-    instance_id = typing.cast(conftest.AnyDict, response.json)["boxes"][0][
-        "instance_id"
-    ]
+            assert response is not None
+            assert "boxes" in typing.cast(conftest.AnyDict, response.json)
+
+            boxes = typing.cast(conftest.AnyDict, response.json)["boxes"]
+
+    assert len(boxes) > 0
+
+    instance_id = boxes[0]["instance_id"]
+
     assert instance_id != ""
 
     the_future = datetime_ext.utcnow() + datetime.timedelta(hours=1)
@@ -75,7 +88,7 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
 
         def fake_list_vpc_boxes(*_, **__):
             ret = []
-            for box_dict in typing.cast(conftest.AnyDict, response.json)["boxes"]:
+            for box_dict in boxes:
                 for virtual in ("age", "max_age"):
                     if virtual in box_dict:
                         box_dict.pop(virtual)
@@ -99,7 +112,7 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
 
         def fake_list_vpc_boxes_2(*_, **__):
             ret = []
-            for box_dict in typing.cast(conftest.AnyDict, response.json)["boxes"]:
+            for box_dict in boxes:
                 for virtual in ("age", "max_age"):
                     if virtual in box_dict:
                         box_dict.pop(virtual)
@@ -123,7 +136,7 @@ def test_reap_boxes(app, fake_oauth_session, authd_headers, monkeypatch, pubkey)
 
         def fake_list_vpc_boxes_3(*_, **__):
             ret = []
-            for box_dict in typing.cast(conftest.AnyDict, response.json)["boxes"]:
+            for box_dict in boxes:
                 for virtual in ("age", "max_age"):
                     if virtual in box_dict:
                         box_dict.pop(virtual)

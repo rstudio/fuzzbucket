@@ -61,13 +61,15 @@ def getdict(
     )
 
 
+STAGE: str = typing.cast(str, get("FUZZBUCKET_STAGE"))
+
 ALLOWED_GITHUB_ORGS = tuple(getlist("FUZZBUCKET_ALLOWED_GITHUB_ORGS"))
 AUTH_PROVIDER: str = typing.cast(
     str, get("FUZZBUCKET_AUTH_PROVIDER", default="github-oauth")
 )
 BRANDING: str = typing.cast(str, get("FUZZBUCKET_BRANDING"))
 DEFAULT_HEADERS: tuple[tuple[str, str], ...] = (
-    ("server", f"fuzzbucket/{__version__}"),
+    ("server", f"fuzzbucket/{__version__.__version__}"),
     ("fuzzbucket-region", str(get("FUZZBUCKET_REGION"))),
     ("fuzzbucket-version", __version__.__version__),
 )
@@ -90,13 +92,16 @@ DEFAULT_TTL = float(
         get("FUZZBUCKET_DEFAULT_TTL", default=str(3600 * 4)),
     )
 )
+IMAGE_ALIASES_TABLE = f"fuzzbucket-{STAGE}-image-aliases"
 OAUTH_MAX_AGE = datetime_ext.parse_timedelta(
     typing.cast(
         str,
         get("FUZZBUCKET_OAUTH_MAX_AGE", default="1 day"),
     )
 ).total_seconds()
-STAGE: str = typing.cast(str, get("FUZZBUCKET_STAGE"))
+SECRET_TOKEN_SIZE_ENCODED = 42
+SECRET_TOKEN_SIZE_PLAIN = 31
 UNKNOWN_AUTH_PROVIDER: ValueError = ValueError(
     f"unknown auth provider {AUTH_PROVIDER!r}"
 )
+USERS_TABLE = f"fuzzbucket-{STAGE}-users"

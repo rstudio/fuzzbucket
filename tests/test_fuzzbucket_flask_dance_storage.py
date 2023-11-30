@@ -1,22 +1,14 @@
 import decimal
 import os
 
-import boto3
 import flask
-import moto
 import pytest
 
-import conftest
 from fuzzbucket import aws, flask_dance_storage
 
 
-@moto.mock_dynamodb
-def test_flask_dance_storage(monkeypatch):
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    fake_session = {"user": "pytest"}
-    monkeypatch.setattr(flask, "session", fake_session)
+def test_flask_dance_storage(dynamodb, monkeypatch):
+    monkeypatch.setattr(flask, "session", {"user": "pytest"})
 
     table_name = f"fuzzbucket-{os.getenv('FUZZBUCKET_STAGE')}-users"
     storage = flask_dance_storage.FlaskDanceStorage(table_name)

@@ -5,4 +5,5 @@
 
 flask
 flask-dance
+flask-login
 werkzeug

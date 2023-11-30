@@ -1,10 +1,6 @@
-import boto3
-import flask
-import moto
 import pytest
 
-import conftest
-from fuzzbucket import auth, aws, blueprints
+from fuzzbucket import aws, user
 
 
 @pytest.mark.parametrize(
@@ -19,7 +15,7 @@ from fuzzbucket import auth, aws, blueprints
         ),
         pytest.param(
             True,
-            "rumples",
+            "nerf",
             "chuckit",
             404,
             id="missing",
@@ -27,31 +23,20 @@ from fuzzbucket import auth, aws, blueprints
         pytest.param(False, "foible", "default", 403, id="forbidden"),
     ],
 )
-@moto.mock_ec2
-@moto.mock_dynamodb
 def test_get_key(
     app,
-    authd_headers,
+    dynamodb,
+    ec2,
     fake_oauth_session,
+    fake_users,
     monkeypatch,
     authd,
     session_user,
     key_alias,
     expected,
 ):
-    ec2_client = boto3.client("ec2")
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
-    fake_session = {"user": session_user}
-    monkeypatch.setattr(flask, "session", fake_session)
 
     def fake_describe_key_pairs():
         return {
@@ -64,10 +49,16 @@ def test_get_key(
             ]
         }
 
-    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+    monkeypatch.setattr(ec2, "describe_key_pairs", fake_describe_key_pairs)
 
-    with app.test_client() as c:
-        response = c.get(f"/key/{key_alias}", headers=authd_headers)
+    with app.test_client(user=(user.User.load(session_user) if authd else None)) as c:
+        response = c.get(
+            f"/key/{key_alias}",
+            headers={
+                "fuzzbucket-user": session_user,
+                "fuzzbucket-secret": fake_users.get(session_user, ""),
+            },
+        )
 
         assert response is not None
         assert response.status_code == expected
@@ -98,31 +89,20 @@ def test_get_key(
         pytest.param(False, "foible", 0, 403, id="forbidden"),
     ],
 )
-@moto.mock_ec2
-@moto.mock_dynamodb
 def test_list_keys(
     app,
-    authd_headers,
+    dynamodb,
+    ec2,
     fake_oauth_session,
+    fake_users,
     monkeypatch,
     authd,
     session_user,
     n_keys,
     expected,
 ):
-    ec2_client = boto3.client("ec2")
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
-    fake_session = {"user": session_user}
-    monkeypatch.setattr(flask, "session", fake_session)
 
     def fake_describe_key_pairs():
         return {
@@ -140,10 +120,16 @@ def test_list_keys(
             ]
         }
 
-    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+    monkeypatch.setattr(ec2, "describe_key_pairs", fake_describe_key_pairs)
 
-    with app.test_client() as c:
-        response = c.get("/key/", headers=authd_headers)
+    with app.test_client(user=(user.User.load(session_user) if authd else None)) as c:
+        response = c.get(
+            "/key/",
+            headers={
+                "fuzzbucket-user": session_user,
+                "fuzzbucket-secret": fake_users.get(session_user, ""),
+            },
+        )
         assert response is not None
         assert response.status_code == expected
 
@@ -238,12 +224,12 @@ def test_list_keys(
         pytest.param(False, "morgenstern", "default", {}, 403, id="forbidden"),
     ],
 )
-@moto.mock_ec2
-@moto.mock_dynamodb
 def test_put_key(
     app,
-    authd_headers,
+    dynamodb,
+    ec2,
     fake_oauth_session,
+    fake_users,
     monkeypatch,
     authd,
     session_user,
@@ -251,19 +237,8 @@ def test_put_key(
     request_kwargs,
     expected,
 ):
-    ec2_client = boto3.client("ec2")
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
-    fake_session = {"user": session_user}
-    monkeypatch.setattr(flask, "session", fake_session)
 
     state = {"describe_key_pairs_call": 0}
 
@@ -299,11 +274,19 @@ def test_put_key(
         state["describe_key_pairs_call"] += 1
         return key_pairs
 
-    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+    monkeypatch.setattr(ec2, "describe_key_pairs", fake_describe_key_pairs)
 
     response = None
-    with app.test_client() as c:
-        response = c.put(f"/key/{key_alias}", headers=authd_headers, **request_kwargs)
+
+    with app.test_client(user=(user.User.load(session_user) if authd else None)) as c:
+        response = c.put(
+            f"/key/{key_alias}",
+            headers={
+                "fuzzbucket-user": session_user,
+                "fuzzbucket-secret": fake_users.get(session_user, ""),
+            },
+            **request_kwargs,
+        )
 
     assert response is not None
     assert response.status_code == expected
@@ -333,31 +316,20 @@ def test_put_key(
         pytest.param(False, "foible", "default", 403, id="forbidden"),
     ],
 )
-@moto.mock_ec2
-@moto.mock_dynamodb
 def test_delete_key(
     app,
-    authd_headers,
+    dynamodb,
+    ec2,
     fake_oauth_session,
+    fake_users,
     monkeypatch,
     authd,
     session_user,
     key_alias,
     expected,
 ):
-    ec2_client = boto3.client("ec2")
-    dynamodb = boto3.resource("dynamodb")
-    conftest.setup_dynamodb_tables(dynamodb)
-    monkeypatch.setattr(aws, "get_dynamodb", lambda: dynamodb)
-    monkeypatch.setattr(aws, "get_ec2_client", lambda: ec2_client)
-    monkeypatch.setattr(auth, "is_fully_authd", lambda: authd)
     fake_oauth_session.authorized = authd
     fake_oauth_session.responses["/user"]["login"] = session_user
-    monkeypatch.setattr(auth, "github", fake_oauth_session)
-    monkeypatch.setattr(blueprints.guts, "github", fake_oauth_session)
-
-    fake_session = {"user": session_user}
-    monkeypatch.setattr(flask, "session", fake_session)
 
     def fake_describe_key_pairs():
         return {
@@ -370,10 +342,16 @@ def test_delete_key(
             ]
         }
 
-    monkeypatch.setattr(ec2_client, "describe_key_pairs", fake_describe_key_pairs)
+    monkeypatch.setattr(ec2, "describe_key_pairs", fake_describe_key_pairs)
 
-    with app.test_client() as c:
-        response = c.delete(f"/key/{key_alias}", headers=authd_headers)
+    with app.test_client(user=(user.User.load(session_user) if authd else None)) as c:
+        response = c.delete(
+            f"/key/{key_alias}",
+            headers={
+                "fuzzbucket-user": session_user,
+                "fuzzbucket-secret": fake_users.get(session_user, ""),
+            },
+        )
 
         assert response is not None
         assert response.status_code == expected

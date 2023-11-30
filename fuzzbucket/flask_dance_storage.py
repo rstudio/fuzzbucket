@@ -9,7 +9,7 @@ from .log import log
 
 
 class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
-    def __init__(self, table_name: str | None) -> None:
+    def __init__(self, table_name: str) -> None:
         self.table_name = table_name
 
     def get(self, _) -> str | None:
@@ -68,8 +68,16 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
 
         self.table.put_item(Item=item)
 
-    def dump(self) -> dict:
-        user = self._load_user()
+    def save(self, item: dict[str, typing.Any]) -> None:
+        if "user" not in item:
+            raise ValueError("cannot set token without user")
+
+        log.debug(f"saving item={item!r} for user={item['user']!r}")
+
+        self.table.put_item(Item=item)
+
+    def dump(self, user: str | None = None) -> dict[str, typing.Any]:
+        user = user if user is not None else self._load_user()
 
         log.debug(f"dumping record user={user!r}")
 
@@ -104,6 +112,6 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
             value = str(value).lower()
             log.debug(f"migrated session user to lowercase session user={value!r}")
 
-        log.debug(f"storage fetched from session user={value!r}")
+        log.debug(f"loaded normalized session user={value!r}")
 
         return value

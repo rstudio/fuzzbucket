@@ -1,15 +1,16 @@
 import logging
 
+import aws_lambda_powertools
+
 from . import cfg
 
 
-def setup_logging() -> logging.Logger:
+def setup_logging() -> aws_lambda_powertools.Logger:
     log_levels = cfg.getdict("FUZZBUCKET_LOG_LEVELS")
     log_levels.setdefault(".", "info")
-    log_levels.setdefault("fuzzbucket", "info")
 
     root_log = logging.getLogger()
-    log = root_log.getChild("fuzzbucket")
+    log = aws_lambda_powertools.Logger()
 
     for log_name, level_name in log_levels.items():
         log_level = getattr(logging, level_name.upper())

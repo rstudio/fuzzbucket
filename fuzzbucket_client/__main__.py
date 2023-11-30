@@ -39,6 +39,7 @@ from . import __version__, datetime_ext
 
 MIN_TTL = datetime.timedelta(minutes=10)
 MAX_TTL = datetime.timedelta(weeks=12)
+SECRET_TOKEN_SIZE_ENCODED = 42
 TTL_HELP = """\
 The --ttl argument may be given values that include the following:
 
@@ -670,7 +671,7 @@ class Client:
         while secret is None:
             try:
                 raw_secret = getpass.getpass("secret: ").strip()
-                if len(raw_secret) != 42:
+                if len(raw_secret) != SECRET_TOKEN_SIZE_ENCODED:
                     print("Invalid secret provided. Please try again.")
                     continue
                 secret = raw_secret

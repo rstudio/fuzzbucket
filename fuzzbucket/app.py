@@ -2,12 +2,16 @@ import warnings
 
 import flask
 import flask.json.provider
+import flask_dance.consumer
 
-from . import cfg, flask_dance_storage, json_provider
+from . import auth, cfg, flask_dance_storage, json_provider
 from .blueprints import boxes, guts, image_aliases, keys
+from .log import log
 
 
 def create_app() -> flask.Flask:
+    log.debug("creating app")
+
     app = flask.Flask(__name__)
 
     app.register_blueprint(guts.bp)
@@ -28,44 +32,36 @@ def create_app() -> flask.Flask:
     )
     app.config["session_storage"] = session_storage
 
+    app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID")
+    app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
+        "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
+    )
+
+    oauth_bp: flask_dance.consumer.OAuth2ConsumerBlueprint | None = None
+
     if cfg.AUTH_PROVIDER == "github-oauth":
-        from flask_dance.contrib.github import make_github_blueprint
-
-        app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get(
-            "FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID"
-        )
-        app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
-            "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
-        )
-        oauth_blueprint = make_github_blueprint(
-            scope=["read:org", "read:public_key"],
-            redirect_to="github_auth_complete",
-            storage=session_storage,
-        )
-        app.config["oauth_blueprint"] = oauth_blueprint
-        app.register_blueprint(oauth_blueprint, url_prefix="/login")
-
+        from .blueprints.github_oauth import bp as oauth_bp
     elif cfg.AUTH_PROVIDER == "oauth":
-        from flask_dance.consumer import OAuth2ConsumerBlueprint
-
-        oauth_blueprint = OAuth2ConsumerBlueprint(
-            "oauth",
-            __name__,
-            base_url=cfg.get("FUZZBUCKET_OAUTH_BASE_URL"),
-            client_id=cfg.get("FUZZBUCKET_OAUTH_CLIENT_ID"),
-            client_secret=cfg.get("FUZZBUCKET_OAUTH_CLIENT_SECRET"),
-            authorization_url=cfg.get("FUZZBUCKET_OAUTH_AUTH_URL"),
-            authorization_url_params={"max_age": int(cfg.OAUTH_MAX_AGE)},
-            auto_refresh_url=cfg.get("FUZZBUCKET_OAUTH_TOKEN_URL"),
-            token_url=cfg.get("FUZZBUCKET_OAUTH_TOKEN_URL"),
-            redirect_to="guts.oauth_complete",
-            scope=list(cfg.getlist("FUZZBUCKET_OAUTH_SCOPE")),
-            storage=session_storage,
-        )
-        app.config["oauth_blueprint"] = oauth_blueprint
-        app.register_blueprint(oauth_blueprint, url_prefix="/login")
-
+        from .blueprints.oauth import bp as oauth_bp
     else:
         warnings.warn(f"unknown auth provider {cfg.AUTH_PROVIDER!r}")
 
+    assert oauth_bp is not None
+
+    app.config["oauth_blueprint"] = oauth_bp
+    app.register_blueprint(oauth_bp, url_prefix="/login")
+
+    auth.login_manager.init_app(app)
+
+    flask.request_started.connect(_log_request_started, app)
+    flask.request_finished.connect(_log_request_finished, app)
+
     return app
+
+
+def _log_request_started(*_, **__):
+    log.debug(f"request started {flask.request}")
+
+
+def _log_request_finished(_, response: flask.Response):
+    log.debug(f"request finished {flask.request} response={response!r}")

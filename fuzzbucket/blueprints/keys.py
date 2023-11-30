@@ -1,25 +1,26 @@
 import flask
+import flask_login
 
-from .. import auth, aws
+from .. import aws
 from ..log import log
 
 bp = flask.Blueprint("keys", __name__)
 
 
 @bp.route("/<string:alias>", methods=("GET",))
+@flask_login.login_required
 def get_key(alias):
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str = flask_login.current_user.get_id()
 
-    full_key_alias = flask.session["user"]
+    full_key_alias = user_id
     if str(alias).lower() != "default":
-        full_key_alias = f"{flask.session['user']}-{alias}"
+        full_key_alias = f"{user_id}-{alias}"
 
     matching_key = aws.find_matching_ec2_key_pair(full_key_alias)
 
     if matching_key is None:
         return (
-            flask.jsonify(error="no key exists for you", you=flask.request.remote_user),
+            flask.jsonify(error="no key exists for you", you=user_id),
             404,
         )
 
@@ -31,24 +32,24 @@ def get_key(alias):
                 key_pair_id=matching_key["KeyPairId"],
                 ec2_fingerprint=matching_key["KeyFingerprint"],
             ),
-            you=flask.request.remote_user,
+            you=user_id,
         ),
         200,
     )
 
 
 @bp.route("/", methods=("GET",), strict_slashes=False)
+@flask_login.login_required
 def list_keys():
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str = flask_login.current_user.get_id()
 
-    matching_keys = aws.find_matching_ec2_key_pairs(flask.session["user"])
+    matching_keys = aws.find_matching_ec2_key_pairs(user_id)
 
     def key_alias(key_name):
-        if str(key_name).lower() == str(flask.session["user"]).lower():
+        if str(key_name).lower() == str(user_id).lower():
             return "default"
 
-        return key_name.replace(f"{flask.session['user']}-", "")
+        return key_name.replace(f"{user_id}-", "")
 
     return (
         flask.jsonify(
@@ -61,28 +62,28 @@ def list_keys():
                 )
                 for matching_key in matching_keys
             ],
-            you=flask.request.remote_user,
+            you=user_id,
         ),
         200,
     )
 
 
 @bp.route("/<string:alias>", methods=("PUT",))
+@flask_login.login_required
 def put_key(alias):
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str = flask_login.current_user.get_id()
 
     if not flask.request.is_json:
         return (
-            flask.jsonify(error="request must be json", you=flask.request.remote_user),
+            flask.jsonify(error="request must be json", you=user_id),
             400,
         )
 
     assert flask.request.json is not None
 
-    full_key_alias = flask.session["user"]
+    full_key_alias = user_id
     if str(alias).lower() != "default":
-        full_key_alias = f"{flask.session['user']}-{alias}"
+        full_key_alias = f"{user_id}-{alias}"
 
     log.debug(f"checking for existence of key with alias={full_key_alias}")
 
@@ -91,7 +92,7 @@ def put_key(alias):
         return (
             flask.jsonify(
                 error="key already exists and cannot be updated",
-                you=flask.request.remote_user,
+                you=user_id,
             ),
             409,
         )
@@ -100,7 +101,8 @@ def put_key(alias):
     if len(key_material) == 0:
         return (
             flask.jsonify(
-                error="request is missing key_material", you=flask.request.remote_user
+                error="request is missing key_material",
+                you=user_id,
             ),
             400,
         )
@@ -109,7 +111,7 @@ def put_key(alias):
         return (
             flask.jsonify(
                 error="key material must be an ec2-compatible format",
-                you=flask.request.remote_user,
+                you=user_id,
             ),
             400,
         )
@@ -124,7 +126,7 @@ def put_key(alias):
         return (
             flask.jsonify(
                 error="failed to re-fetch key after import",
-                you=flask.request.remote_user,
+                you=user_id,
             ),
             500,
         )
@@ -136,26 +138,27 @@ def put_key(alias):
                 key_pair_id=matching_key["KeyPairId"],
                 ec2_fingerprint=matching_key["KeyFingerprint"],
             ),
-            you=flask.request.remote_user,
+            you=user_id,
         ),
         201,
     )
 
 
 @bp.route("/<string:alias>", methods=("DELETE",))
+@flask_login.login_required
 def delete_key(alias):
-    if not auth.is_fully_authd():
-        return auth.auth_403()
+    user_id: str = flask_login.current_user.get_id()
 
-    full_key_alias = flask.session["user"]
+    full_key_alias = user_id
     if str(alias).lower() != "default":
-        full_key_alias = f"{flask.session['user']}-{alias}"
+        full_key_alias = f"{user_id}-{alias}"
 
     matching_key = aws.find_matching_ec2_key_pair(full_key_alias)
     if matching_key is None:
         return (
             flask.jsonify(
-                error="no key to delete for you", you=flask.request.remote_user
+                error="no key to delete for you",
+                you=user_id,
             ),
             404,
         )
@@ -169,7 +172,7 @@ def delete_key(alias):
                 key_pair_id=matching_key["KeyPairId"],
                 ec2_fingerprint=matching_key["KeyFingerprint"],
             ),
-            you=flask.request.remote_user,
+            you=user_id,
         ),
         200,
     )
