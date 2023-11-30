@@ -262,7 +262,7 @@ def reboot_box(instance_id):
     user_id: str = flask_login.current_user.get_id()
 
     log.debug(
-        f"handling reboot_box for user={user_id!r} " + f"instance_id={instance_id!r}"
+        f"handling reboot_box for user={user_id!r} instance_id={instance_id!r}"
     )
 
     if instance_id not in [
