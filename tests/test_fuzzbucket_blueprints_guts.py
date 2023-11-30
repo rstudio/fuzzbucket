@@ -1,12 +1,16 @@
 import json
 import re
+import typing
 
 import flask
 import pytest
 import werkzeug.exceptions
 
-import conftest
 from fuzzbucket import blueprints, user
+
+
+class WrappedError(typing.NamedTuple):
+    original_exception: Exception
 
 
 def test_login(app, dynamodb, fake_users, fake_oauth_session):
@@ -64,7 +68,7 @@ def test_logout(
     ("exc", "check_html", "err_match"),
     [
         pytest.param(
-            conftest.WrappedError(ValueError("not enough pylons")),
+            WrappedError(ValueError("not enough pylons")),
             True,
             "^NOPE=.*not enough pylons",
             id="wrapped",

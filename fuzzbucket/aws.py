@@ -228,6 +228,7 @@ def fetch_first_compatible_github_key(user: str) -> str:
         with flask.current_app.app_context():
             for key in g.oauth_session.get("/user/keys").json():  # type: ignore
                 stripped_key = key.get("key", "").strip()
+
                 if is_ec2_compatible_key(stripped_key):
                     return stripped_key
 

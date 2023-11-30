@@ -124,7 +124,7 @@ def test_resolve_ami_alias(dynamodb, monkeypatch, image_alias, raises, expected)
     ],
 )
 def test_fetch_first_compatible_github_key(
-    monkeypatch, raises, api_response, expected_key
+    app, monkeypatch, raises, api_response, expected_key
 ):
     class FakeOAuthSession:
         def get(self, *_):
@@ -135,5 +135,5 @@ def test_fetch_first_compatible_github_key(
         def json(self):
             return api_response
 
-    monkeypatch.setattr(g, "oauth_session", FakeOAuthSession())
+    monkeypatch.setattr(aws.g, "oauth_session", FakeOAuthSession())
     assert aws.fetch_first_compatible_github_key("user") == expected_key
