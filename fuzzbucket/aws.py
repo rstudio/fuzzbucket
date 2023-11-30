@@ -106,7 +106,7 @@ def resolve_ami_alias(image_alias: str, ddb: typing.Any = None) -> str | None:
 
         return typing.cast(dict, resp.get("Item", {})).get("ami")
     except Exception:
-        log.exception("oh no boto3")
+        log.exception("oh no")
 
         return None
 
