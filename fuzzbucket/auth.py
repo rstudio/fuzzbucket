@@ -46,6 +46,7 @@ def _load_user_id_from_request(request: flask.Request) -> tuple[str | None, str]
     )
 
     for source_name, source, key in (
+        ("session", flask.session, "_user_id"),
         ("session", flask.session, "user"),
         ("headers", request.headers, "fuzzbucket-user"),
         ("args", request.args, "user"),
