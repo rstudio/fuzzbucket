@@ -9,16 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - server: include version and region in response headers
 - server: include region for each box in box-related API responses
-- client: support for SSH and SCP via Amazon SSM with `--ssm` option
+- server: support for managing instances in externally-defined VPC
+- server: support for Okta (via generic OAuth2) as auth provider
+- client: support for SSH and SCP via Amazon SSM with `--ssm` option and
+  `FUZZBUCKET_SSM` environment variable
 
 ### Changed
-- use hatch and pyproject.toml for many more things
+- internal: use hatch and pyproject.toml for many more things
+- server: split up single Flask app into blueprints
+- server: use `Flask-Login` library instead of homegrown things
 - client: swapped "list" and "ls" command and alias
 
 ### Deprecated
 ### Removed
-- custom lambda image scaffolding
-- pipenv files
+- internal: custom lambda image scaffolding
+- internal: pipenv files
 
 ### Fixed
 ### Security
@@ -26,24 +31,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.13.0] - 2023-11-15
 
 ### Added
-- custom lambda image scaffolding
+- internal: custom lambda image scaffolding
 - server: accept VPC tags from custom yaml
 
 ### Changed
-- usage given dependency update compatibility issues
+- server: usage given dependency update compatibility issues
 
 ### Fixed
 - server: continue reaping process on error
-- github actions output integration
+- internal: github actions output integration
 
 ### Security
-- dependency updates
-- target runtime update
+- internal: dependency updates
+- internal: target runtime update
 
 ## [0.12.2] - 2022-05-03
 
 ### Security
-- dependency updates
+- internal: dependency updates
 
 ## [0.12.1] - 2022-04-29
 
@@ -58,10 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - client: warn when mixed-case GitHub usernames are used
 - client: log at warning level about `FUZZBUCKET_CREDENTIALS` when
   tty is detected
-- support for ed25519 ssh keys
+- server/client: support for ed25519 ssh keys
 
 ### Security
-- dependency upgrades
+- internal: dependency upgrades
 
 ## [0.11.0] - 2022-01-06
 

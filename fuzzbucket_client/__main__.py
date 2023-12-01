@@ -601,6 +601,9 @@ class _TrinaryBehavior(enum.Enum):
     AUTO = "auto"
     NEVER = "never"
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class _Preferences(enum.Enum):
     DEFAULT_KEY_ALIAS = "default_key_alias"
