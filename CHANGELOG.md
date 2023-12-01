@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - server: include region for each box in box-related API responses
 - server: support for managing instances in externally-defined VPC
 - server: support for Okta (via generic OAuth2) as auth provider
-- client: support for SSH and SCP via Amazon SSM with `--ssm` option
+- client: support for SSH and SCP via Amazon SSM with `--ssm` option and
+  `FUZZBUCKET_SSM` environment variable
 
 ### Changed
 - internal: use hatch and pyproject.toml for many more things
