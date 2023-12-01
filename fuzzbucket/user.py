@@ -3,7 +3,7 @@ import typing
 
 import flask
 
-from . import cfg, g
+from . import g
 from .log import log
 
 
@@ -34,34 +34,10 @@ class User:
     def is_authenticated(self):
         log.debug("in is_authenticated", extra=dict(user_id=self.user_id))
 
-        if cfg.AUTH_PROVIDER == "github-oauth":
-            if (
-                not g.oauth_session.authorized
-                or self.user_id is None
-                or (
-                    self.user_id.lower()
-                    != str(g.oauth_session.get("/user").json()["login"]).lower()
-                )
-            ):
-                log.debug(
-                    "in is_authenticated not authd via github oauth",
-                    extra=dict(user_id=self.user_id),
-                )
-
-                return False
-
-        elif cfg.AUTH_PROVIDER == "oauth":
-            if self.user_id is None or not g.oauth_session.authorized:
-                log.debug(
-                    "in is_authenticated not authd via oauth",
-                    extra=dict(user_id=self.user_id),
-                )
-
-                return False
-        else:
+        if self.user_id is None or not g.oauth_session.authorized:
             log.debug(
-                "in is_authenticated with unknown provider",
-                extra=dict(result=False, user_id=self.user_id),
+                "in is_authenticated not authd via oauth",
+                extra=dict(user_id=self.user_id, provider=g.oauth_blueprint.name),
             )
 
             return False

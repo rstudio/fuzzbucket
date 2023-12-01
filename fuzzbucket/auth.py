@@ -1,6 +1,7 @@
 import flask
 import flask_dance.consumer
 import flask_login
+import werkzeug.utils
 
 from . import cfg, user
 from .log import log
@@ -74,17 +75,9 @@ def auth_403():
 
 def get_oauth_blueprint() -> flask_dance.consumer.OAuth2ConsumerBlueprint:
     if "oauth_blueprint" not in flask.g:
-        oauth_bp: flask_dance.consumer.OAuth2ConsumerBlueprint | None = None
-
-        if cfg.AUTH_PROVIDER == "github-oauth":
-            from .blueprints.github_oauth import bp as oauth_bp
-        elif cfg.AUTH_PROVIDER == "oauth":
-            from .blueprints.oauth import bp as oauth_bp
-        else:
-            raise cfg.UNKNOWN_AUTH_PROVIDER
-
-        assert oauth_bp is not None
-
-        flask.g.oauth_blueprint = oauth_bp
+        oauth_blueprint_name = cfg.AUTH_PROVIDER.replace("-", "_")
+        flask.g.oauth_blueprint = werkzeug.utils.import_string(
+            f"fuzzbucket.blueprints.{oauth_blueprint_name}.bp"
+        )
 
     return flask.g.oauth_blueprint

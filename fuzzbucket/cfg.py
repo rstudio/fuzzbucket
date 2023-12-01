@@ -101,7 +101,4 @@ OAUTH_MAX_AGE = datetime_ext.parse_timedelta(
 ).total_seconds()
 SECRET_TOKEN_SIZE_ENCODED = 42
 SECRET_TOKEN_SIZE_PLAIN = 31
-UNKNOWN_AUTH_PROVIDER: ValueError = ValueError(
-    f"unknown auth provider {AUTH_PROVIDER!r}"
-)
 USERS_TABLE = f"fuzzbucket-{STAGE}-users"
