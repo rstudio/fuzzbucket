@@ -85,7 +85,7 @@ def put_key(alias):
     if str(alias).lower() != "default":
         full_key_alias = f"{user_id}-{alias}"
 
-    log.debug(f"checking for existence of key with alias={full_key_alias}")
+    log.debug("checking for existence of key", extra=dict(alias=full_key_alias))
 
     matching_key = aws.find_matching_ec2_key_pair(full_key_alias)
     if matching_key is not None:
@@ -119,7 +119,7 @@ def put_key(alias):
     aws.get_ec2_client().import_key_pair(
         KeyName=full_key_alias, PublicKeyMaterial=key_material.encode("utf-8")
     )
-    log.debug(f"imported compatible public key with alias={full_key_alias}")
+    log.debug("imported compatible public key", extra=dict(alias=full_key_alias))
 
     matching_key = aws.find_matching_ec2_key_pair(full_key_alias)
     if matching_key is None:

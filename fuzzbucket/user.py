@@ -2,16 +2,9 @@ import dataclasses
 import typing
 
 import flask
-import flask_dance.consumer
-from flask_dance.contrib.github import github
 
-from . import cfg, flask_dance_storage
+from . import g
 from .log import log
-
-# FIXME: use LocalProxy or put these in flask.g? {{
-storage = flask_dance_storage.FlaskDanceStorage(cfg.USERS_TABLE)
-_session: flask_dance.consumer.OAuth2ConsumerBlueprint | None = None
-# }}
 
 
 @dataclasses.dataclass
@@ -22,7 +15,10 @@ class User:
 
     @classmethod
     def load(cls, user_id: str | None) -> "User":
-        user_dict = storage.dump(user_id)
+        user_dict = {}
+
+        with flask.current_app.app_context():
+            user_dict = g.user_storage.dump(user_id)  # type: ignore
 
         inst = cls(
             user_id=user_dict.get("user"),
@@ -36,63 +32,43 @@ class User:
 
     @property
     def is_authenticated(self):
-        log.debug("handling", extra=dict(user_id=self.user_id))
+        log.debug("in is_authenticated", extra=dict(user_id=self.user_id))
 
-        if cfg.AUTH_PROVIDER == "github-oauth":
-            if (
-                not github.authorized
-                or self.user_id is None
-                or (
-                    self.user_id.lower()
-                    != str(github.get("/user").json()["login"]).lower()
-                )
-            ):
-                log.debug(
-                    "via github oauth", extra=dict(result=False, user_id=self.user_id)
-                )
-
-                return False
-
-        elif cfg.AUTH_PROVIDER == "oauth":
-            if (
-                self.user_id is None
-                or not (
-                    _session or flask.current_app.config["oauth_blueprint"].session
-                ).authorized
-            ):
-                log.debug("via oauth", extra=dict(result=False, user_id=self.user_id))
-
-                return False
-        else:
+        if self.user_id is None or not g.oauth_session.authorized:
             log.debug(
-                "unknown provider", extra=dict(result=False, user_id=self.user_id)
+                "in is_authenticated not authd via oauth",
+                extra=dict(user_id=self.user_id, provider=g.oauth_blueprint.name),
             )
 
             return False
 
         log.debug(
-            "considering request",
+            "in is_authenticated considering request path",
             extra=dict(path=flask.request.path, user_id=self.user_id),
         )
 
         if flask.request.path.endswith("/auth-complete"):
-            log.debug("at auth-complete", extra=dict(result=True, user_id=self.user_id))
+            log.debug(
+                "in is_authenticated at auth-complete path",
+                extra=dict(result=True, user_id=self.user_id),
+            )
 
             return True
 
         headers_secret = flask.request.headers.get("fuzzbucket-secret")
-        db_secret = flask.current_app.config["session_storage"].secret
+        db_secret = g.user_storage.secret
         value = headers_secret == db_secret
 
         if headers_secret is None:
             log.debug(
-                "missing headers secret", extra=dict(result=False, user_id=self.user_id)
+                "in is_authenticated missing headers secret",
+                extra=dict(result=False, user_id=self.user_id),
             )
 
             return False
 
         log.debug(
-            "comparing secrets",
+            "in is_authenticated comparing secrets",
             extra=dict(
                 result=value,
                 user_id=self.user_id,
@@ -106,7 +82,7 @@ class User:
     @property
     def is_active(self):
         log.debug(
-            "handling",
+            "in is_active",
             extra=dict(user_id=self.user_id, secret=_kinda_redacted(self.secret)),
         )
 
@@ -114,12 +90,12 @@ class User:
 
     @property
     def is_anonymous(self):
-        log.debug(f"handling", extra=dict(user_id=self.user_id))
+        log.debug("in is_anonymous", extra=dict(user_id=self.user_id))
 
         return self.user_id is None
 
     def get_id(self):
-        log.debug("handling", extra=dict(user_id=self.user_id))
+        log.debug("in get_id", extra=dict(user_id=self.user_id))
 
         return self.user_id
 
@@ -139,7 +115,7 @@ class User:
                 if key in item["token"]:
                     item["token"][key] = int(item["token"][key])
 
-        log.debug("handling", extra=dict(item=item))
+        log.debug("in as_item", extra=dict(item=item))
 
         return item
 

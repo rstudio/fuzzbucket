@@ -4,9 +4,9 @@ import random
 import typing
 
 import boto3
-from flask_dance.contrib.github import github
+import flask
 
-from . import box, cfg, tags
+from . import box, cfg, g, tags
 from .log import log
 
 DEFAULT_FILTERS: tuple[tuple[tuple[str, str | list[str]], ...], ...] = (
@@ -112,7 +112,7 @@ def resolve_ami_alias(image_alias: str, ddb: typing.Any = None) -> str | None:
 
 
 def resolve_security_groups(security_groups: list[str]) -> list[str]:
-    log.debug(f"resolving security groups={security_groups!r}")
+    log.debug("resolving security group", extra=dict(groups=security_groups))
 
     return [
         sg
@@ -123,7 +123,7 @@ def resolve_security_groups(security_groups: list[str]) -> list[str]:
 
 @functools.cache
 def resolve_security_group(security_group: str) -> str:
-    log.debug(f"resolving security group={security_group!r}")
+    log.debug("resolving security group", dict(group=security_group))
 
     if security_group.startswith("sg-"):
         return security_group
@@ -183,7 +183,7 @@ def find_subnet() -> str | None:
 
 @functools.cache
 def resolve_subnet(subnet_id_or_name: str) -> str | None:
-    log.debug(f"resolving subnet id={subnet_id_or_name!r}")
+    log.debug("resolving subnet", extra=dict(id=subnet_id_or_name))
 
     return (
         get_ec2_client()
@@ -225,17 +225,22 @@ def find_matching_ec2_key_pairs(prefix: str) -> typing.List[dict]:
 
 def fetch_first_compatible_github_key(user: str) -> str:
     try:
-        for key in github.get("/user/keys").json():
-            stripped_key = key.get("key", "").strip()
-            if is_ec2_compatible_key(stripped_key):
-                return stripped_key
+        with flask.current_app.app_context():
+            for key in g.oauth_session.get("/user/keys").json():  # type: ignore
+                stripped_key = key.get("key", "").strip()
 
-        log.warning(f"no compatible ssh key could be found in github for user={user!r}")
+                if is_ec2_compatible_key(stripped_key):
+                    return stripped_key
+
+        log.warning(
+            "no compatible ssh key could be found in github", extra=dict(user=user)
+        )
 
         return ""
     except Exception as exc:
         log.warning(
-            f"error while fetching first compatible github key for user={user!r} err={exc}"
+            "error while fetching first compatible github key",
+            extra=dict(user=user, err=exc),
         )
 
         return ""

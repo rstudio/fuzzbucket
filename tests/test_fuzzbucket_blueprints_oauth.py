@@ -1,8 +1,14 @@
+import typing
+
 import flask
 import pytest
 
-import conftest
 from fuzzbucket import cfg, user
+
+
+class TemplateResponse(typing.NamedTuple):
+    template_name: str
+    status_code: int
 
 
 @pytest.mark.parametrize(
@@ -12,19 +18,19 @@ from fuzzbucket import cfg, user
             pytest.param(
                 {"frobs", "globs"},
                 [{"login": "frobs"}],
-                conftest.TemplateResponse("auth_complete.html", 200),
+                TemplateResponse("auth_complete.html", 200),
                 id="happy",
             ),
             pytest.param(
                 {"frobs", "globs"},
                 [],
-                conftest.TemplateResponse("error.html", 403),
+                TemplateResponse("error.html", 403),
                 id="forbidden",
             ),
             pytest.param(
                 {"frobs", "globs"},
                 {"message": "now you have gone and also done it"},
-                conftest.TemplateResponse("error.html", 503),
+                TemplateResponse("error.html", 503),
                 id="github_err",
             ),
         ]

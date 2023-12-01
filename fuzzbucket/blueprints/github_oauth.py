@@ -30,7 +30,9 @@ def github_logged_in(
 
     resp = blueprint.session.get("/user")
     if not resp.ok:
-        log.warning(f"failed to fetch user info from github; status={resp.status!r}")
+        log.warning(
+            "failed to fetch user info from github", extra=dict(status=resp.status)
+        )
 
         return False
 
@@ -42,7 +44,7 @@ def github_logged_in(
 
         return False
 
-    log.debug(f"using github login={github_login!r}")
+    log.debug("using github login", extra=dict(login=github_login))
 
     fb_user = user.User.load(github_login)
     fb_user.token = token
@@ -51,7 +53,7 @@ def github_logged_in(
     storage.save(fb_user.as_item())
 
     flask_login.login_user(fb_user)
-    log.info(f"successfully signed in with github user={fb_user.user_id!r}")
+    log.info("successfully signed in with github", extra=dict(user=fb_user.user_id))
 
     return False
 
@@ -64,21 +66,26 @@ def oauth_error(
     error_uri: str | None = None,
 ) -> None:
     log.error(
-        "error during github oauth",
+        "in oauth_error during github oauth",
         extra=dict(
             error=error, error_description=error_description, error_uri=error_uri
         ),
     )
-    log.debug("session", extra=dict(session=blueprint.session))
+    log.debug("in oauth_error with session", extra=dict(session=blueprint.session))
 
 
 @bp.route("/auth-complete", methods=("GET",))
 @flask_login.login_required
 def auth_complete():
-    log.debug(f"allowed_orgs={cfg.ALLOWED_GITHUB_ORGS!r}")
+    log.debug(
+        "in github.auth_complete", extra=dict(allowed_orgs=cfg.ALLOWED_GITHUB_ORGS)
+    )
 
     raw_user_orgs = flask_dance.contrib.github.github.get("/user/orgs").json()
-    log.debug(f"raw_user_orgs={raw_user_orgs!r}")
+    log.debug(
+        "in github.auth_complete with raw_user_orgs",
+        extra=dict(raw_user_orgs=raw_user_orgs),
+    )
 
     if "message" in raw_user_orgs:
         return (

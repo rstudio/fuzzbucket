@@ -6,13 +6,13 @@ import typing
 
 import boto3
 import boto3.exceptions
-import flask
 import flask_login
 import moto
 import pytest
 
 os.environ.update(
     FUZZBUCKET_STAGE="test",
+    FUZZBUCKET_DEFAULT_VPC="vpc-fafafafaf",
     POWERTOOLS_LOG_LEVEL="DEBUG",
     POWERTOOLS_DEV="true",
     POWERTOOLS_DEBUG="true",
@@ -26,29 +26,7 @@ os.environ.update(
 import fuzzbucket.app
 from fuzzbucket import cfg
 
-
-class TemplateResponse(typing.NamedTuple):
-    template_name: str
-    status_code: int
-
-
-class FakeRequest(typing.NamedTuple):
-    headers: dict[str, str]
-    args: dict[str, str]
-    environ: dict[str, str]
-    body: typing.TextIO | None = None
-
-
-class WrappedError(typing.NamedTuple):
-    original_exception: Exception
-
-
 AnyDict = dict[str, typing.Any]
-
-
-@pytest.fixture
-def app() -> flask.Flask:
-    return fuzzbucket.app.create_app()
 
 
 class TestClient(flask_login.FlaskLoginClient):
@@ -62,18 +40,15 @@ class TestClient(flask_login.FlaskLoginClient):
                 sess["user"] = user.user_id
 
 
-@pytest.fixture(autouse=True)
-def resetti(app):
-    from fuzzbucket import flask_dance_storage
+@pytest.fixture
+def app():
+    inst = fuzzbucket.app.create_app()
+    inst.testing = True
+    inst.test_client_class = TestClient
+    inst.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
 
-    os.environ.setdefault("FUZZBUCKET_DEFAULT_VPC", "vpc-fafafafaf")
-    os.environ.setdefault("FUZZBUCKET_STAGE", "test")
-    app.testing = True
-    app.test_client_class = TestClient
-    app.secret_key = f":hushed:-:open_mouth:-{random.randint(42, 666)}"
-    session_storage = flask_dance_storage.FlaskDanceStorage(table_name=cfg.USERS_TABLE)
-    app.config["session_storage"] = session_storage
-    app.config["oauth_blueprint"].storage = session_storage
+    with inst.app_context():
+        yield inst
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -92,11 +67,6 @@ def env_setup():
         ("FUZZBUCKET_OAUTH_SCOPE", "openid"),
     ):
         os.environ.setdefault(key, value)
-
-
-@pytest.fixture
-def nowish() -> datetime.datetime:
-    return datetime.datetime(2020, 3, 15, 11, 22, 4, 655788)
 
 
 @pytest.fixture(scope="function")
@@ -201,30 +171,6 @@ def pubkey() -> str:
     )
 
 
-@pytest.fixture
-def authd_headers() -> typing.List[typing.Tuple[str, str]]:
-    return [("Fuzzbucket-User", "pytest"), ("Fuzzbucket-Secret", "zzz")]
-
-
-@pytest.fixture
-def fake_oauth_session(monkeypatch):
-    sess = FakeOAuthSession()
-
-    import flask_dance.contrib.github
-
-    from fuzzbucket import aws, user
-    from fuzzbucket.blueprints import oauth
-
-    with monkeypatch.context() as mp:
-        mp.setattr(aws, "github", sess)
-        mp.setattr(flask_dance.contrib.github, "github", sess)
-        mp.setattr(oauth.bp, "session", sess)
-        mp.setattr(user, "_session", sess)
-        mp.setattr(user, "github", sess)
-
-        yield sess
-
-
 class FakeOAuthSession:
     def __init__(self):
         self.authorized = True
@@ -260,3 +206,20 @@ class FakeOAuthSession:
         response = self.next_json
         self.next_json = None
         return response
+
+
+@pytest.fixture
+def fake_oauth_session(monkeypatch):
+    sess = FakeOAuthSession()
+
+    import flask_dance.contrib.github
+
+    from fuzzbucket import g
+    from fuzzbucket.blueprints import oauth
+
+    with monkeypatch.context() as mp:
+        mp.setattr(flask_dance.contrib.github, "github", sess)
+        mp.setattr(oauth.bp, "session", sess)
+        mp.setattr(g, "oauth_session", sess)
+
+        yield sess

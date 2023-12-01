@@ -1,10 +1,7 @@
-import warnings
-
 import flask
 import flask.json.provider
-import flask_dance.consumer
 
-from . import auth, cfg, flask_dance_storage, json_provider
+from . import auth, cfg, g, json_provider
 from .blueprints import boxes, guts, image_aliases, keys
 from .log import log
 
@@ -27,29 +24,19 @@ def create_app() -> flask.Flask:
     app.secret_key = cfg.get("FUZZBUCKET_FLASK_SECRET_KEY")
     app.json = json_provider.AsJSONProvider(app)
 
-    session_storage = flask_dance_storage.FlaskDanceStorage(
-        table_name=f"fuzzbucket-{cfg.STAGE}-users"
-    )
-    app.config["session_storage"] = session_storage
+    app.config["session_storage"] = g.user_storage
 
-    app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get("FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID")
-    app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
-        "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
-    )
+    with app.app_context():
+        oauth_bp = auth.get_oauth_blueprint()
+        app.register_blueprint(oauth_bp, url_prefix="/login")
 
-    oauth_bp: flask_dance.consumer.OAuth2ConsumerBlueprint | None = None
-
-    if cfg.AUTH_PROVIDER == "github-oauth":
-        from .blueprints.github_oauth import bp as oauth_bp
-    elif cfg.AUTH_PROVIDER == "oauth":
-        from .blueprints.oauth import bp as oauth_bp
-    else:
-        warnings.warn(f"unknown auth provider {cfg.AUTH_PROVIDER!r}")
-
-    assert oauth_bp is not None
-
-    app.config["oauth_blueprint"] = oauth_bp
-    app.register_blueprint(oauth_bp, url_prefix="/login")
+        if oauth_bp.name == "github":
+            app.config["GITHUB_OAUTH_CLIENT_ID"] = cfg.get(
+                "FUZZBUCKET_GITHUB_OAUTH_CLIENT_ID"
+            )
+            app.config["GITHUB_OAUTH_CLIENT_SECRET"] = cfg.get(
+                "FUZZBUCKET_GITHUB_OAUTH_CLIENT_SECRET"
+            )
 
     auth.login_manager.init_app(app)
 
@@ -60,8 +47,8 @@ def create_app() -> flask.Flask:
 
 
 def _log_request_started(*_, **__):
-    log.debug(f"request started {flask.request}")
+    log.debug("request started", extra=dict(request=flask.request))
 
 
 def _log_request_finished(_, response: flask.Response):
-    log.debug(f"request finished {flask.request} response={response!r}")
+    log.debug("request finished", extra=dict(request=flask.request, response=response))

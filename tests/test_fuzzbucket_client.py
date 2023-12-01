@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import datetime
 import io
 import json
 import logging
@@ -11,6 +12,11 @@ import urllib.request
 import pytest
 
 import fuzzbucket_client.__main__
+
+
+@pytest.fixture
+def nowish() -> datetime.datetime:
+    return datetime.datetime(2020, 3, 15, 11, 22, 4, 655788)
 
 
 class FakePath:

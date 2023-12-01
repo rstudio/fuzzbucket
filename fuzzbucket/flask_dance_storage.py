@@ -4,7 +4,7 @@ import typing
 import flask
 import flask_dance.consumer.storage
 
-from . import aws
+from . import aws, cfg
 from .log import log
 
 
@@ -16,7 +16,7 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         """fulfills the session storage method for getting the session token"""
         token = self.dump().get("token")
 
-        log.debug(f"getting token={token!r}")
+        log.debug("getting token", extra=dict(token=token))
 
         return token
 
@@ -32,14 +32,14 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         if token is not None and "expires_at" in token:
             item["token"]["expires_at"] = int(token["expires_at"])
 
-        log.debug(f"setting item={item!r} for user={item['user']!r}")
+        log.debug("setting item for user", extra=dict(item=item, user=item["user"]))
 
         self.table.put_item(Item=item)
 
     def delete(self, _) -> None:
         """fulfills the session storage method for deleting the session token"""
         user = self._load_user()
-        log.debug(f"wiping record for user={user!r}")
+        log.debug("wiping record for user", extra=dict(user=user))
 
         if user is None:
             raise ValueError("cannot delete record without user")
@@ -64,7 +64,7 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         if "user" not in item:
             raise ValueError("cannot set secret without user")
 
-        log.debug(f"setting item={item!r} for user={item['user']!r}")
+        log.debug(f"setting item for user", extra=dict(item=item, user=item["user"]))
 
         self.table.put_item(Item=item)
 
@@ -72,14 +72,14 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         if "user" not in item:
             raise ValueError("cannot set token without user")
 
-        log.debug(f"saving item={item!r} for user={item['user']!r}")
+        log.debug("saving item for user", extra=dict(item=item, user=item["user"]))
 
         self.table.put_item(Item=item)
 
     def dump(self, user: str | None = None) -> dict[str, typing.Any]:
         user = user if user is not None else self._load_user()
 
-        log.debug(f"dumping record user={user!r}")
+        log.debug("dumping record", extra=dict(user=user))
 
         if user is None:
             return {}
@@ -101,7 +101,7 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
         ):
             item["token"]["expires_at"] = int(item["token"]["expires_at"])
 
-        log.debug(f"dumped record={item!r} user={user!r}")
+        log.debug("dumped record", extra=dict(item=item, user=user))
 
         return item
 
@@ -110,8 +110,17 @@ class FlaskDanceStorage(flask_dance.consumer.storage.BaseStorage):
 
         if value is not None and value != str(value).lower():
             value = str(value).lower()
-            log.debug(f"migrated session user to lowercase session user={value!r}")
+            log.debug(
+                "migrated session user to lowercase session", extra=dict(user=value)
+            )
 
-        log.debug(f"loaded normalized session user={value!r}")
+        log.debug("loaded normalized session", extra=dict(user=value))
 
         return value
+
+
+def get_storage() -> FlaskDanceStorage:
+    if "storage" not in flask.g:
+        flask.g.storage = FlaskDanceStorage(cfg.USERS_TABLE)
+
+    return flask.g.storage

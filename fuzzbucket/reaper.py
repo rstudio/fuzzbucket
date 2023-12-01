@@ -20,25 +20,28 @@ def reap_boxes(_, __, ec2_client=None) -> dict[str, list[str]]:
         expires_at = box.created_at + ttl
         now = datetime_ext.utcnow().timestamp()
 
-        log_desc = (
-            f"instance_id={box.instance_id!r} "
-            + f"name={box.name!r} user={box.user!r} created_at={box.created_at!r} "
-            + f"ttl={box.ttl!r} expires_at={expires_at!r}"
+        log_desc = dict(
+            instance_id=box.instance_id,
+            box_name=box.name,
+            user=box.user,
+            created_at=box.created_at,
+            ttl=box.ttl,
+            expires_at=expires_at,
         )
 
         if expires_at > now:
             log.warning(
-                f"skipping box that is not stale {log_desc} "
-                + f"expires_in={expires_at - now!r}"
+                "skipping box that is not stale",
+                extra=(log_desc | dict(expires_in=expires_at - now)),
             )
             continue
 
-        log.info(f"terminating stale box {log_desc}")
+        log.info("terminating stale box", extra=log_desc)
 
         try:
             ec2_client.terminate_instances(InstanceIds=[box.instance_id])
             reaped_instance_ids.append(box.instance_id)
         except ClientError:
-            log.exception(f"failed to terminate stale box {log_desc}")
+            log.exception("failed to terminate stale box", extra=log_desc)
 
     return {"reaped_instance_ids": reaped_instance_ids}
