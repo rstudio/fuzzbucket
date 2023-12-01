@@ -935,20 +935,10 @@ def test_client_ssh(monkeypatch):
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
+    state = {}
+
     def fake_execvp(file, args):
-        assert file == "ssh"
-        assert args == [
-            "ssh",
-            "ethereal-plane.example.org",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-l",
-            "ubuntu",
-            "ls",
-            "-la",
-        ]
+        state.update(file=file, args=args)
 
     def fake_list_boxes():
         return [
@@ -968,49 +958,59 @@ def test_client_ssh(monkeypatch):
     )
     assert ret == 0
 
+    assert state["file"] == "ssh"
+    assert state["args"] == [
+        "ssh",
+        "ethereal-plane.example.org",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-l",
+        "ubuntu",
+        "ls",
+        "-la",
+    ]
+
+    state = {}
+
     def fake_execvp_with_ssm(file, args):
-        assert file == "ssh"
-        assert args == [
-            "ssh",
-            "i-dadb0dcafebaba",
-            "-o",
-            "ProxyCommand=sh -c 'aws ssm start-session --target i-dadb0dcafebaba "
-            + "--region mp-south-2 --document-name AWS-StartSSHSession "
-            + "--parameters portNumber=%p'",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-l",
-            "ubuntu",
-            "ls",
-            "-la",
-        ]
+        state.update(file=file, args=args)
 
     monkeypatch.setattr(os, "execvp", fake_execvp_with_ssm)
 
     ret = fuzzbucket_client.__main__.main(
-        ["fuzzbucket-client", "ssh", "--ssm", "koolthing", "ls", "-la"]
+        ["fuzzbucket-client", "ssh", "--ssm=always", "koolthing", "ls", "-la"]
     )
     assert ret == 0
+
+    assert state["file"] == "ssh"
+    assert state["args"] == [
+        "ssh",
+        "i-dadb0dcafebaba",
+        "-o",
+        "ProxyCommand=sh -c 'aws ssm start-session --target i-dadb0dcafebaba "
+        + "--region mp-south-2 --document-name AWS-StartSSHSession "
+        + "--parameters portNumber=%p'",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-l",
+        "ubuntu",
+        "ls",
+        "-la",
+    ]
 
 
 def test_client_scp(monkeypatch):
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
+    state = {}
+
     def fake_execvp(file, args):
-        assert file == "scp"
-        assert args == [
-            "scp",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-r",
-            "cornelius@ethereal-plane.example.org:/var/log/",
-            "./local/dump",
-        ]
+        state.update(file=file, args=args)
 
     def fake_list_boxes():
         return [
@@ -1037,22 +1037,22 @@ def test_client_scp(monkeypatch):
     )
     assert ret == 0
 
+    assert state["file"] == "scp"
+    assert state["args"] == [
+        "scp",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-r",
+        "cornelius@ethereal-plane.example.org:/var/log/",
+        "./local/dump",
+    ]
+
+    state = {}
+
     def fake_execvp_with_ssm(file, args):
-        assert file == "scp"
-        assert args == [
-            "scp",
-            "-o",
-            "ProxyCommand=sh -c 'aws ssm start-session --target i-feedfacecafebeef "
-            + "--region mp-south-2 --document-name AWS-StartSSHSession "
-            + "--parameters portNumber=%p'",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-r",
-            "cornelius@ethereal-plane.example.org:/var/log/",
-            "./local/dump",
-        ]
+        state.update(file=file, args=args)
 
     monkeypatch.setattr(os, "execvp", fake_execvp_with_ssm)
 
@@ -1060,7 +1060,7 @@ def test_client_scp(monkeypatch):
         [
             "fuzzbucket-client",
             "scp",
-            "--ssm",
+            "--ssm=always",
             "koolthing",
             "-r",
             "cornelius@__BOX__:/var/log/",
@@ -1068,6 +1068,22 @@ def test_client_scp(monkeypatch):
         ]
     )
     assert ret == 0
+
+    assert state["file"] == "scp"
+    assert state["args"] == [
+        "scp",
+        "-o",
+        "ProxyCommand=sh -c 'aws ssm start-session --target i-feedfacecafebeef "
+        + "--region mp-south-2 --document-name AWS-StartSSHSession "
+        + "--parameters portNumber=%p'",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-r",
+        "cornelius@i-feedfacecafebeef:/var/log/",
+        "./local/dump",
+    ]
 
 
 @pytest.mark.parametrize(
