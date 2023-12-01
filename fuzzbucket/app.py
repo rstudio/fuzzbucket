@@ -18,8 +18,11 @@ def create_app() -> flask.Flask:
 
     # NOTE: these URL rules are for backward compatibility with lower versions
     # of fuzzbucket-client:
+    app.add_url_rule("/", "boxes.list_boxes")
     app.add_url_rule("/reboot/<string:instance_id>", "boxes.reboot_box")
     app.add_url_rule("/keys", "keys.list_keys")
+
+    app.url_map.strict_slashes = False
 
     app.secret_key = cfg.get("FUZZBUCKET_FLASK_SECRET_KEY")
     app.json = json_provider.AsJSONProvider(app)
