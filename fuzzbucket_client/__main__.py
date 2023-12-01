@@ -2,16 +2,24 @@
 """
 A client for fuzzbucket.
 
-Configuration is accepted via the following environment variables:
+In addition to arguments passed via command line, configuration is accepted via
+the following environment variables:
 
-    FUZZBUCKET_URL - string URL of the fuzzbucket instance including path prefix
-    FUZZBUCKET_LOG_LEVEL - log level name (default="INFO")
+    FUZZBUCKET_URL (REQUIRED) - [string URL] the fuzzbucket instance including path
+                                prefix, e.g.:
+                                https://xyz123.execute-api.us-east-1.amazonaws.com/prod
 
-    Optional:
-    FUZZBUCKET_CREDENTIALS - credentials string value
-        see ~/.cache/fuzzbucket/credentials
-    FUZZBUCKET_PREFERENCES - preferences JSON string value
-        see ~/.cache/fuzzbucket/preferences
+    FUZZBUCKET_SSM            - [string "always"/"auto"/"never"] control when to use an
+                                SSM proxy when a given box does not have a public DNS
+                                name (default="auto")
+
+    FUZZBUCKET_CREDENTIALS    - [string "username:secret"] credentials like those in
+                                ~/.cache/fuzzbucket/credentials (no default)
+
+    FUZZBUCKET_LOG_LEVEL      - [string] log level name (default="INFO")
+
+    FUZZBUCKET_PREFERENCES    - [json] preferences value like that in
+                                ~/.cache/fuzzbucket/preferences (no default)
 
 """
 import argparse
@@ -304,7 +312,8 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
     parser_ssh.add_argument(
         "--ssm",
-        action="store_true",
+        default=_TrinaryBehavior.AUTO,
+        type=_TrinaryBehavior,
         help="open session via Amazon SSM proxy",
     )
     parser_ssh.usage = "usage: %(prog)s [-hq|--ssm] box [ssh-arguments]"
@@ -337,7 +346,8 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
     parser_scp.add_argument(
         "--ssm",
-        action="store_true",
+        default=_TrinaryBehavior.AUTO,
+        type=_TrinaryBehavior,
         help="open session via Amazon SSM proxy",
     )
     parser_scp.usage = "usage: %(prog)s [-hq|--ssm] box [scp-arguments]"
@@ -584,6 +594,12 @@ class CredentialsError(ValueError):
 class _DataFormats(enum.Enum):
     INI = "ini"
     JSON = "json"
+
+
+class _TrinaryBehavior(enum.Enum):
+    ALWAYS = "always"
+    AUTO = "auto"
+    NEVER = "never"
 
 
 class _Preferences(enum.Enum):
@@ -860,44 +876,64 @@ class Client:
 
     @_command
     def ssh(self, known_args, unknown_args):
-        matching_box, ok = self._resolve_sshable_box(known_args.box, known_args.ssm)
-        if not ok:
-            return False
-        assert matching_box is not None
-        ssh_command, ok = self._build_ssh_command(
-            matching_box, known_args.ssm, unknown_args
+        matching_box, hostname, needs_ssm, ok = self._resolve_sshable_box(
+            known_args.box, known_args.ssm
         )
+
         if not ok:
             return False
+
+        assert matching_box is not None
+
+        ssh_command, ok = self._build_ssh_command(
+            matching_box, hostname, needs_ssm, unknown_args
+        )
+
+        if not ok:
+            return False
+
         if not known_args.quiet:
             log.info(
                 f"sshing into matching_box={matching_box['name']!r} "
                 + f"ssh_command={ssh_command!r}"
             )
             print(self._format_boxes([matching_box]), end="")
+
         sys.stdout.flush()
         sys.stderr.flush()
+
         execvp("ssh", ssh_command)
-        return True
+
+        return True  # NOTE: this is unreachable under normal circumstances
 
     @_command
     def scp(self, known_args, unknown_args):
-        matching_box, ok = self._resolve_sshable_box(known_args.box, known_args.ssm)
+        matching_box, hostname, needs_ssm, ok = self._resolve_sshable_box(
+            known_args.box, known_args.ssm
+        )
+
         if not ok:
             return False
+
         assert matching_box is not None
+
         scp_command = self._build_scp_command(
-            matching_box, known_args.ssm, unknown_args
+            matching_box, hostname, needs_ssm, unknown_args
         )
+
         log.info(
             f"scping with matching_box={matching_box['name']!r} "
             + f"scp_command={scp_command!r}"
         )
+
         print(self._format_boxes([matching_box]), end="")
+
         sys.stdout.flush()
         sys.stderr.flush()
+
         execvp("scp", scp_command)
-        return True
+
+        return True  # NOTE: this is unreachable under normal circumstances
 
     @_command
     def list_aliases(self, *_):
@@ -1170,8 +1206,10 @@ class Client:
         with self._credentials_file.open() as infile:
             creds = configparser.ConfigParser()
             creds.read_file(infile)
+
             if self._credentials_section not in creds.sections():
                 return ""
+
             return creds.get(self._credentials_section, "credentials")
 
     def _write_credentials(self, user, secret, name=None):
@@ -1179,22 +1217,29 @@ class Client:
             _env_creds_log(
                 "skipping writing credentials due to presence of FUZZBUCKET_CREDENTIALS"
             )
+
             return
 
         creds = configparser.ConfigParser()
+
         if self._credentials_file.exists():
             with self._credentials_file.open() as infile:
                 creds.read_file(infile)
+
         if self._credentials_section not in creds.sections():
             creds.add_section(self._credentials_section)
+
         creds.set(self._credentials_section, "credentials", f"{user}:{secret}")
+
         if name is not None:
             creds.set(self._credentials_section, "name", str(name))
+
         with self._credentials_file.open("w") as outfile:
             outfile.write(
                 "# WARNING: this file is generated " + f"(last update {utcnow()})\n"
             )
             creds.write(outfile)
+
         self._cached_credentials = None
 
     @property
@@ -1207,25 +1252,50 @@ class Client:
 
     def _build_request(self, url, data=None, headers=None, method="GET"):
         headers = headers if headers is not None else {}
+
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        req.headers["Fuzzbucket-User"] = self._user
-        req.headers["Fuzzbucket-Secret"] = self._secret
+
+        req.headers["fuzzbucket-user"] = self._user
+        req.headers["fuzzbucket-secret"] = self._secret
+
         return req
 
     def _resolve_sshable_box(
-        self, box_name: str, ssm: bool
-    ) -> tuple[typing.Optional[Box], bool]:
+        self, box_name: str, ssm: _TrinaryBehavior
+    ) -> tuple[typing.Optional[Box], str, bool, bool]:
         matching_box = self._find_box(box_name)
+
         if matching_box is None:
             log.error(f"no box found matching {box_name!r}")
-            return None, False
-        if not ssm and matching_box.get("public_dns_name") is None:
-            log.error(f"no public dns name found for box={matching_box['name']}")
-            return None, False
-        return matching_box, True
+
+            return None, "", False, False
+
+        hostname: typing.Optional[str] = None
+        needs_ssm: bool = False
+
+        if ssm == _TrinaryBehavior.ALWAYS:
+            hostname = matching_box.get("instance_id")
+            needs_ssm = True
+
+        elif ssm == _TrinaryBehavior.NEVER:
+            hostname = matching_box.get("public_dns_name")
+
+        else:
+            hostname = matching_box.get("public_dns_name")
+
+            if hostname is None:
+                hostname = matching_box.get("instance_id")
+                needs_ssm = True
+
+        if hostname is None:
+            log.error(f"no hostname name found for box={matching_box['name']}")
+
+            return None, "", False, False
+
+        return matching_box, hostname, needs_ssm, True
 
     def _build_ssh_command(
-        self, box: Box, ssm: bool, unknown_args: list[str]
+        self, box: Box, hostname: str, needs_ssm: bool, unknown_args: list[str]
     ) -> tuple[list[str], bool]:
         if "-l" not in unknown_args:
             unknown_args = [
@@ -1235,19 +1305,14 @@ class Client:
                     self.default_ssh_user,
                 ),
             ] + unknown_args
-        hostname = box.get("instance_id") if ssm else box.get("public_dns_name")
-        if hostname is None:
-            log.error(
-                f"ssm not in use and no public dns name found for box={box['name']}"
-            )
-            return [], False
+
         return (
             typing.cast(
                 list[str],
                 ["ssh", hostname]
                 + self._with_ssh_opts(
                     box,
-                    ssm,
+                    needs_ssm,
                     unknown_args,
                 ),
             ),
@@ -1255,13 +1320,14 @@ class Client:
         )
 
     def _build_scp_command(
-        self, box: Box, ssm: bool, unknown_args: list[str]
+        self, box: Box, hostname: str, needs_ssm: bool, unknown_args: list[str]
     ) -> list[str]:
         for i, value in enumerate(unknown_args):
             if "__BOX__" not in value:
                 continue
 
-            box_value = typing.cast(str, box["public_dns_name"])
+            box_value = hostname
+
             if "@" not in value:
                 box_value = "@".join(
                     [
@@ -1274,16 +1340,17 @@ class Client:
                 )
 
             unknown_args[i] = value.replace("__BOX__", box_value)
+
         return ["scp"] + self._with_ssh_opts(
             box,
-            ssm,
+            needs_ssm,
             unknown_args,
         )
 
     def _with_ssh_opts(
         self,
         box: Box,
-        ssm: bool,
+        needs_ssm: bool,
         unknown_args: list[str],
     ) -> list[str]:
         unknown_args_string = " ".join(unknown_args)
@@ -1294,13 +1361,14 @@ class Client:
             is None
         ):
             unknown_args = ["-o", "StrictHostKeyChecking=no"] + unknown_args
+
         if (
             re.search(" -o UserKnownHostsFile=.+", unknown_args_string, re.IGNORECASE)
             is None
         ):
             unknown_args = ["-o", "UserKnownHostsFile=/dev/null"] + unknown_args
 
-        if ssm:
+        if needs_ssm:
             return self._with_ssh_ssm_proxy_command(box, unknown_args)
 
         return unknown_args
@@ -1349,17 +1417,23 @@ class Client:
 
     def _format_boxes_ini(self, boxes):
         boxes_ini = configparser.ConfigParser()
+
         for box in boxes:
             boxes_ini.add_section(box["name"])
+
             if box.get("public_ip") is None:
                 box["public_ip"] = "(pending)"
+
             for key, value in box.items():
                 if value is None:
                     continue
+
                 boxes_ini.set(box["name"], str(key), str(value))
+
         buf = io.StringIO()
         boxes_ini.write(buf)
         buf.seek(0)
+
         return buf.read()
 
     def _format_boxes_json(self, boxes):
@@ -1370,16 +1444,21 @@ class Client:
 
     def _format_keys_ini(self, keys):
         keys_ini = configparser.ConfigParser()
+
         for i, key in enumerate(keys):
             key_alias = key.get("alias", f"unaliased-key-{i}")
             keys_ini.add_section(key_alias)
+
             for attr, value in key.items():
                 if value is None:
                     continue
+
                 keys_ini.set(key_alias, str(attr), str(value))
+
         buf = io.StringIO()
         keys_ini.write(buf)
         buf.seek(0)
+
         return buf.read()
 
     def _format_keys_json(self, keys):
@@ -1393,11 +1472,14 @@ class Client:
     def _format_image_aliases_ini(self, image_aliases):
         image_aliases_ini = configparser.ConfigParser()
         image_aliases_ini.add_section("image_aliases")
+
         for alias, ami in sorted(image_aliases.items()):
             image_aliases_ini.set("image_aliases", alias, ami)
+
         buf = io.StringIO()
         image_aliases_ini.write(buf)
         buf.seek(0)
+
         return buf.read()
 
     def _format_image_aliases_json(self, image_aliases):
@@ -1408,12 +1490,15 @@ class Client:
 
     def _format_valid_ttl_ini(self, ttl):
         ttl_ini = configparser.ConfigParser()
+
         ttl_ini.add_section("ttl")
         ttl_ini.set("ttl", "str", str(ttl))
         ttl_ini.set("ttl", "float", str(ttl.total_seconds()))
+
         buf = io.StringIO()
         ttl_ini.write(buf)
         buf.seek(0)
+
         return buf.read()
 
     def _format_valid_ttl_json(self, ttl):
@@ -1424,9 +1509,11 @@ class Client:
     @classmethod
     def _guess_ssh_user(cls, image_alias, default=default_ssh_user) -> str:
         image_alias = image_alias.lower()
+
         for prefix, user in cls.default_ssh_users.items():
             if image_alias.startswith(prefix):
                 return user
+
         return default
 
 
