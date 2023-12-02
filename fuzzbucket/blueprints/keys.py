@@ -9,7 +9,7 @@ bp = flask.Blueprint("keys", __name__)
 
 @bp.route("/<string:alias>", methods=("GET",))
 @flask_login.login_required
-def get_key(alias):
+def get_key(alias="default"):
     user_id: str = flask_login.current_user.get_id()
 
     full_key_alias = user_id
