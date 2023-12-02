@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+## [0.14.0] - 2023-12-01
+
+### Added
 - server: include version and region in response headers
 - server: include region for each box in box-related API responses
 - server: support for managing instances in externally-defined VPC
@@ -262,7 +271,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.13.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.14.0...HEAD
+[0.14.0]: https://github.com/rstudio/fuzzbucket/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/rstudio/fuzzbucket/compare/0.12.2...0.13.0
 [0.12.2]: https://github.com/rstudio/fuzzbucket/compare/0.12.1...0.12.2
 [0.12.1]: https://github.com/rstudio/fuzzbucket/compare/0.12.0...0.12.1
