@@ -29,13 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - server: use `Flask-Login` library instead of homegrown things
 - client: swapped "list" and "ls" command and alias
 
-### Deprecated
 ### Removed
 - internal: custom lambda image scaffolding
 - internal: pipenv files
-
-### Fixed
-### Security
 
 ## [0.13.0] - 2023-11-15
 
