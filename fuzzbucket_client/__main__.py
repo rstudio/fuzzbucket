@@ -254,9 +254,10 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     parser_list = subparsers.add_parser(
         "ls",
         aliases=["l", "list"],
-        help="list your boxes",
+        help="list matching boxes",
         formatter_class=CustomHelpFormatter,
     )
+    parser_list.add_argument("box_match", nargs="?")
     parser_list.set_defaults(func=client.ls)
 
     parser_update = subparsers.add_parser(
@@ -710,11 +711,20 @@ class Client:
         return True
 
     @_command
-    def ls(self, *_):
+    def ls(self, known_args: argparse.Namespace, _):
         log.debug(f"fetching boxes for user={self._user!r}")
-        boxes = self._list_boxes()
-        log.info(f"fetched boxes for user={self._user!r} count={len(boxes)}")
-        print(self._format_boxes(boxes), end="")
+
+        matching_boxes = self._find_boxes(known_args.box_match)
+
+        if matching_boxes is None:
+            log.error(f"no boxes found matching {known_args.box_match!r}")
+
+            return False
+
+        log.info(f"fetched boxes for user={self._user!r} count={len(matching_boxes)}")
+
+        print(self._format_boxes(matching_boxes), end="")
+
         return True
 
     @_command
@@ -1091,27 +1101,40 @@ class Client:
 
     def _find_box(self, box_search):
         results = self._find_boxes(box_search)
+
         if results is None:
             return None
+
         return results[0]
 
     def _find_boxes(self, box_search):
         boxes = self._list_boxes()
+
+        if box_search is None:
+            return boxes
+
         results = []
+
         for box in boxes:
             log.debug(f"finding box_search={box_search!r} considering box={box!r}")
+
             if box.get("name") is not None and fnmatch.fnmatchcase(
                 box["name"], box_search
             ):
                 results.append(box)
+
                 continue
+
             if box.get("image_alias") is not None and fnmatch.fnmatchcase(
                 box["image_alias"], box_search
             ):
                 results.append(box)
+
                 continue
+
         if len(results) == 0:
             return None
+
         return results
 
     def _list_boxes(self):

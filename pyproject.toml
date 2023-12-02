@@ -71,7 +71,7 @@ lint = [
   "black --check --diff {root}",
   "pytest -m mypy --no-cov"
 ]
-test = "pytest --cov-fail-under=89"
+test = "pytest --cov-fail-under=89 {args}"
 fmt = [
   "isort {root}",
   "black {root}"

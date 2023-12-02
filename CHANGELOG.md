@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- client: glob-style filtering by name or image alias in `ls` command
+
 ### Changed
 ### Deprecated
 ### Removed

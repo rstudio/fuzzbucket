@@ -51,6 +51,13 @@ def config_setup(tmpdir, monkeypatch):
     os.environ.pop("FUZZBUCKET_CREDENTIALS", None)
 
 
+def test_trinary_behavior():
+    assert str(fuzzbucket_client.__main__._TrinaryBehavior.ALWAYS) == "always"
+
+    with pytest.raises(ValueError):
+        fuzzbucket_client.__main__._TrinaryBehavior("boguster")
+
+
 def test_default_client():
     assert fuzzbucket_client.__main__.default_client() is not None
 
@@ -279,13 +286,15 @@ def test_client_failing_func(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("args",),
+    ("args", "returning"),
     [
-        pytest.param(("ls",), id="empty"),
-        pytest.param(("-j", "list"), id="output_json"),
+        pytest.param(("ls",), 0, id="empty"),
+        pytest.param(("-j", "list"), 0, id="output_json"),
+        pytest.param(("list", "spark*"), 0, id="matching"),
+        pytest.param(("list", "*giraffes*"), 86, id="not_matching"),
     ],
 )
-def test_client_list(monkeypatch, args):
+def test_client_ls(monkeypatch, args, returning):
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
     monkeypatch.setattr(
@@ -298,7 +307,7 @@ def test_client_list(monkeypatch, args):
         ),
     )
     ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"] + list(args))
-    assert ret == 0
+    assert ret == returning
 
 
 @pytest.mark.parametrize(
@@ -1349,6 +1358,30 @@ def test_client_delete_key(monkeypatch, caplog):
 
     assert client.delete_key(argparse.Namespace(alias="hurr"), "unknown")
     assert "deleted key" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("args", "response", "out_match", "returning"),
+    [
+        pytest.param(("whoami",), '{"you":"castleface"}', "castleface", 0),
+        pytest.param(("-j", "whoami"), '{"you":"castleface"}', "castleface", 0),
+        pytest.param(("whoami",), "{}", None, 86),
+    ],
+)
+def test_client_whoami(args, response, out_match, returning, monkeypatch, capsys):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(io.StringIO(response)),
+    )
+
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"] + list(args))
+    assert ret == returning
+    if out_match is not None:
+        assert out_match in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
