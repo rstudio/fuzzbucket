@@ -2,7 +2,8 @@ set shell := ["bash", "-c"]
 
 default:
   hatch run lint
-  hatch run test
+  FUZZBUCKET_AUTH_PROVIDER=github-oauth hatch run test
+  FUZZBUCKET_AUTH_PROVIDER=oauth hatch run test --cov-append
 
 deps:
   hatch run yarn install
