@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import datetime
+import email
 import io
 import json
 import logging
@@ -8,6 +9,7 @@ import os
 import random
 import re
 import urllib.request
+import urllib.response
 
 import pytest
 
@@ -84,7 +86,7 @@ def gen_fake_urlopen(response, http_exc=None, empty_methods=(), request_hook=Non
         if request_hook is not None:
             request_hook(request)
         if request.get_method() in empty_methods:
-            yield io.StringIO("")
+            yield io.BytesIO()
             return
         if http_exc is not None:
             raise urllib.request.HTTPError(*(list(http_exc) + [response]))
@@ -301,8 +303,10 @@ def test_client_ls(monkeypatch, args, returning):
         client,
         "_urlopen",
         gen_fake_urlopen(
-            io.StringIO(
-                json.dumps({"boxes": [{"name": "sparkles", "fancy": "probably"}]})
+            io.BytesIO(
+                json.dumps(
+                    {"boxes": [{"name": "sparkles", "fancy": "probably"}]}
+                ).encode()
             )
         ),
     )
@@ -405,7 +409,7 @@ def test_client_logout(monkeypatch):
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO("")),
+        gen_fake_urlopen(io.BytesIO()),
     )
     ret = fuzzbucket_client.__main__.main(["fuzzbucket-client", "logout"])
     assert ret == 0
@@ -593,7 +597,9 @@ def test_client_create(
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO(json.dumps(api_response)), http_exc=http_exc),
+        gen_fake_urlopen(
+            io.BytesIO(json.dumps(api_response).encode()), http_exc=http_exc
+        ),
     )
     ret = fuzzbucket_client.__main__.main(
         ["fuzzbucket-client", "create"] + list(cmd_args)
@@ -800,7 +806,7 @@ def test_client_update(
         client,
         "_urlopen",
         gen_fake_urlopen(
-            io.StringIO(json.dumps(api_response)),
+            io.BytesIO(json.dumps(api_response).encode()),
             http_exc=http_exc,
             request_hook=request_hook,
         ),
@@ -866,7 +872,7 @@ def test_client_delete(
         client,
         "_urlopen",
         gen_fake_urlopen(
-            io.StringIO(json.dumps(api_response)),
+            io.BytesIO(json.dumps(api_response).encode()),
             http_exc=http_exc,
             empty_methods=("DELETE",),
         ),
@@ -927,7 +933,7 @@ def test_client_reboot(
         client,
         "_urlopen",
         gen_fake_urlopen(
-            io.StringIO(json.dumps(api_response)),
+            io.BytesIO(json.dumps(api_response).encode()),
             http_exc=http_exc,
             empty_methods=("POST",),
         ),
@@ -1130,7 +1136,7 @@ def test_client_list_aliases(
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+        gen_fake_urlopen(io.BytesIO(json.dumps(api_response).encode())),
     )
     client.data_format = data_format
 
@@ -1175,7 +1181,7 @@ def test_client_create_alias(
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO(json.dumps(api_response))),
+        gen_fake_urlopen(io.BytesIO(json.dumps(api_response).encode())),
     )
     client.data_format = data_format
 
@@ -1194,7 +1200,7 @@ def test_client_delete_alias(monkeypatch, caplog):
     client = fuzzbucket_client.__main__.Client()
     monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
 
-    monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.StringIO("")))
+    monkeypatch.setattr(client, "_urlopen", gen_fake_urlopen(io.BytesIO()))
 
     assert client.delete_alias(argparse.Namespace(alias="hurr"), "unknown")
     assert "deleted alias" in caplog.text
@@ -1223,7 +1229,7 @@ def test_client_get_key(monkeypatch, capsys, data_format, matches):
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO('{"key":{"any":"fields","allowed":true}}')),
+        gen_fake_urlopen(io.BytesIO(b'{"key":{"any":"fields","allowed":true}}')),
     )
 
     assert client.get_key(argparse.Namespace(alias="hurr"), "unknown")
@@ -1271,7 +1277,7 @@ def test_client_list_keys(monkeypatch, capsys, data_format, matches):
         client,
         "_urlopen",
         gen_fake_urlopen(
-            io.StringIO('{"keys":[{"braking":"litho","retrograde":true}]}')
+            io.BytesIO(b'{"keys":[{"braking":"litho","retrograde":true}]}')
         ),
     )
 
@@ -1336,7 +1342,7 @@ def test_client_add_key(monkeypatch, caplog, alias, filename, key_material, succ
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO('{"key":{"braking":"litho","retrograde":true}}')),
+        gen_fake_urlopen(io.BytesIO(b'{"key":{"braking":"litho","retrograde":true}}')),
     )
 
     filename.text_content = key_material
@@ -1353,7 +1359,7 @@ def test_client_delete_key(monkeypatch, caplog):
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO('{"key":{"braking":"litho","retrograde":true}}')),
+        gen_fake_urlopen(io.BytesIO(b'{"key":{"braking":"litho","retrograde":true}}')),
     )
 
     assert client.delete_key(argparse.Namespace(alias="hurr"), "unknown")
@@ -1363,9 +1369,9 @@ def test_client_delete_key(monkeypatch, caplog):
 @pytest.mark.parametrize(
     ("args", "response", "out_match", "returning"),
     [
-        pytest.param(("whoami",), '{"you":"castleface"}', "castleface", 0),
-        pytest.param(("-j", "whoami"), '{"you":"castleface"}', "castleface", 0),
-        pytest.param(("whoami",), "{}", None, 86),
+        pytest.param(("whoami",), b'{"you":"castleface"}', "castleface", 0),
+        pytest.param(("-j", "whoami"), b'{"you":"castleface"}', "castleface", 0),
+        pytest.param(("whoami",), b"{}", None, 86),
     ],
 )
 def test_client_whoami(args, response, out_match, returning, monkeypatch, capsys):
@@ -1375,11 +1381,86 @@ def test_client_whoami(args, response, out_match, returning, monkeypatch, capsys
     monkeypatch.setattr(
         client,
         "_urlopen",
-        gen_fake_urlopen(io.StringIO(response)),
+        gen_fake_urlopen(io.BytesIO(response)),
     )
 
     ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"] + list(args))
     assert ret == returning
+
+    if out_match is not None:
+        assert out_match in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("args", "response", "http_exc", "out_match", "returning"),
+    [
+        pytest.param(
+            ("api", "foul/form"),
+            b'{"funeral":"solution"}',
+            None,
+            '{"funeral":"solution"}',
+            0,
+            id="simple",
+        ),
+        pytest.param(
+            ("-j", "api", "foul/form"),
+            b"<solution>funeral</solution>",
+            None,
+            "<solution>funeral</solution>",
+            0,
+            id="ignored_json_format",
+        ),
+        pytest.param(
+            ("api", "-H", "Spicy: 11", "-i", "foul/form"),
+            b'{"funeral":"solution"}',
+            None,
+            'Bear: Foz\n\n{"funeral":"solution"}',
+            0,
+            id="headers_time",
+        ),
+        pytest.param(
+            ("api", "frock/block"),
+            b"perm act\n",
+            (
+                "http://fakety.example.org/fake",
+                418,
+                b'{"hecking":"toot"}',
+                [("Content-Type", "application/json")],
+            ),
+            None,
+            86,
+            id="teapot",
+        ),
+    ],
+)
+def test_client_api(
+    args,
+    response,
+    http_exc,
+    out_match,
+    returning,
+    monkeypatch,
+    capsys,
+):
+    client = fuzzbucket_client.__main__.Client()
+    monkeypatch.setattr(fuzzbucket_client.__main__, "default_client", lambda: client)
+
+    monkeypatch.setattr(
+        client,
+        "_urlopen",
+        gen_fake_urlopen(
+            urllib.response.addinfourl(
+                io.BytesIO(response),
+                email.message_from_string("Bear: Foz\n"),
+                "http://ok.bears.example.org",
+            ),
+            http_exc=http_exc,
+        ),
+    )
+
+    ret = fuzzbucket_client.__main__.main(["fuzzbucket-client"] + list(args))
+    assert ret == returning
+
     if out_match is not None:
         assert out_match in capsys.readouterr().out
 
