@@ -493,6 +493,26 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
     )
     parser_whoami.set_defaults(func=client.whoami)
 
+    parser_api = subparsers.add_parser(
+        "api", help="make an arbitrary HTTP request to the fuzzbucket API"
+    )
+    parser_api.add_argument(
+        "-X", "--request", default="GET", help="request method to use"
+    )
+    parser_api.add_argument(
+        "-H", "--header", default=[], action="append", help="pass custom header(s)"
+    )
+    parser_api.add_argument(
+        "-i",
+        "--include",
+        action="store_true",
+        help="include response headers in the output",
+    )
+    parser_api.add_argument(
+        "url", help="full URL or request path to be joined to FUZZBUCKET_URL"
+    )
+    parser_api.set_defaults(func=client.api)
+
     known_args, unknown_args = parser.parse_known_args(sysargs[1:])
     known_args = _normalize_known_args(known_args)
     config_logging(level=logging.DEBUG if known_args.debug else logging.INFO)
@@ -1098,6 +1118,31 @@ class Client:
 
         print("you are not currently logged in")
         return False
+
+    @_command
+    def api(self, known_args, _):
+        full_url = known_args.url
+
+        if not full_url.startswith("http"):
+            full_url = _pjoin(self._url, full_url)
+
+        req = self._build_request(full_url, method=known_args.request)
+
+        for header in known_args.header:
+            key, value = header.split(":", maxsplit=1)
+            req.headers[key] = value
+
+        with self._urlopen(req) as response:
+            if known_args.include:
+                for header in response.headers:
+                    print(f"{header}: {response.headers[header]}")
+
+                print("")
+
+            for chunk in response:
+                sys.stdout.write(chunk.decode("utf-8"))
+
+        return True
 
     def _find_box(self, box_search):
         results = self._find_boxes(box_search)
