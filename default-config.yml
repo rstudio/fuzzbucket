@@ -103,7 +103,7 @@ environment:
 
   # `FUZZBUCKET_REGION` is the target deployment region and should match the
   # region of the AWS auth session.
-  FUZZBUCKET_REGION: ${env:AWS_REGION, ${env:AWS_DEFAULT_REGION, 'us-east-1'}}
+  FUZZBUCKET_REGION: ${aws:region}
 
   # `FUZZBUCKET_STAGE` is the value of the serverless deploy stage and is used
   # to construct values such as dynamodb table names.
