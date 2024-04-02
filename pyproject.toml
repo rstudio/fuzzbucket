@@ -123,6 +123,8 @@ addopts = '''
   --cov-report term
   --cov-report html
   --cov-report xml
+  --ignore=wsgi_handler.py
+  --ignore=serverless_wsgi.py
   -vv
   --mypy
   --disable-warnings
