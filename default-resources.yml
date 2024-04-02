@@ -3,7 +3,7 @@ resources:
     VPC:
       Type: AWS::EC2::VPC
       Properties:
-        CidrBlock: 172.98.0.0/18
+        CidrBlock: 172.22.0.0/20
         EnableDnsSupport: true
         EnableDnsHostnames: true
         Tags:
@@ -15,7 +15,7 @@ resources:
       Properties:
         VpcId: !Ref VPC
         AvailabilityZone: ${aws:region, 'us-east-1'}a
-        CidrBlock: 172.98.0.0/18
+        CidrBlock: 172.22.0.0/20
         MapPublicIpOnLaunch: true
         Tags:
         - Key: Name

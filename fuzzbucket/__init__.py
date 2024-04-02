@@ -8,7 +8,7 @@ from . import aws
 
 def deferred_app(
     environ: dict[str, str], start_response: typing.Callable
-) -> typing.Iterable[str]:
+) -> typing.Iterable[bytes]:
     return cached_app()(environ, start_response)
 
 

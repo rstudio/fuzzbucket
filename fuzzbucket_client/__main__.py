@@ -141,8 +141,7 @@ log = logging.getLogger("fuzzbucket")
 
 class CustomHelpFormatter(
     argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
-):
-    ...
+): ...
 
 
 def main(sysargs: list[str] = sys.argv[:]) -> int:
