@@ -73,7 +73,7 @@ def env_setup():
 def dynamodb(fake_users, monkeypatch):
     from fuzzbucket import aws
 
-    with moto.mock_dynamodb():
+    with moto.mock_aws():
         ddb = boto3.resource("dynamodb", region_name="us-east-1")
         setup_dynamodb_tables(ddb, fake_users)
 
@@ -87,7 +87,7 @@ def dynamodb(fake_users, monkeypatch):
 def ec2(monkeypatch):
     from fuzzbucket import aws
 
-    with moto.mock_ec2():
+    with moto.mock_aws():
         ec2c = boto3.client("ec2", region_name="us-east-1")
 
         with monkeypatch.context() as mp:
