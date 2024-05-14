@@ -17,19 +17,19 @@ jobs:
       releasable: ${{ toJson(steps.check_releasable.outputs.releasable) }}
       tarball_basename: ${{ toJson(steps.create_release_artifact.outputs.tarball_basename) }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: git fetch --prune --unshallow
-    - uses: actions/setup-python@v4
-    - uses: actions/setup-node@v3
+    - uses: actions/setup-python@v5
+    - uses: actions/setup-node@v4
       with:
-        node-version: 18.x
-    - uses: extractions/setup-just@v1
-    - uses: actions/cache@v3
+        node-version: 20.x
+    - uses: extractions/setup-just@v2
+    - uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
         restore-keys: ${{ runner.os }}-pip-
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       with:
         path: ~/.npm
         key: ${{ runner.os }}-node18-${{ hashFiles('**/yarn.lock') }}
@@ -50,7 +50,7 @@ jobs:
     - run: hatch build
     - run: hatch run release-artifact | tee -a "${GITHUB_OUTPUT}"
       id: create_release_artifact
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: tarball
         path: ${{ steps.create_release_artifact.outputs.tarball }}
@@ -59,14 +59,14 @@ jobs:
     needs: [build]
     strategy:
       matrix:
-        python: [3.9.x, 3.10.x, 3.11.x]
+        python: [3.8.x, 3.9.x, 3.10.x, 3.11.x, 3.12.x]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: git fetch --prune --unshallow
-    - uses: actions/setup-python@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python }}
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       id: download
       with:
         name: tarball
@@ -83,14 +83,14 @@ jobs:
       id-token: write
       contents: write
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - run: git fetch --prune --unshallow
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       id: download
       with:
         name: tarball
         path: dist
-    - uses: softprops/action-gh-release@v1
+    - uses: softprops/action-gh-release@v2
       with:
         files: ${{ steps.download.outputs.download-path }}/${{ fromJson(needs.build.outputs.tarball_basename) }}
     - uses: pypa/gh-action-pypi-publish@release/v1
