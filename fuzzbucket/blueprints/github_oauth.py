@@ -12,8 +12,8 @@ from ..log import log
 storage = flask_dance_storage.FlaskDanceStorage(table_name=cfg.USERS_TABLE)
 
 bp = flask_dance.contrib.github.make_github_blueprint(
-    scope=["read:org", "read:public_key"],
-    redirect_to="github_oauth.auth_complete",
+    scope= "read:org,read:public_key",
+    redirect_to="github.auth_complete",
     storage=storage,
 )
 
