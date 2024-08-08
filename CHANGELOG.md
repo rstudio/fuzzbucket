@@ -6,14 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- client: glob-style filtering by name or image alias in `ls` command
-
 ### Changed
 ### Deprecated
 ### Removed
 ### Fixed
 ### Security
+
+## [0.15.1] - 2024-08-08
+
+### Fixed
+- server: use correct redirect value for github auth
+- server: provide github oauth scope as comma-delimited string
+
+### Security
+- client/server: update dependencies, node + python versions tested
+
+## [0.15.0] - 2024-04-02
+
+### Added
+- client: glob-style filtering by name or image alias in `ls` command
+- client: `api` command in client as escape hatch
+
+### Fixed
+- server: resize/renumber default VPC CIDR blocks
+- internal: update usage of `moto` library
 
 ## [0.14.0] - 2023-12-01
 
@@ -269,7 +285,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - initial implementation
 
-[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.14.0...HEAD
+[Unreleased]: https://github.com/rstudio/fuzzbucket/compare/0.15.0...HEAD
+[0.15.0]: https://github.com/rstudio/fuzzbucket/compare/0.14.0...0.15.0
 [0.14.0]: https://github.com/rstudio/fuzzbucket/compare/0.13.0...0.14.0
 [0.13.0]: https://github.com/rstudio/fuzzbucket/compare/0.12.2...0.13.0
 [0.12.2]: https://github.com/rstudio/fuzzbucket/compare/0.12.1...0.12.2
