@@ -8,6 +8,6 @@
     "serverless-offline": "*",
     "serverless-python-requirements": "*",
     "serverless-resources-env": "*",
-    "serverless-wsgi": "*"
+    "serverless-wsgi": "3.0.5"
   }
 }
