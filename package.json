@@ -6,7 +6,7 @@
     "serverless": "*",
     "serverless-dynamodb-local": "*",
     "serverless-offline": "*",
-    "serverless-python-requirements": "*",
+    "serverless-python-requirements": "6.1.2",
     "serverless-resources-env": "*",
     "serverless-wsgi": "*"
   }

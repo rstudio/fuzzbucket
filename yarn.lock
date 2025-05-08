@@ -3098,10 +3098,10 @@ serverless-offline@*:
     velocityjs "^2.0.6"
     ws "^8.16.0"
 
-serverless-python-requirements@*:
-  version "6.1.0"
-  resolved "https://registry.yarnpkg.com/serverless-python-requirements/-/serverless-python-requirements-6.1.0.tgz#197cebfc8bb0890d980b8bfcf6b9be8380b92d34"
-  integrity sha512-+cgHLXT7AnjAiOXF/lIuw9RWz7GrgTmgpq8FijzKuahEMzcK5J1p+8odiX0V3zMm4CWpFBxQrcCcGaq2zmw8dA==
+serverless-python-requirements@6.1.2:
+  version "6.1.2"
+  resolved "https://registry.yarnpkg.com/serverless-python-requirements/-/serverless-python-requirements-6.1.2.tgz#21a222c06ac52736c969b60e251a7e2f606a6a33"
+  integrity sha512-pas27CBxxaLTU5XMYnCVPJc+LVdm65Ys5olNvRWRqfUaZwTfD/7KSSt2XPSRme8BeJubroslaiOtWPP+IrxTVA==
   dependencies:
     "@iarna/toml" "^2.2.5"
     appdirectory "^0.1.0"
