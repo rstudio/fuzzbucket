@@ -5,7 +5,7 @@
   "dependencies": {
     "serverless": "*",
     "serverless-dynamodb-local": "*",
-    "serverless-offline": "*",
+    "serverless-offline": "13.8.2",
     "serverless-python-requirements": "*",
     "serverless-resources-env": "*",
     "serverless-wsgi": "*"
