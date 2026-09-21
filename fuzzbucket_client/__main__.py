@@ -22,6 +22,7 @@ the following environment variables:
                                 ~/.cache/fuzzbucket/preferences (no default)
 
 """
+
 import argparse
 import configparser
 import contextlib
@@ -189,12 +190,10 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
         help="human-friendly name to give to credentials entry",
     )
     parser_login.set_defaults(func=client.login)
-    parser_login.epilog = textwrap.dedent(
-        """
+    parser_login.epilog = textwrap.dedent("""
         NOTE: Use the exact letter casing expected by the auth provider to
         avoid weirdness.
-        """
-    )
+        """)
 
     parser_logout = subparsers.add_parser(
         "logout",
@@ -317,19 +316,15 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
         help="open session via Amazon SSM proxy",
     )
     parser_ssh.usage = "usage: %(prog)s [-hq|--ssm] box [ssh-arguments]"
-    parser_ssh.description = textwrap.dedent(
-        """
+    parser_ssh.description = textwrap.dedent("""
         ssh into a box, optionally passing arbitrary commands as positional
         arguments.  Additionally, stdio streams will be inherited by the ssh
         process in order to support piping.
-        """
-    )
-    parser_ssh.epilog = textwrap.dedent(
-        """
+        """)
+    parser_ssh.epilog = textwrap.dedent("""
         NOTE: If no login is provided via the "-l" ssh option, a value will
         be guessed based on the box image alias.
-        """
-    )
+        """)
     parser_ssh.add_argument("box")
     parser_ssh.set_defaults(func=client.ssh)
 
@@ -351,15 +346,12 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
         help="open session via Amazon SSM proxy",
     )
     parser_scp.usage = "usage: %(prog)s [-hq|--ssm] box [scp-arguments]"
-    parser_scp.description = textwrap.dedent(
-        """
+    parser_scp.description = textwrap.dedent("""
         scp things into or out of a box, optionally passing arbitrary commands
         as positional arguments. Additionally, stdio streams will be inherited
         by the scp process in order to support piping.
-        """
-    )
-    parser_scp.epilog = textwrap.dedent(
-        """
+        """)
+    parser_scp.epilog = textwrap.dedent("""
         NOTE: If no login is provided in at least one of the source or
         destination arguments, a value will be guessed based on the box image
         alias.
@@ -380,8 +372,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
         becomes:
             scp -r altuser@boxname.fully.qualified.example.com:/var/log/*.log \\
                    ./some/local/path/
-        """
-    )
+        """)
     parser_scp.add_argument("box")
     parser_scp.set_defaults(func=client.scp)
 
@@ -533,9 +524,7 @@ def main(sysargs: list[str] = sys.argv[:]) -> int:
 
 
 def _print_auth_hint():
-    print(
-        textwrap.dedent(
-            """
+    print(textwrap.dedent("""
         Please run the following command with your username/email
         to grant access to Fuzzbucket:
 
@@ -550,9 +539,7 @@ def _print_auth_hint():
             fuzzbucket-client logout
 
             fuzzbucket-client login {username/email}
-        """
-        )
-    )
+        """))
 
 
 def _pjoin(*parts: str) -> str:
@@ -694,18 +681,14 @@ class Client:
             ]
         )
         webbrowser.open(login_url)
-        print(
-            textwrap.dedent(
-                f"""
+        print(textwrap.dedent(f"""
             Attempting to open the following URL in a browser:
 
                 {login_url}
 
             Please follow the OAuth2 flow and then paste the 'secret' provided
             by fuzzbucket.
-        """
-            )
-        )
+        """))
         secret = None
         while secret is None:
             try:

@@ -4,6 +4,7 @@
 
 Lint and optionally modify a given fuzzbucket config file.
 """
+
 import argparse
 import difflib
 import pathlib
