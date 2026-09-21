@@ -146,6 +146,9 @@ def create_box():
         DeviceName=ami_desc["Images"][0].get("RootDeviceName"),
         Ebs=dict(
             DeleteOnTermination=True,
+            # Force gp3 regardless of the AMI's own mapping (older Ubuntu
+            # sources are gp2).
+            VolumeType="gp3",
             VolumeSize=[
                 bdm.get("Ebs", {}).get("VolumeSize")
                 for bdm in ami_desc["Images"][0].get("BlockDeviceMappings", [])
