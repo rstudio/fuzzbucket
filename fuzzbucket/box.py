@@ -47,9 +47,8 @@ class Box:
             instance_type=instance["InstanceType"],
             image_id=instance["ImageId"],
             other_tags={},
-            public_dns_name=(
-                instance["PublicDnsName"] if instance["PublicDnsName"] != "" else None
-            ),
+            # Absent (not just empty) when the instance has no public address.
+            public_dns_name=instance.get("PublicDnsName") or None,
             public_ip=instance.get("PublicIpAddress", None),
         )
 
