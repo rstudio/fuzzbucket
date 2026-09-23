@@ -504,3 +504,76 @@ def test_reboot_box_not_yours(
         assert response.status_code == 403
         assert "error" in typing.cast(conftest.AnyDict, response.json)
         assert typing.cast(conftest.AnyDict, response.json)["error"] == "no touching"
+
+
+def test_create_box_root_volume_is_gp3(
+    app,
+    dynamodb,
+    ec2,
+    fake_users,
+    fake_oauth_session,
+    monkeypatch,
+    pubkey,
+):
+    """The AMI's own mapping carries no VolumeType (gp2 by AWS default);
+    the box must still be launched on gp3."""
+    fake_oauth_session.responses["/user"]["login"] = "lordtestingham"
+    fake_oauth_session.authorized = True
+
+    if cfg.AUTH_PROVIDER == "oauth":
+        monkeypatch.setattr(
+            ec2,
+            "describe_key_pairs",
+            lambda: {
+                "KeyPairs": [
+                    {
+                        "KeyName": "lordTestingham",
+                        "KeyPairId": "key-fafafafafafafafaf",
+                        "KeyFingerprint": "ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa:ff:aa",
+                    }
+                ]
+            },
+        )
+
+    monkeypatch.setattr(
+        ec2,
+        "describe_images",
+        lambda ImageIds=(), *_, **__: {
+            "Images": [
+                {
+                    "RootDeviceName": "/dev/xyz",
+                    "BlockDeviceMappings": [
+                        {"DeviceName": "/dev/xyz", "Ebs": {"VolumeSize": 9}}
+                    ],
+                }
+            ]
+        },
+    )
+
+    seen: dict[str, typing.Any] = {}
+    real_run_instances = ec2.run_instances
+
+    def spy_run_instances(**kwargs):
+        seen.update(kwargs)
+        return real_run_instances(**kwargs)
+
+    monkeypatch.setattr(ec2, "run_instances", spy_run_instances)
+
+    with monkeypatch.context() as mp:
+        mp.setattr(aws, "fetch_first_compatible_github_key", lambda _: pubkey)
+        with app.test_client(user=user.User.load("lordtestingham")) as c:
+            response = c.post(
+                "/box/",
+                json=dict(ami="ami-fafafafafaf", root_volume_size=11),
+                headers={
+                    "fuzzbucket-user": "lordtestingham",
+                    "fuzzbucket-secret": fake_users.get("lordtestingham", ""),
+                },
+            )
+
+    # The launch request is what matters here; the response path is covered
+    # by test_create_box.
+    assert "BlockDeviceMappings" in seen, response.status_code
+    ebs = seen["BlockDeviceMappings"][0]["Ebs"]
+    assert ebs["VolumeType"] == "gp3"
+    assert ebs["VolumeSize"] == 11
